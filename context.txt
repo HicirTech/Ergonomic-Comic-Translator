@@ -1,0 +1,24 @@
+Project: comictranslator
+
+Purpose:
+- Bun backend that runs PaddleOCR on 1..n comic page images from comics/
+- Writes structured OCR JSON to output/ocr-results.json
+- Keeps Python dependencies isolated in .venv and does not install globally
+
+Current layout:
+- src/main.ts: Bun entrypoint and environment bootstrap
+- src/python/paddleocr_runner.py: OCR runner and JSON serializer
+- requirements.txt: Python dependencies for the isolated venv
+
+Commands:
+- bun install
+- bun run ocr
+- bun run typecheck
+
+Environment:
+- OCR_PYTHON_PATH can point to a local Python executable if Python is not on PATH
+
+Notes for AI editing:
+- Keep source files under src/
+- Do not rely on global Python packages
+- Preserve output metadata: pageNumber, fileName, filePath, lines, text, confidence, box
