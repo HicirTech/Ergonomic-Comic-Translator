@@ -5,14 +5,16 @@
  * Uses the textless page image (text already removed) so that inpainted text
  * doesn't interfere with boundary detection.
  *
- * Algorithm — gradient-based ray-casting:
- * 1. Load the image and compute a Sobel edge-magnitude map.
- * 2. Cast 360 rays from the polygon centroid outward.
- * 3. Walk each ray and stop when accumulated edge energy exceeds a threshold
- *    (adaptive, based on the image's median edge strength).
- * 4. Build an ordered contour from the hit points (angular buckets).
- * 5. Simplify the contour with Douglas-Peucker.
- * 6. Inset each vertex by `insetPx` toward the centroid.
+ * Algorithm — gradient-based ray-casting with polygon-aware minimum distance:
+ * 1. Load the image and compute a Sobel edge-magnitude map (with Gaussian pre-blur).
+ * 2. Compute the minimum per-ray distance from the polygon boundary.
+ *    Since text is inside the bubble, no bubble edge can be closer than the polygon edge.
+ * 3. Cast 360 rays from the polygon centroid outward.
+ *    Skip any edge hit closer than the polygon boundary for that direction.
+ * 4. Apply median smoothing on hit distances to reject remaining outliers.
+ * 5. Build an ordered contour from the smoothed hit points.
+ * 6. Simplify the contour with Douglas-Peucker.
+ * 7. Inset each vertex by `insetPx` toward the centroid.
  *
  * Works with both light and dark bubble backgrounds because it relies on
  * brightness *changes* (edges) rather than absolute brightness values.
@@ -21,17 +23,18 @@
 const RAY_COUNT = 360;
 const RAY_STEP = 1;
 const MAX_RAY_LENGTH = 800;
-// How many consecutive boundary-flagged pixels must be hit before declaring a boundary
-const BOUNDARY_RUN_LENGTH = 3;
-// Color deviation threshold (Euclidean distance in RGB space)
-const COLOR_DEVIATION_THRESHOLD = 45;
-
-/** Perceived luminance (0–255) at pixel (x, y). Returns 0 for out-of-bounds. */
-function brightness(data: Uint8ClampedArray, w: number, h: number, x: number, y: number): number {
-  if (x < 0 || y < 0 || x >= w || y >= h) return 0;
-  const off = (y * w + x) * 4;
-  return data[off] * 0.299 + data[off + 1] * 0.587 + data[off + 2] * 0.114;
-}
+// Sobel edge threshold. After 5×5 Gaussian blur, bubble outlines (even thin
+// semi-transparent ones) produce Sobel ≈ 25–37. Threshold 20 catches them
+// while staying above blur-suppressed noise.
+const SOBEL_THRESHOLD = 20;
+// How many consecutive edge pixels to declare a boundary.
+// Pre-blur widens thin 1-2px outlines to ~3-4px.
+const EDGE_RUN_LENGTH = 3;
+// Angular half-window (in buckets) for median smoothing of hit distances.
+// ±20 = 40° window.
+const MEDIAN_HALF_WINDOW = 20;
+// Outlier rejection: ray distance < median × this fraction is replaced.
+const OUTLIER_RATIO = 0.55;
 
 /** Load an image from a URL. */
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -45,16 +48,55 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Compute Sobel edge magnitude for every pixel.
- * Returns a Float32Array of edge magnitudes (0–~1020).
+ * Apply a 5×5 separable Gaussian blur (σ ≈ 1.0) to a luminance array.
+ * Kernel: [1 4 6 4 1] / 16 per pass (total /256).
+ * Widens thin 1-2px outlines to ~4px for reliable Sobel detection.
+ */
+function gaussianBlur5(src: Float32Array, w: number, h: number): Float32Array {
+  const tmp = new Float32Array(w * h);
+  const dst = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - 2);
+      const x1 = Math.max(0, x - 1);
+      const x3 = Math.min(w - 1, x + 1);
+      const x4 = Math.min(w - 1, x + 2);
+      tmp[y * w + x] =
+        src[y * w + x0] +
+        src[y * w + x1] * 4 +
+        src[y * w + x] * 6 +
+        src[y * w + x3] * 4 +
+        src[y * w + x4];
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - 2);
+    const y1 = Math.max(0, y - 1);
+    const y3 = Math.min(h - 1, y + 1);
+    const y4 = Math.min(h - 1, y + 2);
+    for (let x = 0; x < w; x++) {
+      dst[y * w + x] = (
+        tmp[y0 * w + x] +
+        tmp[y1 * w + x] * 4 +
+        tmp[y * w + x] * 6 +
+        tmp[y3 * w + x] * 4 +
+        tmp[y4 * w + x]
+      ) / 256;
+    }
+  }
+  return dst;
+}
+
+/**
+ * Compute Sobel edge magnitude for every pixel (with Gaussian pre-blur).
  */
 function computeEdgeMap(data: Uint8ClampedArray, w: number, h: number): Float32Array {
-  const lum = new Float32Array(w * h);
+  const lumRaw = new Float32Array(w * h);
   for (let i = 0; i < w * h; i++) {
     const off = i * 4;
-    lum[i] = data[off] * 0.299 + data[off + 1] * 0.587 + data[off + 2] * 0.114;
+    lumRaw[i] = data[off] * 0.299 + data[off + 1] * 0.587 + data[off + 2] * 0.114;
   }
-
+  const lum = gaussianBlur5(lumRaw, w, h);
   const edge = new Float32Array(w * h);
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
@@ -75,94 +117,44 @@ function computeEdgeMap(data: Uint8ClampedArray, w: number, h: number): Float32A
 }
 
 /**
- * Compute an adaptive edge threshold from the edge map.
- * Uses the edge values sampled along a ring around the centroid to determine
- * what constitutes a "strong" edge in this particular image region.
+ * Compute minimum ray distance per angular bucket from the polygon boundary.
+ * For each ray, compute where it exits the polygon (ray–segment intersection).
+ * Since the text polygon is inside the bubble, no bubble edge can be closer
+ * to the centroid than the polygon boundary in that direction.
  */
-function computeAdaptiveThreshold(
-  edge: Float32Array, w: number, h: number,
-  cx: number, cy: number, sampleRadius: number,
-): number {
-  const samples: number[] = [];
-  for (let i = 0; i < 72; i++) {
-    const angle = (2 * Math.PI * i) / 72;
-    const x = Math.round(cx + Math.cos(angle) * sampleRadius);
-    const y = Math.round(cy + Math.sin(angle) * sampleRadius);
-    if (x >= 0 && y >= 0 && x < w && y < h) {
-      samples.push(edge[y * w + x]);
-    }
-  }
-  if (samples.length === 0) return 40;
-  samples.sort((a, b) => a - b);
-  // Use the 75th percentile of edge values in the local area as the threshold
-  const p75 = samples[Math.floor(samples.length * 0.75)];
-  // Clamp to a reasonable range
-  return Math.max(25, Math.min(120, p75 * 1.5 + 15));
-}
-
-/**
- * Sample the average RGB color in a small area around (cx, cy).
- * Used as the "interior baseline color" for color-deviation boundary detection.
- */
-function sampleInteriorColor(
-  data: Uint8ClampedArray, w: number, h: number,
-  cx: number, cy: number, radius = 8,
-): [number, number, number] {
-  let rSum = 0, gSum = 0, bSum = 0, count = 0;
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      const x = cx + dx;
-      const y = cy + dy;
-      if (x < 0 || y < 0 || x >= w || y >= h) continue;
-      if (dx * dx + dy * dy > radius * radius) continue;
-      const off = (y * w + x) * 4;
-      rSum += data[off];
-      gSum += data[off + 1];
-      bSum += data[off + 2];
-      count++;
-    }
-  }
-  if (count === 0) return [128, 128, 128];
-  return [rSum / count, gSum / count, bSum / count];
-}
-
-/** Euclidean distance between pixel at (x,y) and a reference RGB color. */
-function colorDeviation(
-  data: Uint8ClampedArray, w: number,
-  x: number, y: number,
-  refR: number, refG: number, refB: number,
-): number {
-  const off = (y * w + x) * 4;
-  const dr = data[off] - refR;
-  const dg = data[off + 1] - refG;
-  const db = data[off + 2] - refB;
-  return Math.sqrt(dr * dr + dg * dg + db * db);
-}
-
-/**
- * Order boundary points by angle into angular buckets.
- * For each bucket, keep the point closest to centroid (first edge hit).
- */
-function buildContour(
-  points: [number, number][],
+function computeMinDistances(
+  polygon: [number, number][],
   cx: number, cy: number,
   bucketCount: number,
-): [number, number][] {
-  const buckets: ([number, number] | null)[] = new Array(bucketCount).fill(null);
+): Float32Array {
+  const minDist = new Float32Array(bucketCount);
+  const n = polygon.length;
 
-  for (const [bx, by] of points) {
-    const angle = Math.atan2(by - cy, bx - cx);
-    const bucket = Math.floor(((angle + Math.PI) / (2 * Math.PI)) * bucketCount) % bucketCount;
-    if (!buckets[bucket]) {
-      buckets[bucket] = [bx, by];
+  for (let i = 0; i < bucketCount; i++) {
+    const angle = (2 * Math.PI * i) / bucketCount;
+    const rdx = Math.cos(angle);
+    const rdy = Math.sin(angle);
+
+    let bestDist = 0;
+    // Test ray against every polygon edge
+    for (let j = 0; j < n; j++) {
+      const [ax, ay] = polygon[j];
+      const [bx, by] = polygon[(j + 1) % n];
+      const ex = bx - ax;
+      const ey = by - ay;
+      // Solve: (cx + rdx*t) = (ax + ex*u), (cy + rdy*t) = (ay + ey*u)
+      const denom = rdx * ey - rdy * ex;
+      if (Math.abs(denom) < 1e-9) continue;
+      const t = ((ax - cx) * ey - (ay - cy) * ex) / denom;
+      const u = ((ax - cx) * rdy - (ay - cy) * rdx) / denom;
+      if (t > 0 && u >= 0 && u <= 1) {
+        if (t > bestDist) bestDist = t;
+      }
     }
+    minDist[i] = bestDist;
   }
 
-  const contour: [number, number][] = [];
-  for (const pt of buckets) {
-    if (pt) contour.push(pt);
-  }
-  return contour;
+  return minDist;
 }
 
 // ── Douglas-Peucker simplification ──────────────────────────────────────────
@@ -178,17 +170,14 @@ function perpendicularDist(pt: [number, number], a: [number, number], b: [number
 
 function douglasPeucker(points: [number, number][], epsilon: number): [number, number][] {
   if (points.length <= 2) return points;
-
   let maxDist = 0;
   let maxIdx = 0;
   const first = points[0];
   const last = points[points.length - 1];
-
   for (let i = 1; i < points.length - 1; i++) {
     const d = perpendicularDist(points[i], first, last);
     if (d > maxDist) { maxDist = d; maxIdx = i; }
   }
-
   if (maxDist > epsilon) {
     const left = douglasPeucker(points.slice(0, maxIdx + 1), epsilon);
     const right = douglasPeucker(points.slice(maxIdx), epsilon);
@@ -237,7 +226,7 @@ export async function detectBubbleBoundary(
   const imageData = ctx.getImageData(0, 0, w, h);
   const { data } = imageData;
 
-  // Compute Sobel edge map
+  // Compute Sobel edge map (with Gaussian pre-blur)
   const edgeMap = computeEdgeMap(data, w, h);
 
   // Compute centroid of the input polygon
@@ -248,78 +237,114 @@ export async function detectBubbleBoundary(
 
   if (cx < 0 || cy < 0 || cx >= w || cy >= h) return null;
 
-  // Compute adaptive edge threshold based on the local area
-  // Use the average polygon radius as the sample ring radius
-  let avgR = 0;
-  for (const [px, py] of polygon) avgR += Math.hypot(px - cx, py - cy);
-  avgR /= polygon.length;
-  const edgeThreshold = computeAdaptiveThreshold(edgeMap, w, h, cx, cy, Math.max(10, avgR * 0.5));
+  // Compute minimum distance per ray direction from the polygon boundary.
+  // Since the text polygon is inside the bubble, no bubble edge can be
+  // closer to the centroid than the polygon edge in that direction.
+  const minDistances = computeMinDistances(polygon, cx, cy, RAY_COUNT);
 
-  // Sample interior color for color-deviation detection
-  // This helps detect semi-transparent colored bubbles where Sobel edges are weak
-  const [refR, refG, refB] = sampleInteriorColor(data, w, h, cx, cy);
+  // ── Phase 1: Cast rays and collect raw hit distances ──────────────
+  const hitDistances = new Float32Array(RAY_COUNT); // 0 = no hit
+  const hitPoints: ([number, number] | null)[] = new Array(RAY_COUNT).fill(null);
 
-  // Cast rays from centroid and find boundary points
-  // Dual detection criteria:
-  //   A) Strong Sobel edge (consecutive edge pixels) — works for sharp boundaries
-  //   B) Color deviation from interior — works for gradual/semi-transparent transitions
-  const boundaryPoints: [number, number][] = [];
   for (let i = 0; i < RAY_COUNT; i++) {
     const angle = (2 * Math.PI * i) / RAY_COUNT;
     const dx = Math.cos(angle) * RAY_STEP;
     const dy = Math.sin(angle) * RAY_STEP;
+    const minDist = minDistances[i];
 
     let x = cx;
     let y = cy;
     let edgeRunCount = 0;
-    let colorRunCount = 0;
     let hitX = -1, hitY = -1;
 
     for (let step = 0; step < MAX_RAY_LENGTH / RAY_STEP; step++) {
       x += dx;
       y += dy;
-
       const ix = Math.round(x);
       const iy = Math.round(y);
 
-      // Out of image bounds
       if (ix < 0 || iy < 0 || ix >= w || iy >= h) {
         if (hitX < 0) { hitX = ix - Math.round(dx); hitY = iy - Math.round(dy); }
         break;
       }
 
-      // Criterion A: Sobel edge
+      const dist = Math.hypot(ix - cx, iy - cy);
+
+      // Skip edge hits that are closer than the polygon boundary
+      if (dist < minDist) continue;
+
       const edgeVal = edgeMap[iy * w + ix];
-      const isEdge = edgeVal >= edgeThreshold;
-
-      // Criterion B: color deviation from interior baseline
-      const deviation = colorDeviation(data, w, ix, iy, refR, refG, refB);
-      const isColorDeviant = deviation >= COLOR_DEVIATION_THRESHOLD;
-
-      // A pixel is a boundary candidate if it has a strong edge OR significant color change
-      if (isEdge || isColorDeviant) {
-        if (isEdge) edgeRunCount++; else edgeRunCount = 0;
-        colorRunCount++;
-        if (colorRunCount === 1) { hitX = ix; hitY = iy; }
-        // Require shorter run for Sobel edges (strong signal), longer for color-only
-        if (edgeRunCount >= BOUNDARY_RUN_LENGTH || colorRunCount >= BOUNDARY_RUN_LENGTH + 2) break;
+      if (edgeVal >= SOBEL_THRESHOLD) {
+        edgeRunCount++;
+        if (edgeRunCount === 1) { hitX = ix; hitY = iy; }
+        if (edgeRunCount >= EDGE_RUN_LENGTH) break;
       } else {
         edgeRunCount = 0;
-        colorRunCount = 0;
         hitX = -1;
         hitY = -1;
       }
     }
 
     if (hitX >= 0 && hitY >= 0) {
-      boundaryPoints.push([hitX, hitY]);
+      hitDistances[i] = Math.hypot(hitX - cx, hitY - cy);
+      hitPoints[i] = [hitX, hitY];
+    }
+  }
+
+  // ── Phase 2: Median smoothing to reject remaining outliers ────────
+  // An outlier is a ray whose hit distance is much shorter than its
+  // angular neighbors (caused by interior textures or overlapping bubbles).
+  const smoothedDistances = new Float32Array(RAY_COUNT);
+  for (let i = 0; i < RAY_COUNT; i++) {
+    const neighbors: number[] = [];
+    for (let d = -MEDIAN_HALF_WINDOW; d <= MEDIAN_HALF_WINDOW; d++) {
+      const j = ((i + d) % RAY_COUNT + RAY_COUNT) % RAY_COUNT;
+      if (hitDistances[j] > 0) neighbors.push(hitDistances[j]);
+    }
+    if (neighbors.length === 0) {
+      smoothedDistances[i] = 0;
+      continue;
+    }
+    neighbors.sort((a, b) => a - b);
+    smoothedDistances[i] = neighbors[Math.floor(neighbors.length / 2)];
+  }
+
+  // Replace outlier hits: if a ray's distance < median × OUTLIER_RATIO,
+  // use the median distance instead (place the point on the ray at that distance)
+  const boundaryPoints: [number, number][] = [];
+  for (let i = 0; i < RAY_COUNT; i++) {
+    const angle = (2 * Math.PI * i) / RAY_COUNT;
+    const median = smoothedDistances[i];
+    if (median === 0) continue;
+
+    const rawDist = hitDistances[i];
+    if (rawDist > 0 && rawDist >= median * OUTLIER_RATIO) {
+      // Keep original hit
+      boundaryPoints.push(hitPoints[i]!);
+    } else {
+      // Replace with median-distance point on this ray
+      const px = cx + Math.cos(angle) * median;
+      const py = cy + Math.sin(angle) * median;
+      boundaryPoints.push([Math.round(px), Math.round(py)]);
     }
   }
 
   if (boundaryPoints.length < 10) return null;
 
+  // ── Phase 3: Build contour, simplify, inset ──────────────────────
   // Build ordered contour using angular buckets (360 buckets = 1° resolution)
-  const contour = buildContour(boundaryPoints, cx, cy, 360);
+  const buckets: ([number, number] | null)[] = new Array(360).fill(null);
+  for (const [bx, by] of boundaryPoints) {
+    const angle = Math.atan2(by - cy, bx - cx);
+    const bucket = Math.floor(((angle + Math.PI) / (2 * Math.PI)) * 360) % 360;
+    if (!buckets[bucket]) {
+      buckets[bucket] = [bx, by];
+    }
+  }
+  const contour: [number, number][] = [];
+  for (const pt of buckets) {
+    if (pt) contour.push(pt);
+  }
   if (contour.length < 4) return null;
 
   // Simplify — adaptive epsilon based on bubble size
