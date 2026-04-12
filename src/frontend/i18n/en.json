@@ -140,7 +140,8 @@
     "mergePreviewHint": "Drag to reorder lines before merging. Text and translations will be joined in the order shown.",
     "mergeConfirm": "Merge",
     "rectifyPolygon": "Rectify to Rectangle",
-    "snapToBubble": "Snap to Bubble"
+    "snapToBubble": "Snap to Bubble",
+    "snapToBubbleNoTextless": "Generate textless page first"
   },
   "contextPanel": {
     "title": "Glossary",
