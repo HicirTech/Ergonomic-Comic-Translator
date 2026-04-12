@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useOcrLines, useOcrActions } from "../OcrEditorContext.tsx";
 
 const EditorContextMenu: React.FC = () => {
-  const { lines } = useOcrLines();
+  const { lines, selectedLineIndices } = useOcrLines();
   const {
     contextMenu,
     setContextMenu,
@@ -12,6 +12,7 @@ const EditorContextMenu: React.FC = () => {
     onAddPolygonPoint,
     onDeletePolygonPoint,
     onDeleteTextLine,
+    onMergeSelectedLines,
     onOcrPage,
     onTextlessPageWithSave,
     onTranslatePage,
@@ -52,6 +53,10 @@ const EditorContextMenu: React.FC = () => {
 
       {contextMenu?.kind === "polygon" && (
         <MenuItem onClick={onDeleteTextLine}>{t("ocrPreview.deleteTextLine")}</MenuItem>
+      )}
+
+      {selectedLineIndices.size >= 2 && (
+        <MenuItem onClick={onMergeSelectedLines}>{t("ocrPreview.mergeSelectedLines")}</MenuItem>
       )}
 
       <MenuItem

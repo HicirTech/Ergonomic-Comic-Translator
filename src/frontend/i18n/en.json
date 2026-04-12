@@ -134,7 +134,8 @@
     "translationEditorTitle": "Translation Editor",
     "translationPlaceholder": "Enter translation...",
     "selectLineToTranslate": "Select a line to edit its translation",
-    "exportPng": "Export page as PNG"
+    "exportPng": "Export page as PNG",
+    "mergeSelectedLines": "Merge Selected Lines"
   },
   "contextPanel": {
     "title": "Glossary",

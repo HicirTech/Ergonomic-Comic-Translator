@@ -89,6 +89,7 @@ export interface OcrActionsContextValue {
   onDeletePolygonPoint: () => void;
   onDeleteTextLine: () => void;
   onAddNewLine: () => void;
+  onMergeSelectedLines: () => void;
   onSave: () => void;
   onOcrPage?: () => void;
   onTextlessPageWithSave: () => void;

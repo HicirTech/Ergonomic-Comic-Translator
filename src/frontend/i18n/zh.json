@@ -134,7 +134,8 @@
     "translationEditorTitle": "译文编辑器",
     "translationPlaceholder": "输入译文...",
     "selectLineToTranslate": "选择文字行以编辑译文",
-    "exportPng": "导出当前页为 PNG"
+    "exportPng": "导出当前页为 PNG",
+    "mergeSelectedLines": "合并选中行"
   },
   "contextPanel": {
     "title": "术语表",

@@ -146,27 +146,26 @@ const SvgOverlay: React.FC = () => {
                     onClick={() => setSelectedLineIndex(lineIdx)}
                   />
                   {layout.kind === "horizontal"
-                    ? layout.lines.map((row, i) => (
+                    ? layout.rows.map((row, i) => (
                       <text
                         key={i}
-                        x={layout.cx}
-                        y={layout.startY + i * layout.lineHeight}
+                        x={row.cx}
+                        y={row.y}
                         textAnchor="middle"
                         fontSize={layout.fontSize}
                         fill={polygonTextColor(polygonBgColor)}
                         fontFamily="sans-serif"
                         style={{ pointerEvents: "none" }}
                       >
-                        {row}
+                        {row.text}
                       </text>
                     ))
                     : layout.columns.map((col, ci) => {
-                      const x = layout.startX - ci * layout.columnWidth;
-                      return col.split("").map((ch, ri) => (
+                      return col.chars.split("").map((ch, ri) => (
                         <text
                           key={`${ci}-${ri}`}
-                          x={x}
-                          y={layout.startY + ri * (layout.fontSize * 1.1)}
+                          x={col.x}
+                          y={col.startY + ri * (layout.fontSize * 1.1)}
                           textAnchor="middle"
                           fontSize={layout.fontSize}
                           fill={polygonTextColor(polygonBgColor)}

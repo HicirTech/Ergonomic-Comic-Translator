@@ -205,10 +205,11 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
     const {
       contextMenu, setContextMenu, openPolygonMenu,
       handleAddPolygonPoint, handleDeletePolygonPoint,
-      handleDeleteTextLine, handleAddNewLine,
+      handleDeleteTextLine, handleAddNewLine, handleMergeSelectedLines,
     } = useContextMenuActions(
       linesRef, translatedLinesRef, lines.length,
       applyHistoryEdit, updateLine, getSvgPoint, setSelectedLineIndex,
+      setSelectedLineIndices, selectedLineIndicesRef,
     );
 
     // ── Keyboard handler ─────────────────────────────────────────────────
@@ -318,6 +319,7 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       onDeletePolygonPoint: handleDeletePolygonPoint,
       onDeleteTextLine: handleDeleteTextLine,
       onAddNewLine: handleAddNewLine,
+      onMergeSelectedLines: handleMergeSelectedLines,
       onSave: handleSave,
       onOcrPage,
       onTextlessPageWithSave: handleTextlessPageWithSave,
@@ -325,8 +327,8 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       onExportPng: handleExportPng,
     }), [isDirty, saving, saveMessage, errorMessage, contextMenu, setContextMenu, getSvgPoint,
       startPolygonMoveDrag, startPolygonPointDrag, openPolygonMenu, handleAddPolygonPoint,
-      handleDeletePolygonPoint, handleDeleteTextLine, handleAddNewLine, handleSave,
-      onOcrPage, handleTextlessPageWithSave, onTranslatePage, handleExportPng]);
+      handleDeletePolygonPoint, handleDeleteTextLine, handleAddNewLine, handleMergeSelectedLines,
+      handleSave, onOcrPage, handleTextlessPageWithSave, onTranslatePage, handleExportPng]);
 
     const summaryCtxValue = useMemo(() => ({
       allPageLineSummaries,
