@@ -16,6 +16,7 @@ import { useContextMenuActions } from "./hooks/useContextMenuActions.ts";
 import { usePanelKeyboard } from "./hooks/usePanelKeyboard.ts";
 import { OcrLinesContext, OcrViewContext, OcrTranslationContext, OcrActionsContext, OcrSummaryContext } from "./OcrEditorContext.tsx";
 import OcrPreviewPanelView from "./OcrPreviewPanelView.tsx";
+import MergePreviewDialog from "./components/MergePreviewDialog.tsx";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -205,7 +206,9 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
     const {
       contextMenu, setContextMenu, openPolygonMenu,
       handleAddPolygonPoint, handleDeletePolygonPoint,
-      handleDeleteTextLine, handleAddNewLine, handleMergeSelectedLines,
+      handleDeleteTextLine, handleAddNewLine,
+      handleOpenMergePreview, handleConfirmMerge, handleCancelMerge,
+      mergePreviewOpen, mergePreviewItems,
     } = useContextMenuActions(
       linesRef, translatedLinesRef, lines.length,
       applyHistoryEdit, updateLine, getSvgPoint, setSelectedLineIndex,
@@ -339,7 +342,7 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       onDeletePolygonPoint: handleDeletePolygonPoint,
       onDeleteTextLine: handleDeleteTextLine,
       onAddNewLine: handleAddNewLine,
-      onMergeSelectedLines: handleMergeSelectedLines,
+      onMergeSelectedLines: handleOpenMergePreview,
       onSave: handleSave,
       onOcrPage,
       onTextlessPageWithSave: handleTextlessPageWithSave,
@@ -347,7 +350,7 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       onExportPng: handleExportPng,
     }), [isDirty, saving, saveMessage, errorMessage, contextMenu, setContextMenu, getSvgPoint,
       startPolygonMoveDrag, startPolygonPointDrag, openPolygonMenu, handleAddPolygonPoint,
-      handleDeletePolygonPoint, handleDeleteTextLine, handleAddNewLine, handleMergeSelectedLines,
+      handleDeletePolygonPoint, handleDeleteTextLine, handleAddNewLine, handleOpenMergePreview,
       handleSave, onOcrPage, handleTextlessPageWithSave, onTranslatePage, handleExportPng]);
 
     const summaryCtxValue = useMemo(() => ({
@@ -362,6 +365,12 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
             <OcrTranslationContext.Provider value={translationCtxValue}>
               <OcrActionsContext.Provider value={actionsCtxValue}>
                 <OcrPreviewPanelView />
+                <MergePreviewDialog
+                  open={mergePreviewOpen}
+                  items={mergePreviewItems}
+                  onConfirm={handleConfirmMerge}
+                  onCancel={handleCancelMerge}
+                />
               </OcrActionsContext.Provider>
             </OcrTranslationContext.Provider>
           </OcrViewContext.Provider>

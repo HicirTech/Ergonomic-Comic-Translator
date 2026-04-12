@@ -135,7 +135,10 @@
     "translationPlaceholder": "Enter translation...",
     "selectLineToTranslate": "Select a line to edit its translation",
     "exportPng": "Export page as PNG",
-    "mergeSelectedLines": "Merge Selected Lines"
+    "mergeSelectedLines": "Merge Selected Lines",
+    "mergePreviewTitle": "Merge Lines — Review Order",
+    "mergePreviewHint": "Drag to reorder lines before merging. Text and translations will be joined in the order shown.",
+    "mergeConfirm": "Merge"
   },
   "contextPanel": {
     "title": "Glossary",

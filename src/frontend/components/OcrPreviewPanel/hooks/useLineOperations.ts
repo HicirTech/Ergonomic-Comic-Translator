@@ -91,25 +91,18 @@ export function useLineOperations(
 
 /**
  * Merge multiple lines into a single line with a convex-hull polygon.
- * Text is concatenated in top-to-bottom reading order (by polygon centroid Y).
+ * Lines are used in the order provided (caller controls reading order).
  * Returns the merged line or null if fewer than 2 lines are provided.
  */
 export function buildMergedLine(lines: OcrLineItem[], startIndex: number): OcrLineItem | null {
   if (lines.length < 2) return null;
 
-  // Sort by vertical centroid for reading order
-  const sorted = lines.slice().sort((a, b) => {
-    const aY = a.polygon ? polyBounds(a.polygon).cy : 0;
-    const bY = b.polygon ? polyBounds(b.polygon).cy : 0;
-    return aY - bY;
-  });
-
-  // Merge text (newline-separated)
-  const mergedText = sorted.map((l) => l.text).join("\n");
+  // Merge text (newline-separated) — caller provides the desired order
+  const mergedText = lines.map((l) => l.text).join("\n");
 
   // Collect all polygon vertices and compute convex hull
   const allPoints: [number, number][] = [];
-  for (const line of sorted) {
+  for (const line of lines) {
     if (line.polygon) {
       for (const p of line.polygon) allPoints.push([p[0], p[1]]);
     }
@@ -123,7 +116,7 @@ export function buildMergedLine(lines: OcrLineItem[], startIndex: number): OcrLi
     : null;
 
   // Use orientation from first line
-  const orientation = sorted[0].orientation;
+  const orientation = lines[0].orientation;
 
   return {
     lineIndex: startIndex,

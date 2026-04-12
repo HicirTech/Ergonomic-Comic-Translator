@@ -1,8 +1,9 @@
 import React, { useCallback, useState } from "react";
 import type { OcrLineItem, TranslatedLine } from "../../../api/index.ts";
-import type { ContextMenuState } from "../types.ts";
+import type { ContextMenuState, MergePreviewItem } from "../types.ts";
 import { findNearestSegmentInsertIndex, normalizeLineIndices } from "../helpers.ts";
 import { buildMergedLine } from "./useLineOperations.ts";
+import { polyBounds } from "../utils/polygonGeometry.ts";
 
 /**
  * Manages the SVG context-menu state and the five actions available from it:
@@ -116,21 +117,55 @@ export function useContextMenuActions(
     setContextMenu(null);
   }, [contextMenu, linesLength, applyHistoryEdit]);
 
-  const handleMergeSelectedLines = useCallback(() => {
+  // ── Merge preview dialog state ──────────────────────────────────────
+  const [mergePreviewItems, setMergePreviewItems] = useState<MergePreviewItem[]>([]);
+  const [mergePreviewOpen, setMergePreviewOpen] = useState(false);
+
+  /** Open the merge-preview dialog (called from context menu). */
+  const handleOpenMergePreview = useCallback(() => {
     const indices = Array.from(selectedLineIndicesRef.current).sort((a, b) => a - b);
     if (indices.length < 2) return;
 
-    const linesToMerge = indices.map((i) => linesRef.current[i]).filter(Boolean);
+    // Build preview items sorted by centroid Y (default reading order)
+    const items: MergePreviewItem[] = indices
+      .map((i) => {
+        const line = linesRef.current[i];
+        if (!line) return null;
+        const ocrIdx = line.lineIndex;
+        const translated =
+          translatedLinesRef.current.find((tl) => tl.lineIndex === ocrIdx)?.translated ?? "";
+        return { arrayIndex: i, text: line.text, translated } as MergePreviewItem;
+      })
+      .filter((it): it is MergePreviewItem => it !== null)
+      .sort((a, b) => {
+        const aLine = linesRef.current[a.arrayIndex];
+        const bLine = linesRef.current[b.arrayIndex];
+        const aY = aLine?.polygon ? polyBounds(aLine.polygon).cy : 0;
+        const bY = bLine?.polygon ? polyBounds(bLine.polygon).cy : 0;
+        return aY - bY;
+      });
+
+    if (items.length < 2) return;
+    setMergePreviewItems(items);
+    setMergePreviewOpen(true);
+    setContextMenu(null);
+  }, []);
+
+  /** Execute merge with user-confirmed order. */
+  const handleConfirmMerge = useCallback((orderedItems: MergePreviewItem[]) => {
+    setMergePreviewOpen(false);
+
+    const orderedIndices = orderedItems.map((it) => it.arrayIndex);
+    const linesToMerge = orderedIndices.map((i) => linesRef.current[i]).filter(Boolean);
     if (linesToMerge.length < 2) return;
 
-    // Build merged line
-    const keepIndex = indices[0];
+    const keepIndex = orderedIndices[0];
     const merged = buildMergedLine(linesToMerge, linesRef.current[keepIndex].lineIndex);
     if (!merged) return;
 
     // Remove merged lines (except the first) and replace the first with merged
-    const removeSet = new Set(indices.slice(1));
-    const ocrIndicesToRemove = new Set(indices.slice(1).map((i) => linesRef.current[i]?.lineIndex));
+    const removeSet = new Set(orderedIndices.slice(1));
+    const ocrIndicesToRemove = new Set(orderedIndices.slice(1).map((i) => linesRef.current[i]?.lineIndex));
     const nextLines: OcrLineItem[] = [];
     for (let i = 0; i < linesRef.current.length; i++) {
       if (removeSet.has(i)) continue;
@@ -141,18 +176,14 @@ export function useContextMenuActions(
       }
     }
 
-    // Merge translations
-    const mergedTranslation = indices
-      .map((i) => {
-        const ocrIdx = linesRef.current[i]?.lineIndex;
-        return translatedLinesRef.current.find((tl) => tl.lineIndex === ocrIdx)?.translated ?? "";
-      })
+    // Merge translations in user-specified order
+    const mergedTranslation = orderedItems
+      .map((it) => it.translated)
       .filter(Boolean)
       .join("\n");
 
     const nextTranslated = translatedLinesRef.current
       .filter((tl) => !ocrIndicesToRemove.has(tl.lineIndex));
-    // Update or add the merged translation
     const keepOcrIdx = linesRef.current[keepIndex].lineIndex;
     const existingTlIdx = nextTranslated.findIndex((tl) => tl.lineIndex === keepOcrIdx);
     if (mergedTranslation) {
@@ -164,7 +195,6 @@ export function useContextMenuActions(
     }
 
     const normalized = normalizeLineIndices(nextLines);
-    // Remap translation lineIndices to match normalized lines
     const oldToNew = new Map<number, number>();
     nextLines.forEach((line, i) => oldToNew.set(line.lineIndex, i));
     const remappedTranslated = nextTranslated
@@ -175,10 +205,13 @@ export function useContextMenuActions(
       .filter((tl): tl is TranslatedLine => tl !== null);
 
     applyHistoryEdit(normalized, undefined, remappedTranslated);
-    setSelectedLineIndex(0); // select the merged line (first position after normalize)
+    setSelectedLineIndex(0);
     setSelectedLineIndices(new Set());
-    setContextMenu(null);
   }, [applyHistoryEdit]);
+
+  const handleCancelMerge = useCallback(() => {
+    setMergePreviewOpen(false);
+  }, []);
 
   return {
     contextMenu,
@@ -188,6 +221,10 @@ export function useContextMenuActions(
     handleDeletePolygonPoint,
     handleDeleteTextLine,
     handleAddNewLine,
-    handleMergeSelectedLines,
+    handleOpenMergePreview,
+    handleConfirmMerge,
+    handleCancelMerge,
+    mergePreviewOpen,
+    mergePreviewItems,
   };
 }
