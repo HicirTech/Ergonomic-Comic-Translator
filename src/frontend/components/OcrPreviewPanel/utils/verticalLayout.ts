@@ -139,10 +139,11 @@ function fitVerticalRotated(
   minSize = 8,
   maxSize = 72,
 ): VerticalRotatedLayout {
-  // Rotate polygon 90° CCW around its centre for layout purposes
+  // Rotate polygon -90° (CW) around its centre — the inverse of the
+  // renderer's SVG rotate(90, cx, cy) — so text laid out horizontally
+  // in this space ends up correctly oriented after the render rotation.
   const { cx, cy } = bounds;
   const rotatedPoly: [number, number][] = polygon.map(([px, py]) => {
-    // 90° CCW: (x,y) → (y, -x) relative to centre
     const dx = px - cx;
     const dy = py - cy;
     return [cx + dy, cy - dx] as [number, number];

@@ -255,7 +255,10 @@ export function useContextMenuActions(
     setContextMenu(null);
 
     void detectBubbleBoundary(textlessImageUrl, line.polygon, 5).then((snapped) => {
-      if (!snapped) return;
+      if (!snapped) {
+        console.warn("[snap-to-bubble] No dialogue bubble detected for polygon", lineIndex);
+        return;
+      }
 
       // Compute AABB from new polygon
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -271,7 +274,7 @@ export function useContextMenuActions(
         polygon: snapped,
         box: [minX, minY, maxX, maxY],
       }));
-    }).catch(() => { /* bubble detection failed — silently ignore */ });
+    }).catch((err) => { console.error("[snap-to-bubble] Bubble detection failed", err); });
   }, [contextMenu, updateLine, textlessImageUrl]);
 
   return {

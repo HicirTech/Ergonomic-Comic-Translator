@@ -154,7 +154,7 @@ function layoutHorizontal(
   if (shiftedFirst >= bounds.y && shiftedLast <= bounds.y + bounds.h) {
     // Re-check each shifted Y is still inside the polygon and re-compute cx
     const shiftedRows: HorizontalLayoutRow[] = [];
-    let reRemaining = text.replace(/\n/g, useCjk ? "" : " ").trim();
+    let reRemaining = text.replace(/\n/g, useCjk ? "" : " ").replace(/\s+/g, useCjk ? "" : " ").trim();
     for (const row of usedRows) {
       const newY = row.y + shift;
       // Multi-sample the shifted position the same way we built the original slots

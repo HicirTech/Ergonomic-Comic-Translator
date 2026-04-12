@@ -204,14 +204,15 @@ const UploadDetailPageContainer: React.FC = () => {
     setOcrSubmitting(true);
     setOcrPageError(null);
     try {
-      if (ocrPageIndex === selectedPage) {
-        await saveCurrentPageIfDirty();
-      }
+      // Always save unsaved edits before OCR overwrites the file or we reload
+      await saveCurrentPageIfDirty();
       // enqueueOcrPage runs OCR synchronously on the server —
       // when the POST resolves, the output file is already updated.
       await enqueueOcrPage(uploadId, ocrPageIndex + 1, ocrModel, ocrLanguage);
-      // Always refresh the preview panel so the new lines replace old state
-      await refreshCurrentPreviewPage();
+      // Refresh the preview panel so the new lines replace old state
+      if (ocrPageIndex === selectedPage) {
+        await refreshCurrentPreviewPage();
+      }
       refreshPageSummaries();
       setOcrPageOpen(false);
       setOcrPageIndex(null);
