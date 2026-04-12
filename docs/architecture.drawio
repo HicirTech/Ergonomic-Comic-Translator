@@ -1,0 +1,425 @@
+<mxfile host="65bd71144e">
+    <diagram id="arch-overview" name="Architecture Overview">
+        <mxGraphModel dx="1944" dy="1259" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="3300" pageHeight="2400" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="&lt;b&gt;Ergonomic Comic Translator — System Architecture&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=22;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="10" width="500" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="sys-group" value="&lt;b&gt;System Layer&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;verticalAlign=top;align=left;fontSize=14;dashed=1;dashPattern=5 5;spacingTop=5;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="1720" width="2220" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="sys-os" value="&lt;b&gt;WSL2 / Linux&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="1770" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sys-homebrew" value="&lt;b&gt;Homebrew&lt;/b&gt;&lt;br&gt;Poetry, pyenv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="1770" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sys-nvidia" value="&lt;b&gt;NVIDIA GPU&lt;/b&gt;&lt;br&gt;CUDA 12.x Driver" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="1770" width="180" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sys-amd" value="&lt;b&gt;AMD GPU (optional)&lt;/b&gt;&lt;br&gt;ZLUDA / ROCm" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="700" y="1770" width="180" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sys-pyenv" value="&lt;b&gt;pyenv&lt;/b&gt;&lt;br&gt;Python 3.12" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="920" y="1770" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sys-bun" value="&lt;b&gt;Bun Runtime&lt;/b&gt;&lt;br&gt;TS/JS execution" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1120" y="1770" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sys-ollama" value="&lt;b&gt;Ollama (Windows Host)&lt;/b&gt;&lt;br&gt;LLM for translation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1320" y="1770" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sys-poetry" value="&lt;b&gt;Poetry&lt;/b&gt;&lt;br&gt;Python venv manager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="1850" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sys-tcvenv" value="&lt;b&gt;text-cleaner-venv&lt;/b&gt;&lt;br&gt;PyTorch + cu129" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="1850" width="180" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="setup-group" value="&lt;b&gt;Setup &amp; Diagnostics Scripts (src/scripts/)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=top;align=left;fontSize=14;dashed=1;dashPattern=5 5;spacingTop=5;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="1520" width="2220" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="setup-sysboot" value="&lt;b&gt;system:bootstrap&lt;/b&gt;&lt;br&gt;system-bootstrap.ts&lt;br&gt;Install Poetry + pyenv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="1570" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="setup-pyboot" value="&lt;b&gt;python:bootstrap&lt;/b&gt;&lt;br&gt;python-bootstrap.ts&lt;br&gt;Python 3.12 + PaddleOCR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="1570" width="210" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="setup-tcboot" value="&lt;b&gt;text-cleaner:bootstrap&lt;/b&gt;&lt;br&gt;text-cleaner-bootstrap.ts&lt;br&gt;venv + PyTorch + models" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="550" y="1570" width="220" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="setup-doctor" value="&lt;b&gt;doctor&lt;/b&gt;&lt;br&gt;doctor.ts&lt;br&gt;Full system check" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="1570" width="170" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="setup-nvidia" value="&lt;b&gt;nvidia:detect&lt;/b&gt;&lt;br&gt;nvidia-detect.ts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="1570" width="150" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="setup-cuda" value="&lt;b&gt;cuda:detect&lt;/b&gt;&lt;br&gt;cuda-detect.ts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1180" y="1570" width="150" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="setup-amd" value="&lt;b&gt;amd:detect&lt;/b&gt;&lt;br&gt;amd-detect.ts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1360" y="1570" width="150" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="setup-pydetect" value="&lt;b&gt;python:detect&lt;/b&gt;&lt;br&gt;python-detect.ts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1540" y="1570" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="setup-sysdetect" value="&lt;b&gt;system:detect&lt;/b&gt;&lt;br&gt;system-detect.ts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1730" y="1570" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="setup-shell" value="&lt;b&gt;shell-utils.ts&lt;/b&gt;&lt;br&gt;Shared shell helpers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1920" y="1570" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-sysboot-sys" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#9673a6;" parent="1" source="setup-sysboot" target="sys-homebrew" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-pyboot-sys" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#9673a6;" parent="1" source="setup-pyboot" target="sys-pyenv" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-tcboot-sys" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#9673a6;" parent="1" source="setup-tcboot" target="sys-tcvenv" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="py-group" value="&lt;b&gt;Python Layer (src/python/)&lt;/b&gt;  —  invoked via python -m with PYTHONPATH" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;align=left;fontSize=14;dashed=1;dashPattern=5 5;spacingTop=5;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="1280" width="1200" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="py-ocr-pkg" value="&lt;b&gt;ocr/ package&lt;/b&gt;  (Poetry venv)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;align=left;fontSize=13;spacingTop=5;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="1320" width="520" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="py-ocr-runner" value="&lt;b&gt;ocr.runner&lt;/b&gt;&lt;br&gt;PaddleOCR / VL-1.5&lt;br&gt;Batch image OCR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="1370" width="160" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="py-ocr-pdf" value="&lt;b&gt;ocr.pdf&lt;/b&gt;&lt;br&gt;PDF → PNG&lt;br&gt;(pypdfium2)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="270" y="1370" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="py-ocr-geom" value="&lt;b&gt;ocr.geometry&lt;/b&gt;&lt;br&gt;Polygon/box helpers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="430" y="1370" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="py-tl-pkg" value="&lt;b&gt;textless/ package&lt;/b&gt;  (text-cleaner-venv)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;align=left;fontSize=13;spacingTop=5;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="620" y="1320" width="590" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="py-tl-runner" value="&lt;b&gt;textless.runner&lt;/b&gt;&lt;br&gt;Mask + inpaint entry" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="640" y="1370" width="150" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="py-tl-config" value="&lt;b&gt;textless.config&lt;/b&gt;&lt;br&gt;Model paths, device" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="810" y="1370" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="py-tl-inpaint" value="&lt;b&gt;textless.inpainting&lt;/b&gt;&lt;br&gt;lama / none / original" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="970" y="1370" width="160" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="py-tl-utils" value="&lt;b&gt;textless.utils&lt;/b&gt;&lt;br&gt;log, inference,&lt;br&gt;threading, generic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1150" y="1370" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="py-models" value="&lt;b&gt;models/&lt;/b&gt;&lt;br&gt;lama_large_512px.ckpt&lt;br&gt;detect-20241225.ckpt&lt;br&gt;(gitignored)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="1340" width="190" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli-group" value="&lt;b&gt;CLI Scripts (src/scripts/)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;align=left;fontSize=14;dashed=1;dashPattern=5 5;spacingTop=5;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="1100" width="1200" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli-ocr" value="&lt;b&gt;bun run ocr&lt;/b&gt;&lt;br&gt;src/main.ts → src/ocr/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="1150" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli-textless" value="&lt;b&gt;bun run textless&lt;/b&gt;&lt;br&gt;textless.ts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="290" y="1150" width="170" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli-translate" value="&lt;b&gt;bun run translate&lt;/b&gt;&lt;br&gt;translate.ts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="490" y="1150" width="170" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli-delete" value="&lt;b&gt;bun run delete&lt;/b&gt;&lt;br&gt;delete.ts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="690" y="1150" width="150" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli-context" value="&lt;b&gt;bun run context&lt;/b&gt;&lt;br&gt;context.ts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="870" y="1150" width="150" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli-pyrun" value="&lt;b&gt;python-run.ts&lt;/b&gt;&lt;br&gt;Poetry bridge&lt;br&gt;python -m + PYTHONPATH" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=0;" parent="1" vertex="1">
+                    <mxGeometry x="1050" y="1150" width="170" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-cli-ocr-pyrunner" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#82b366;dashed=1;" parent="1" source="cli-ocr" target="py-ocr-runner" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-cli-tl-pyrunner" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#82b366;dashed=1;" parent="1" source="cli-textless" target="py-tl-runner" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-cli-translate-ollama" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#d6b656;dashed=1;" parent="1" source="cli-translate" target="sys-ollama" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ocr-group" value="&lt;b&gt;OCR Module (src/ocr/)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;align=left;fontSize=14;dashed=1;dashPattern=5 5;spacingTop=5;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="920" width="700" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="ocr-runOcr" value="&lt;b&gt;run-ocr.ts&lt;/b&gt;&lt;br&gt;High-level workflow" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="970" width="150" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="ocr-prep" value="&lt;b&gt;preparation.ts&lt;/b&gt;&lt;br&gt;Input discovery,&lt;br&gt;PDF splitting" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="970" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="ocr-exec" value="&lt;b&gt;execution.ts&lt;/b&gt;&lt;br&gt;Batch OCR,&lt;br&gt;multi-GPU" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="970" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="ocr-merge" value="&lt;b&gt;merge.ts&lt;/b&gt;&lt;br&gt;Deterministic&lt;br&gt;result merge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="970" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="shared-group" value="&lt;b&gt;Shared (src/)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;verticalAlign=top;align=left;fontSize=14;dashed=1;dashPattern=5 5;spacingTop=5;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="920" width="460" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="shared-config" value="&lt;b&gt;config.ts&lt;/b&gt;&lt;br&gt;All paths, env vars" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="810" y="970" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="shared-logger" value="&lt;b&gt;logger.ts&lt;/b&gt;&lt;br&gt;log4js + Python&lt;br&gt;stderr forwarding" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="970" y="970" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="shared-main" value="&lt;b&gt;main.ts&lt;/b&gt;&lt;br&gt;CLI OCR entry" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1130" y="970" width="100" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-group" value="&lt;b&gt;API Server (src/api/)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;align=left;fontSize=14;dashed=1;dashPattern=5 5;spacingTop=5;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="530" width="2220" height="360" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-server" value="&lt;b&gt;server.ts&lt;/b&gt;&lt;br&gt;Bun HTTP Server&lt;br&gt;:3000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="580" width="160" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-router" value="&lt;b&gt;router.ts&lt;/b&gt;&lt;br&gt;Route dispatcher" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="270" y="580" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-routes-label" value="&lt;b&gt;Routes&lt;/b&gt;" style="text;html=1;align=left;fontSize=12;fontColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="460" y="570" width="80" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-route-upload" value="upload-routes.ts&lt;br&gt;POST /api/upload&lt;br&gt;GET /api/files&lt;br&gt;DELETE /api/uploads/:id" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="450" y="590" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-route-ocr" value="ocr-routes.ts&lt;br&gt;POST /api/ocr/:id[/:page]&lt;br&gt;GET /api/ocr[/:id]&lt;br&gt;DELETE /api/ocr/:id" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="670" y="590" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-route-textless" value="textless-routes.ts&lt;br&gt;POST /api/textless/:id[/:page]&lt;br&gt;GET /api/textless[/:id]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="890" y="590" width="220" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-route-translate" value="translate-routes.ts&lt;br&gt;POST /api/translate/:id[/:page]&lt;br&gt;GET /api/translate[/:id[/:page]]&lt;br&gt;PUT /api/translate/:id/:page" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="1130" y="590" width="240" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-route-context" value="context-routes.ts&lt;br&gt;POST /api/context/:id&lt;br&gt;GET /api/context[/:id]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="1390" y="590" width="210" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-svc-label" value="&lt;b&gt;Services (factory functions, no classes)&lt;/b&gt;" style="text;html=1;align=left;fontSize=12;fontColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="680" width="350" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-svc-upload" value="&lt;b&gt;upload-service&lt;/b&gt;&lt;br&gt;File intake, ZIP extract" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="710" width="170" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-svc-ocr" value="&lt;b&gt;ocr-queue-service&lt;/b&gt;&lt;br&gt;OCR queue + worker&lt;br&gt;Ready→Queued→Processing→Completed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="270" y="710" width="230" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-svc-textless" value="&lt;b&gt;textless-queue-service&lt;/b&gt;&lt;br&gt;Textless queue + worker&lt;br&gt;Per-page tracking" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="710" width="200" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-svc-translate" value="&lt;b&gt;translate-queue-service&lt;/b&gt;&lt;br&gt;Translation queue + worker&lt;br&gt;Sliding window context" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="740" y="710" width="210" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-svc-tlproc" value="&lt;b&gt;textless-processing&lt;/b&gt;&lt;br&gt;Page processing logic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="970" y="710" width="170" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-svc-trproc" value="&lt;b&gt;translate-processing&lt;/b&gt;&lt;br&gt;Ollama integration&lt;br&gt;Streaming JSON" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="710" width="170" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-svc-config" value="&lt;b&gt;config-service&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1350" y="710" width="130" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-svc-delete" value="&lt;b&gt;delete-service&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1500" y="710" width="130" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-svc-queueproc" value="&lt;b&gt;base-queue-processor&lt;/b&gt;&lt;br&gt;Generic drain loop factory" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1650" y="710" width="180" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-repo-label" value="&lt;b&gt;Repositories (async interface + file-backed impl)&lt;/b&gt;" style="text;html=1;align=left;fontSize=12;fontColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="785" width="400" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-repo-upload" value="upload-record-repo&lt;br&gt;→ uploadRecord.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f2ff;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="810" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-repo-ocr" value="ocr-job-repo&lt;br&gt;→ ocrQueue.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f2ff;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="810" width="150" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-repo-textless" value="textless-job-repo&lt;br&gt;→ textlessQueue.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f2ff;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="430" y="810" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-repo-translate" value="translation-job-repo&lt;br&gt;→ translateQueue.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f2ff;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="610" y="810" width="170" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-repo-context" value="context-job-repo&lt;br&gt;→ contextQueue.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f2ff;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="810" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-interfaces" value="&lt;b&gt;interfaces/&lt;/b&gt;&lt;br&gt;One type per file&lt;br&gt;JobStatus union" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f2ff;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="810" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-utils" value="&lt;b&gt;utils/&lt;/b&gt;&lt;br&gt;ZIP, HTTP, time, path" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f2ff;strokeColor=#6c8ebf;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="810" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-group" value="&lt;b&gt;Frontend — React 18 + MUI + Vite (src/frontend/)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;verticalAlign=top;align=left;fontSize=14;dashed=1;dashPattern=5 5;spacingTop=5;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="60" width="2220" height="440" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-main" value="&lt;b&gt;main.tsx&lt;/b&gt;&lt;br&gt;React entry" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="110" width="120" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-app" value="&lt;b&gt;App.tsx&lt;/b&gt;&lt;br&gt;ThemeProvider&lt;br&gt;BrowserRouter" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="230" y="110" width="130" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-i18n" value="&lt;b&gt;i18n/&lt;/b&gt;&lt;br&gt;en.json + zh.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="390" y="110" width="130" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-theme" value="&lt;b&gt;theme/&lt;/b&gt;&lt;br&gt;Dark MUI theme" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="550" y="110" width="130" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-api" value="&lt;b&gt;api/&lt;/b&gt;&lt;br&gt;Typed fetch wrappers&lt;br&gt;(ocr-api, textless-api,&lt;br&gt;translate-api, ...)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="710" y="100" width="160" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-utils" value="&lt;b&gt;utils/&lt;/b&gt;&lt;br&gt;ocr-line-summary&lt;br&gt;exportPdf" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="110" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-config" value="&lt;b&gt;config.ts&lt;/b&gt;&lt;br&gt;polygonTextColor&lt;br&gt;DEFAULT_POLYGON_BG_COLOR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1070" y="100" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-pages-label" value="&lt;b&gt;Pages&lt;/b&gt;" style="text;html=1;align=left;fontSize=12;fontColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="185" width="80" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-homepage" value="&lt;b&gt;HomePage&lt;/b&gt;&lt;br&gt;Gallery of upload cards&lt;br&gt;Container / View" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="210" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-detailpage" value="&lt;b&gt;UploadDetailPage&lt;/b&gt;&lt;br&gt;Image strip + OCR editor&lt;br&gt;Keyboard shortcuts, dialog mgmt&lt;br&gt;PDF export, page navigation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="290" y="200" width="230" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-comp-label" value="&lt;b&gt;Components (Container / View pattern)&lt;/b&gt;" style="text;html=1;align=left;fontSize=12;fontColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="300" width="320" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-uploadcard" value="&lt;b&gt;UploadCard&lt;/b&gt;&lt;br&gt;Cover + metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="330" width="130" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-uploaddialog" value="&lt;b&gt;UploadDialog&lt;/b&gt;&lt;br&gt;Drag-drop, DndContext&lt;br&gt;Error display" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="230" y="330" width="150" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-deletedialog" value="&lt;b&gt;DeleteConfirm&lt;/b&gt;&lt;br&gt;Delete dialog" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="330" width="120" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-ocrdialog" value="&lt;b&gt;OcrDialog&lt;/b&gt;&lt;br&gt;Model + lang picker&lt;br&gt;Error alert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="330" width="130" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-textlessdialog" value="&lt;b&gt;TextlessDialog&lt;/b&gt;&lt;br&gt;Page picker&lt;br&gt;Error alert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="690" y="330" width="130" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-translateddialog" value="&lt;b&gt;TranslateDialog&lt;/b&gt;&lt;br&gt;Model + lang + scope" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="840" y="330" width="150" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-imagestrip" value="&lt;b&gt;ImageStripPanel&lt;/b&gt;&lt;br&gt;Page thumbnails&lt;br&gt;Status dots" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1010" y="330" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-ocrprev-group" value="&lt;b&gt;OcrPreviewPanel (complex component)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#b85450;verticalAlign=top;align=left;fontSize=12;dashed=0;spacingTop=4;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="400" width="2140" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-ocrctx" value="OcrEditorContext" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#b85450;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="100" y="430" width="110" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-ocrcontainer" value="Container" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#b85450;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="430" width="80" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-ocrview" value="View" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#b85450;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="430" width="60" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-svgoverlay" value="SvgOverlay" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#b85450;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="430" width="80" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-imgtoolbar" value="ImageToolbar" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#b85450;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="470" y="430" width="90" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-linesummary" value="LineSummary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#b85450;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="570" y="430" width="90" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-lineeditor" value="LineEditor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#b85450;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="670" y="430" width="80" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-translationeditor" value="TranslationEditor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#b85450;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="760" y="430" width="110" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-contextmenu" value="EditorContextMenu" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#b85450;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="880" y="430" width="120" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-hooks" value="hooks: useEditorHistory, usePolygonDrag, useTextlessPolling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#b85450;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="1010" y="430" width="340" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="fe-polytextlayout" value="polygonTextLayout" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#b85450;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="1360" y="430" width="120" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-fe-api" value="HTTP fetch" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#b85450;fontSize=11;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="fe-api" target="api-server" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="790" y="510"/>
+                            <mxPoint x="160" y="510"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-server-router" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6c8ebf;" parent="1" source="api-server" target="api-router" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="data-group" value="&lt;b&gt;Data Storage (.tmp/)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;verticalAlign=top;align=left;fontSize=14;dashed=1;dashPattern=5 5;spacingTop=5;spacingLeft=10;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="920" width="960" height="340" as="geometry"/>
+                </mxCell>
+                <mxCell id="data-program" value="&lt;b&gt;.tmp/program/&lt;/b&gt;&lt;br&gt;uploadRecord.json&lt;br&gt;ocrQueue.json&lt;br&gt;textlessQueue.json&lt;br&gt;translateQueue.json&lt;br&gt;contextQueue.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="1330" y="960" width="180" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="data-upload" value="&lt;b&gt;.tmp/upload/{uploadId}/&lt;/b&gt;&lt;br&gt;Raw uploaded files" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1540" y="960" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="data-prepare" value="&lt;b&gt;.tmp/ocr_prepare/{scope}/&lt;/b&gt;&lt;br&gt;Prepared images for OCR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1770" y="960" width="210" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="data-ocrout" value="&lt;b&gt;.tmp/ocr_output/{scope}/&lt;/b&gt;&lt;br&gt;ocr_output.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="2010" y="960" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="data-textless" value="&lt;b&gt;.tmp/textless/{scope}/&lt;/b&gt;&lt;br&gt;Text-removed images" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1540" y="1040" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="data-translated" value="&lt;b&gt;.tmp/translated/{scope}/&lt;/b&gt;&lt;br&gt;translated.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1770" y="1040" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="data-venv" value="&lt;b&gt;.tmp/text-cleaner-venv/&lt;/b&gt;&lt;br&gt;Separate Python venv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="2010" y="1040" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-upload-prepare" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#d79b00;" parent="1" source="data-upload" target="data-prepare" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-prepare-ocr" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#d79b00;" parent="1" source="data-prepare" target="data-ocrout" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-ocr-textless" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#d79b00;" parent="1" source="data-ocrout" target="data-textless" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="2110" y="1020"/>
+                            <mxPoint x="2110" y="1020"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-ocr-translated" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#d79b00;" parent="1" source="data-ocrout" target="data-translated" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="pipeline-label" value="&lt;b&gt;Pipeline:&lt;/b&gt; Upload → Prepare → OCR → Textless / Translate" style="text;html=1;align=left;fontSize=12;fontColor=#d79b00;" parent="1" vertex="1">
+                    <mxGeometry x="1330" y="1120" width="420" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="uploadid-label" value="&lt;b&gt;uploadId (UUID)&lt;/b&gt; is the sole identifier across the entire pipeline" style="text;html=1;align=left;fontSize=11;fontColor=#d79b00;" parent="1" vertex="1">
+                    <mxGeometry x="1330" y="1150" width="420" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="queue-sm-label" value="&lt;b&gt;Queue State Machine:&lt;/b&gt;  Ready → Queued → Processing → Completed" style="text;html=1;align=left;fontSize=12;fontColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="1330" y="1180" width="500" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="queue-err-label" value="On error: status reverts to Ready, lastError set. Frontend shows Alert." style="text;html=1;align=left;fontSize=11;fontColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="1330" y="1210" width="500" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-group" value="&lt;b&gt;Python–Bun Communication Protocol&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;verticalAlign=top;align=left;fontSize=12;dashed=0;spacingTop=4;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="1660" y="1280" width="600" height="190" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-stderr" value="&lt;b&gt;stderr&lt;/b&gt; = Logging channel&lt;br&gt;[INFO]/[WARN]/[ERROR] prefixed lines → log4js" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=10;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="1680" y="1320" width="260" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-stdout" value="&lt;b&gt;stdout&lt;/b&gt; = Data channel&lt;br&gt;JSON result (or unused when --output file)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=10;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="1680" y="1380" width="260" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-invoke" value="&lt;b&gt;Invocation&lt;/b&gt;&lt;br&gt;poetry run python -m ocr.runner&lt;br&gt;poetry run python -m ocr.pdf&lt;br&gt;python -m textless.runner&lt;br&gt;PYTHONPATH=src/python/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=10;align=left;spacingLeft=8;" parent="1" vertex="1">
+                    <mxGeometry x="1960" y="1310" width="270" height="100" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
