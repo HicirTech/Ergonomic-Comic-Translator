@@ -192,6 +192,7 @@ const SvgOverlay: React.FC = () => {
                   onMouseDown={(event) => {
                     if (event.button !== 0) return;
                     event.stopPropagation();
+                    if (event.ctrlKey || event.metaKey) return;
                     startPolygonMoveDrag(lineIdx, polygon, event);
                   }}
                   onContextMenu={(event) => openPolygonMenu(event, lineIdx, null)}
@@ -211,6 +212,7 @@ const SvgOverlay: React.FC = () => {
                     onMouseDown={(event) => {
                       if (event.button !== 0) return;
                       event.stopPropagation();
+                      if (event.ctrlKey || event.metaKey) return;
                       startPolygonMoveDrag(lineIdx, polygon, event);
                     }}
                     onContextMenu={(event) => openPolygonMenu(event, lineIdx, null)}

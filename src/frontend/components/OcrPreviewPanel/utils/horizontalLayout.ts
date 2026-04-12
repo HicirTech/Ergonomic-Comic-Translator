@@ -87,15 +87,30 @@ function layoutHorizontal(
   const minY = bounds.y + insetY + fontSize; // first possible baseline
   const maxY = bounds.y + bounds.h - insetY;
 
-  // 1. Build list of candidate slots (Y positions with usable width)
+  // 1. Build list of candidate slots (Y positions with usable width).
+  //    Sample the polygon span at multiple vertical offsets within each text
+  //    row (top of ascenders, mid-height, baseline) and use the *narrowest*
+  //    intersected span.  This prevents text from being placed wider than the
+  //    polygon at any point in the row, which is the main cause of clipping
+  //    in irregular polygons.
   interface Slot { y: number; width: number; cx: number }
   const slots: Slot[] = [];
   for (let y = minY; y <= maxY; y += lineHeight) {
-    const span = polygonSpanAtY(polygon, y - fontSize * 0.3); // sample near vertical centre of row
-    if (!span) continue;
-    const w = (span.right - span.left) * 0.94; // 6% total inset
+    // Sample at top-of-glyph, mid-height and baseline
+    const offsets = [y - fontSize * 0.85, y - fontSize * 0.45, y];
+    let narrowLeft = -Infinity;
+    let narrowRight = Infinity;
+    let miss = false;
+    for (const sy of offsets) {
+      const span = polygonSpanAtY(polygon, sy);
+      if (!span) { miss = true; break; }
+      if (span.left > narrowLeft) narrowLeft = span.left;
+      if (span.right < narrowRight) narrowRight = span.right;
+    }
+    if (miss) continue;
+    const w = (narrowRight - narrowLeft) * 0.94; // 6% total inset
     if (w < fontSize * 0.6) continue; // too narrow for even one character
-    slots.push({ y, width: w, cx: (span.left + span.right) / 2 });
+    slots.push({ y, width: w, cx: (narrowLeft + narrowRight) / 2 });
   }
   if (slots.length === 0) return null;
 
@@ -135,13 +150,23 @@ function layoutHorizontal(
     let reRemaining = text.replace(/\n/g, useCjk ? "" : " ").trim();
     for (const row of usedRows) {
       const newY = row.y + shift;
-      const span = polygonSpanAtY(polygon, newY - fontSize * 0.3);
-      if (!span) {
+      // Multi-sample the shifted position the same way we built the original slots
+      const offsets = [newY - fontSize * 0.85, newY - fontSize * 0.45, newY];
+      let narrowLeft = -Infinity;
+      let narrowRight = Infinity;
+      let miss = false;
+      for (const sy of offsets) {
+        const span = polygonSpanAtY(polygon, sy);
+        if (!span) { miss = true; break; }
+        if (span.left > narrowLeft) narrowLeft = span.left;
+        if (span.right < narrowRight) narrowRight = span.right;
+      }
+      if (miss) {
         // Shifted position is outside polygon — abort shift
         return usedRows;
       }
-      const w = (span.right - span.left) * 0.94;
-      const cx = (span.left + span.right) / 2;
+      const w = (narrowRight - narrowLeft) * 0.94;
+      const cx = (narrowLeft + narrowRight) / 2;
       const rowText = useCjk
         ? consumeCharRow(reRemaining, fontSize, w)
         : consumeWordRow(reRemaining, fontSize, w);
