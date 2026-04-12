@@ -138,7 +138,8 @@
     "mergeSelectedLines": "合并选中行",
     "mergePreviewTitle": "合并行 — 确认顺序",
     "mergePreviewHint": "拖拽调整行的顺序。原文和译文将按此顺序拼接。",
-    "mergeConfirm": "合并"
+    "mergeConfirm": "合并",
+    "snapToBubble": "对齐到对话框"
   },
   "contextPanel": {
     "title": "术语表",

@@ -91,6 +91,7 @@ export interface OcrActionsContextValue {
   onDeleteTextLine: () => void;
   onAddNewLine: () => void;
   onMergeSelectedLines: () => void;
+  onSnapToBubble: () => void;
   onSave: () => void;
   onOcrPage?: () => void;
   onTextlessPageWithSave: () => void;

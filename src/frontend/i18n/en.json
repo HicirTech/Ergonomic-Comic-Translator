@@ -138,7 +138,8 @@
     "mergeSelectedLines": "Merge Selected Lines",
     "mergePreviewTitle": "Merge Lines — Review Order",
     "mergePreviewHint": "Drag to reorder lines before merging. Text and translations will be joined in the order shown.",
-    "mergeConfirm": "Merge"
+    "mergeConfirm": "Merge",
+    "snapToBubble": "Snap to Bubble"
   },
   "contextPanel": {
     "title": "Glossary",

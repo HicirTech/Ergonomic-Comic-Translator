@@ -4,6 +4,7 @@ import type { ContextMenuState, MergePreviewItem } from "../types.ts";
 import { findNearestSegmentInsertIndex, normalizeLineIndices } from "../helpers.ts";
 import { buildMergedLine } from "./useLineOperations.ts";
 import { polyBounds } from "../utils/polygonGeometry.ts";
+import { detectBubbleBoundary } from "../utils/detectBubble.ts";
 
 /**
  * Manages the SVG context-menu state and the five actions available from it:
@@ -23,6 +24,7 @@ export function useContextMenuActions(
   setSelectedLineIndex: React.Dispatch<React.SetStateAction<number | null>>,
   setSelectedLineIndices: React.Dispatch<React.SetStateAction<ReadonlySet<number>>>,
   selectedLineIndicesRef: React.RefObject<ReadonlySet<number>>,
+  imgRef: React.RefObject<HTMLImageElement | null>,
 ) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
@@ -213,6 +215,37 @@ export function useContextMenuActions(
     setMergePreviewOpen(false);
   }, []);
 
+  // ── Snap polygon to bubble ────────────────────────────────────────
+  const handleSnapToBubble = useCallback(() => {
+    if (!contextMenu) return;
+    const line = linesRef.current[contextMenu.lineIndex];
+    if (!line?.polygon || line.polygon.length < 3) return;
+    const img = imgRef.current;
+    if (!img) return;
+
+    const snapped = detectBubbleBoundary(img, line.polygon, 5);
+    if (!snapped) {
+      setContextMenu(null);
+      return;
+    }
+
+    // Compute AABB from new polygon
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [px, py] of snapped) {
+      if (px < minX) minX = px;
+      if (py < minY) minY = py;
+      if (px > maxX) maxX = px;
+      if (py > maxY) maxY = py;
+    }
+
+    updateLine(contextMenu.lineIndex, (l) => ({
+      ...l,
+      polygon: snapped,
+      box: [minX, minY, maxX, maxY],
+    }));
+    setContextMenu(null);
+  }, [contextMenu, updateLine]);
+
   return {
     contextMenu,
     setContextMenu,
@@ -224,6 +257,7 @@ export function useContextMenuActions(
     handleOpenMergePreview,
     handleConfirmMerge,
     handleCancelMerge,
+    handleSnapToBubble,
     mergePreviewOpen,
     mergePreviewItems,
   };

@@ -13,6 +13,7 @@ const EditorContextMenu: React.FC = () => {
     onDeletePolygonPoint,
     onDeleteTextLine,
     onMergeSelectedLines,
+    onSnapToBubble,
     onOcrPage,
     onTextlessPageWithSave,
     onTranslatePage,
@@ -53,6 +54,10 @@ const EditorContextMenu: React.FC = () => {
 
       {contextMenu?.kind === "polygon" && (
         <MenuItem onClick={onDeleteTextLine}>{t("ocrPreview.deleteTextLine")}</MenuItem>
+      )}
+
+      {contextMenu?.kind === "polygon" && (
+        <MenuItem onClick={onSnapToBubble}>{t("ocrPreview.snapToBubble")}</MenuItem>
       )}
 
       {selectedLineIndices.size >= 2 && (
