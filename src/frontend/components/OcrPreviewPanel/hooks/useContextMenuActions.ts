@@ -215,6 +215,37 @@ export function useContextMenuActions(
     setMergePreviewOpen(false);
   }, []);
 
+  // ── Rectify polygon to rectangle ──────────────────────────────────
+  const handleRectifyPolygon = useCallback(() => {
+    if (!contextMenu) return;
+    const line = linesRef.current[contextMenu.lineIndex];
+    if (!line?.polygon || line.polygon.length < 3) return;
+    const lineIndex = contextMenu.lineIndex;
+    setContextMenu(null);
+
+    // Compute axis-aligned bounding box of current polygon
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [px, py] of line.polygon) {
+      if (px < minX) minX = px;
+      if (py < minY) minY = py;
+      if (px > maxX) maxX = px;
+      if (py > maxY) maxY = py;
+    }
+
+    const rectPolygon: [number, number][] = [
+      [minX, minY],
+      [maxX, minY],
+      [maxX, maxY],
+      [minX, maxY],
+    ];
+
+    updateLine(lineIndex, (l) => ({
+      ...l,
+      polygon: rectPolygon,
+      box: [minX, minY, maxX, maxY],
+    }));
+  }, [contextMenu, updateLine]);
+
   // ── Snap polygon to bubble ────────────────────────────────────────
   const handleSnapToBubble = useCallback(() => {
     if (!contextMenu) return;
@@ -254,6 +285,7 @@ export function useContextMenuActions(
     handleOpenMergePreview,
     handleConfirmMerge,
     handleCancelMerge,
+    handleRectifyPolygon,
     handleSnapToBubble,
     mergePreviewOpen,
     mergePreviewItems,

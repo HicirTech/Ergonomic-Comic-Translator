@@ -208,7 +208,7 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       handleAddPolygonPoint, handleDeletePolygonPoint,
       handleDeleteTextLine, handleAddNewLine,
       handleOpenMergePreview, handleConfirmMerge, handleCancelMerge,
-      handleSnapToBubble,
+      handleRectifyPolygon, handleSnapToBubble,
       mergePreviewOpen, mergePreviewItems,
     } = useContextMenuActions(
       linesRef, translatedLinesRef, lines.length,
@@ -344,6 +344,7 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       onDeleteTextLine: handleDeleteTextLine,
       onAddNewLine: handleAddNewLine,
       onMergeSelectedLines: handleOpenMergePreview,
+      onRectifyPolygon: handleRectifyPolygon,
       onSnapToBubble: handleSnapToBubble,
       onSave: handleSave,
       onOcrPage,
@@ -353,7 +354,7 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
     }), [isDirty, saving, saveMessage, errorMessage, contextMenu, setContextMenu, getSvgPoint,
       startPolygonMoveDrag, startPolygonPointDrag, openPolygonMenu, handleAddPolygonPoint,
       handleDeletePolygonPoint, handleDeleteTextLine, handleAddNewLine, handleOpenMergePreview,
-      handleSnapToBubble,
+      handleRectifyPolygon, handleSnapToBubble,
       handleSave, onOcrPage, handleTextlessPageWithSave, onTranslatePage, handleExportPng]);
 
     const summaryCtxValue = useMemo(() => ({
