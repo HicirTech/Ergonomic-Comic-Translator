@@ -63,7 +63,7 @@ A React + Material UI interface for the full workflow:
 | **Translation Overlay** | Rendered translated text inside polygons, orientation-aware with auto-fitted font size |
 | **Polygon Text Layout** | Scanline-based text wrapping that conforms to irregular polygon shapes — CJK characters stack in right-to-left columns for vertical orientation, non-CJK text uses word-boundary wrapping with rotated rendering |
 | **Polygon Merging** | Select multiple polygons (Ctrl+click) and merge them into one — preview dialog with drag-and-drop to reorder text before confirming |
-| **Snap to Bubble** | Right-click a polygon to auto-detect the surrounding speech bubble boundary using flood-fill edge detection, then snap the polygon to fit the bubble interior |
+| **Snap to Bubble** | Right-click a polygon to auto-detect the surrounding speech bubble boundary using flood-fill edge detection, then snap the polygon to fit the bubble interior (requires textless page) |
 | **Rectify to Rectangle** | Right-click a polygon to convert any irregular shape to its axis-aligned bounding rectangle |
 | **Text/Textless Toggle** | Switch between original and text-removed image |
 | **Polygon Styling** | ARGB color picker for polygon overlay background |
