@@ -5,18 +5,24 @@
  * Uses the textless page image (text already removed) so that inpainted text
  * doesn't interfere with boundary detection.
  *
- * Algorithm:
- * 1. Load the image and draw to an offscreen canvas.
- * 2. Flood-fill from the polygon centroid to find all connected light pixels
- *    (the bubble interior).
- * 3. Extract boundary pixels of the filled region.
- * 4. Order boundary pixels into a contour by angle from centroid.
- * 5. Simplify the contour with the Douglas-Peucker algorithm.
+ * Algorithm — gradient-based ray-casting:
+ * 1. Load the image and compute a Sobel edge-magnitude map.
+ * 2. Cast 360 rays from the polygon centroid outward.
+ * 3. Walk each ray and stop when accumulated edge energy exceeds a threshold
+ *    (adaptive, based on the image's median edge strength).
+ * 4. Build an ordered contour from the hit points (angular buckets).
+ * 5. Simplify the contour with Douglas-Peucker.
  * 6. Inset each vertex by `insetPx` toward the centroid.
+ *
+ * Works with both light and dark bubble backgrounds because it relies on
+ * brightness *changes* (edges) rather than absolute brightness values.
  */
 
-const BRIGHTNESS_THRESHOLD = 170;
-const MAX_FLOOD_PIXELS = 800_000; // safety cap to avoid flooding the entire page
+const RAY_COUNT = 360;
+const RAY_STEP = 1;
+const MAX_RAY_LENGTH = 800;
+// How many consecutive edge pixels must be hit before declaring a boundary
+const EDGE_RUN_LENGTH = 3;
 
 /** Perceived luminance (0–255) at pixel (x, y). Returns 0 for out-of-bounds. */
 function brightness(data: Uint8ClampedArray, w: number, h: number, x: number, y: number): number {
@@ -37,81 +43,80 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Scanline flood-fill from (sx, sy). Returns a Uint8Array mask where 1 = filled.
- * Only fills pixels whose brightness >= threshold.
+ * Compute Sobel edge magnitude for every pixel.
+ * Returns a Float32Array of edge magnitudes (0–~1020).
  */
-function floodFill(
-  data: Uint8ClampedArray, w: number, h: number,
-  sx: number, sy: number, threshold: number,
-): Uint8Array | null {
-  const mask = new Uint8Array(w * h);
-  const stack: number[] = [sx, sy];
-  let count = 0;
-
-  while (stack.length > 0) {
-    const y = stack.pop()!;
-    const x = stack.pop()!;
-    if (x < 0 || y < 0 || x >= w || y >= h) continue;
-    const idx = y * w + x;
-    if (mask[idx]) continue;
-    if (brightness(data, w, h, x, y) < threshold) continue;
-
-    mask[idx] = 1;
-    count++;
-    if (count > MAX_FLOOD_PIXELS) return null; // region too large, likely not a bubble
-
-    stack.push(x - 1, y, x + 1, y, x, y - 1, x, y + 1);
+function computeEdgeMap(data: Uint8ClampedArray, w: number, h: number): Float32Array {
+  const lum = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const off = i * 4;
+    lum[i] = data[off] * 0.299 + data[off + 1] * 0.587 + data[off + 2] * 0.114;
   }
 
-  return mask;
-}
-
-/**
- * Extract boundary pixels from a flood-fill mask.
- * A pixel is on the boundary if it's filled and has at least one unfilled 4-neighbor.
- */
-function extractBoundary(mask: Uint8Array, w: number, h: number): [number, number][] {
-  const boundary: [number, number][] = [];
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (!mask[y * w + x]) continue;
-      // Check 4-neighbors
-      if (
-        x === 0 || y === 0 || x === w - 1 || y === h - 1 ||
-        !mask[y * w + (x - 1)] || !mask[y * w + (x + 1)] ||
-        !mask[(y - 1) * w + x] || !mask[(y + 1) * w + x]
-      ) {
-        boundary.push([x, y]);
-      }
+  const edge = new Float32Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const tl = lum[(y - 1) * w + (x - 1)];
+      const tc = lum[(y - 1) * w + x];
+      const tr = lum[(y - 1) * w + (x + 1)];
+      const ml = lum[y * w + (x - 1)];
+      const mr = lum[y * w + (x + 1)];
+      const bl = lum[(y + 1) * w + (x - 1)];
+      const bc = lum[(y + 1) * w + x];
+      const br = lum[(y + 1) * w + (x + 1)];
+      const gx = -tl + tr - 2 * ml + 2 * mr - bl + br;
+      const gy = -tl - 2 * tc - tr + bl + 2 * bc + br;
+      edge[y * w + x] = Math.sqrt(gx * gx + gy * gy);
     }
   }
-  return boundary;
+  return edge;
 }
 
 /**
- * Order boundary points by angle from the centroid, then average nearby points
- * into angular buckets to produce a clean, ordered contour.
+ * Compute an adaptive edge threshold from the edge map.
+ * Uses the edge values sampled along a ring around the centroid to determine
+ * what constitutes a "strong" edge in this particular image region.
+ */
+function computeAdaptiveThreshold(
+  edge: Float32Array, w: number, h: number,
+  cx: number, cy: number, sampleRadius: number,
+): number {
+  const samples: number[] = [];
+  for (let i = 0; i < 72; i++) {
+    const angle = (2 * Math.PI * i) / 72;
+    const x = Math.round(cx + Math.cos(angle) * sampleRadius);
+    const y = Math.round(cy + Math.sin(angle) * sampleRadius);
+    if (x >= 0 && y >= 0 && x < w && y < h) {
+      samples.push(edge[y * w + x]);
+    }
+  }
+  if (samples.length === 0) return 40;
+  samples.sort((a, b) => a - b);
+  // Use the 75th percentile of edge values in the local area as the threshold
+  const p75 = samples[Math.floor(samples.length * 0.75)];
+  // Clamp to a reasonable range
+  return Math.max(25, Math.min(120, p75 * 1.5 + 15));
+}
+
+/**
+ * Order boundary points by angle into angular buckets.
+ * For each bucket, keep the point closest to centroid (first edge hit).
  */
 function buildContour(
-  boundary: [number, number][],
+  points: [number, number][],
   cx: number, cy: number,
   bucketCount: number,
 ): [number, number][] {
-  // For each angular bucket, track the point furthest from centroid
   const buckets: ([number, number] | null)[] = new Array(bucketCount).fill(null);
-  const bucketDist: number[] = new Array(bucketCount).fill(0);
 
-  for (const [bx, by] of boundary) {
-    const angle = Math.atan2(by - cy, bx - cx); // -PI..PI
+  for (const [bx, by] of points) {
+    const angle = Math.atan2(by - cy, bx - cx);
     const bucket = Math.floor(((angle + Math.PI) / (2 * Math.PI)) * bucketCount) % bucketCount;
-    const dist = (bx - cx) ** 2 + (by - cy) ** 2;
-    if (dist > bucketDist[bucket]) {
+    if (!buckets[bucket]) {
       buckets[bucket] = [bx, by];
-      bucketDist[bucket] = dist;
     }
   }
 
-  // Collect non-empty buckets in order
   const contour: [number, number][] = [];
   for (const pt of buckets) {
     if (pt) contour.push(pt);
@@ -151,16 +156,10 @@ function douglasPeucker(points: [number, number][], epsilon: number): [number, n
   return [first, last];
 }
 
-/**
- * Simplify a closed polygon using Douglas-Peucker.
- * Handles the wrap-around by doubling, simplifying, then trimming.
- */
 function simplifyClosedPolygon(points: [number, number][], epsilon: number): [number, number][] {
   if (points.length <= 4) return points;
-  // Double the points so the algorithm handles the wrap-around seam
   const doubled = [...points, ...points];
   const simplified = douglasPeucker(doubled, epsilon);
-  // Take approximately the first half (original range)
   const n = Math.ceil(simplified.length / 2);
   return simplified.slice(0, n);
 }
@@ -197,37 +196,79 @@ export async function detectBubbleBoundary(
   const imageData = ctx.getImageData(0, 0, w, h);
   const { data } = imageData;
 
+  // Compute Sobel edge map
+  const edgeMap = computeEdgeMap(data, w, h);
+
   // Compute centroid of the input polygon
   let cx = 0, cy = 0;
   for (const [px, py] of polygon) { cx += px; cy += py; }
   cx = Math.round(cx / polygon.length);
   cy = Math.round(cy / polygon.length);
 
-  // Verify centroid is inside a light area
-  if (brightness(data, w, h, cx, cy) < BRIGHTNESS_THRESHOLD) {
-    return null;
+  if (cx < 0 || cy < 0 || cx >= w || cy >= h) return null;
+
+  // Compute adaptive edge threshold based on the local area
+  // Use the average polygon radius as the sample ring radius
+  let avgR = 0;
+  for (const [px, py] of polygon) avgR += Math.hypot(px - cx, py - cy);
+  avgR /= polygon.length;
+  const edgeThreshold = computeAdaptiveThreshold(edgeMap, w, h, cx, cy, Math.max(10, avgR * 0.5));
+
+  // Cast rays from centroid and find boundary points
+  const boundaryPoints: [number, number][] = [];
+  for (let i = 0; i < RAY_COUNT; i++) {
+    const angle = (2 * Math.PI * i) / RAY_COUNT;
+    const dx = Math.cos(angle) * RAY_STEP;
+    const dy = Math.sin(angle) * RAY_STEP;
+
+    let x = cx;
+    let y = cy;
+    let edgeRunCount = 0;
+    let hitX = -1, hitY = -1;
+
+    for (let step = 0; step < MAX_RAY_LENGTH / RAY_STEP; step++) {
+      x += dx;
+      y += dy;
+
+      const ix = Math.round(x);
+      const iy = Math.round(y);
+
+      // Out of image bounds
+      if (ix < 0 || iy < 0 || ix >= w || iy >= h) {
+        if (hitX < 0) { hitX = ix - Math.round(dx); hitY = iy - Math.round(dy); }
+        break;
+      }
+
+      const edgeVal = edgeMap[iy * w + ix];
+      if (edgeVal >= edgeThreshold) {
+        edgeRunCount++;
+        if (edgeRunCount === 1) { hitX = ix; hitY = iy; }
+        if (edgeRunCount >= EDGE_RUN_LENGTH) break;
+      } else {
+        edgeRunCount = 0;
+        hitX = -1;
+        hitY = -1;
+      }
+    }
+
+    if (hitX >= 0 && hitY >= 0) {
+      boundaryPoints.push([hitX, hitY]);
+    }
   }
 
-  // Flood-fill from centroid to find the bubble interior
-  const mask = floodFill(data, w, h, cx, cy, BRIGHTNESS_THRESHOLD);
-  if (!mask) return null; // region too large
-
-  // Extract boundary pixels
-  const boundary = extractBoundary(mask, w, h);
-  if (boundary.length < 10) return null;
+  if (boundaryPoints.length < 10) return null;
 
   // Build ordered contour using angular buckets (360 buckets = 1° resolution)
-  const contour = buildContour(boundary, cx, cy, 360);
+  const contour = buildContour(boundaryPoints, cx, cy, 360);
   if (contour.length < 4) return null;
 
-  // Simplify the contour — epsilon based on the bubble size
-  // Compute approximate radius for adaptive epsilon
+  // Simplify — adaptive epsilon based on bubble size
   let maxR = 0;
   for (const [px, py] of contour) {
     const r = Math.hypot(px - cx, py - cy);
     if (r > maxR) maxR = r;
   }
-  const epsilon = Math.max(2, maxR * 0.02); // ~2% of bubble radius, min 2px
+  const epsilon = Math.max(2, maxR * 0.02);
   const simplified = simplifyClosedPolygon(contour, epsilon);
   if (simplified.length < 3) return null;
 

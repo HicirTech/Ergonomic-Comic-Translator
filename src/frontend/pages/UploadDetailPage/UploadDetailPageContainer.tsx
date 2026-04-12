@@ -23,7 +23,6 @@ import {
   enqueueOcrPage,
   enqueueTextlessPage,
   fetchOcrConfig,
-  fetchOcrJobStatus,
   fetchTextlessJobStatus,
   fetchUploadPages,
   fetchAllOcrPageLines,
@@ -157,16 +156,6 @@ const UploadDetailPageContainer: React.FC = () => {
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  const waitForOcrSettled = async (): Promise<string | null> => {
-    if (!uploadId) return null;
-    for (let i = 0; i < 240; i += 1) {
-      const status = await fetchOcrJobStatus(uploadId);
-      if (status.status !== "Queued" && status.status !== "Processing") return status.lastError;
-      await sleep(1500);
-    }
-    return null;
-  };
-
   const handleTextlessPage = async (pageIndex: number) => {
     if (!uploadId) return;
     setTextlessPageOpen(true);
@@ -220,15 +209,11 @@ const UploadDetailPageContainer: React.FC = () => {
       if (ocrPageIndex === selectedPage) {
         await saveCurrentPageIfDirty();
       }
+      // enqueueOcrPage runs OCR synchronously on the server —
+      // when the POST resolves, the output file is already updated.
       await enqueueOcrPage(uploadId, ocrPageIndex + 1, ocrModel, ocrLanguage);
-      const lastError = await waitForOcrSettled();
-      if (lastError) {
-        setOcrPageError(lastError);
-        return;
-      }
-      if (ocrPageIndex === selectedPage) {
-        await refreshCurrentPreviewPage();
-      }
+      // Always refresh the preview panel so the new lines replace old state
+      await refreshCurrentPreviewPage();
       refreshPageSummaries();
       setOcrPageOpen(false);
       setOcrPageIndex(null);
