@@ -1,0 +1,482 @@
+Project: Ergonomic Comic Translator
+
+Purpose:
+- Bun-driven OCR pipeline for comic page images and PDF files.
+- Writes normalized OCR JSON to a configurable output path.
+- Uses Poetry-managed Python for PaddleOCR runtime work.
+- Post-OCR text removal via local Python pipeline (manga-text-cleaner + lama inpainting).
+- Post-OCR translation via local Ollama LLM (page-by-page with full context).
+
+Current architecture:
+- System layer: WSL2/Linux, Homebrew, visible NVIDIA and/or AMD GPUs, CUDA driver passthrough from Windows, optional ZLUDA for AMD GPU acceleration.
+- Python layer: Poetry + pyenv-managed Python 3.12, two domain packages under src/python/ invoked as modules (python -m):
+  - ocr/ package: PaddleOCR runtime (runner.py), PDF page rendering (pdf.py), polygon geometry helpers (geometry.py)
+  - textless/ package: text removal pipeline (runner.py), inpainting strategy dispatch (inpainting/), shared utilities (utils/)
+- Bun layer: modular OCR code under src/ocr/, modular API code under src/api/, input discovery, runtime config, PDF preparation, batch OCR execution with multi-GPU support, logging, upload intake, and final JSON merge.
+- Text cleaner layer: separate Python venv (.tmp/text-cleaner-venv/) using the textless/ package with manga-text-cleaner and lama-cleaner for text removal using OCR bounding boxes.
+- Translation layer: Bun-driven Ollama integration (src/api/services/translate-processing.ts) translating OCR pages page-by-page using a local LLM. Each page call includes full OCR and accumulated translations as context. Output written incrementally to .tmp/translated/{scope}/translated.json.
+
+Important current behavior:
+- Shared path config lives in src/config.ts.
+- Bun accepts image files and PDF files from the configured OCR file root; the default is .tmp/ocr/.
+- PDF inputs are first rendered into per-page PNG files via src/python/pdf_splitter.py.
+- All pages for a given scope are processed in a single batch Python process by default (one model load).
+- When OCR_CONCURRENCY > 1 and multiple NVIDIA GPUs are available, pages are split round-robin across parallel GPU batches (one Python process per GPU).
+- On a single GPU, OCR_CONCURRENCY has no effect — all pages run in one batch to avoid VRAM contention.
+- Single PDF files are prepared page-by-page, then all page images are batched together.
+- OCR output is written under .tmp/ocr_output/{scope} by default.
+- OCR preparation artifacts and per-job JSON files are preserved under .tmp/ocr_output/{scope}/artifacts.
+- Direct Bun OCR uses scope ocr; files discovered under the API upload root use their uploadId as the output scope.
+- Bun API server accepts image, PDF, and ZIP uploads.
+- Bun API server uses GET /api/files to list stored files and POST /api/upload to accept new uploads.
+- Bun API server exposes POST /api/ocr/{uploadId}, GET /api/ocr, DELETE /api/ocr/{uploadId}, and GET /api/ocr/{uploadId} for OCR queue management.
+- Bun API server exposes POST /api/textless/{uploadId}, POST /api/textless/{uploadId}/{page}, GET /api/textless, and GET /api/textless/{uploadId} for textless queue management.
+- Bun API server exposes POST /api/translate/{uploadId}, POST /api/translate/{uploadId}/{page}, GET /api/translate, GET /api/translate/{uploadId}, GET /api/translate/{uploadId}/{page}, and PUT /api/translate/{uploadId}/{page} for translation queue management and per-page read/write.
+- OCR queue state is persisted in .tmp/program/ocrQueue.json by default.
+- Textless queue state is persisted in .tmp/program/textlessQueue.json by default.
+- Translation queue state is persisted in .tmp/program/translateQueue.json by default.
+- OCR queue states are Ready, Queued, Processing, and Completed.
+- Textless queue states are Ready, Queued, Processing, and Completed (shared JobStatus type).
+- OCR and textless queues share a unified JobStatus type defined in src/api/interfaces/job-status.ts.
+- If no OCR task is active, a queued upload starts immediately; otherwise it waits for the current upload to finish.
+- Once an upload reaches Completed, later POST /api/ocr/{uploadId} requests do not re-add it to the queue.
+- Textless queue requires OCR Completed status; uploads can be re-queued. Per-page tracking (pending/completed/failed). One uploadId at a time.
+- Translation queue requires OCR Completed status; uploads can be re-queued. Per-page tracking (pending/completed/failed). One uploadId at a time. Pages translated sequentially with sliding window context (last TRANSLATE_CONTEXT_PAGES translated pages, default 8). If whole-page translation fails after 3 retries, automatically falls back to translating each line individually (2 retries per line).
+- ZIP uploads are extracted into OCR-readable files under the configured API upload directory; the default is .tmp/upload/.
+- Upload metadata is persisted through an API repository abstraction backed by .tmp/program/uploadRecord.json.
+- By default, OCR staging and API uploads are separate: OCR scans .tmp/ocr while API stores uploads in .tmp/upload.
+- OCR preparation copies images or splits PDFs into .tmp/ocr_prepare/{scope}/.
+- OCR output is written to .tmp/ocr_output/{scope}/ocr_output.json.
+- Text-removed images are written to .tmp/textless/{scope}/ with same filenames as source.
+- Translation output is written to .tmp/translated/{scope}/translated.json.
+- Per-page translation edits are read/written via GET/PUT /api/translate/{uploadId}/{page}; the UI saves inline edits back to the same translated.json.
+- Queue state is stored in .tmp/program/ocrQueue.json.
+- Textless queue state is stored in .tmp/program/textlessQueue.json.
+- Final output is merged back in stable order:
+- by original input file order
+- then by original PDF page order
+- then pageNumber is reassigned sequentially in the merged JSON
+
+Folder structure under .tmp/:
+- .tmp/program/: internal state (uploadRecord.json, ocrQueue.json, textlessQueue.json, translateQueue.json)
+- .tmp/upload/{uploadId}/: raw uploaded files per upload batch
+- .tmp/ocr_prepare/{scope}/images/: all prepared images for OCR (copied loose images, extracted ZIP images, split PDF pages)
+- .tmp/ocr_output/{scope}/ocr_output.json: final merged OCR JSON
+- .tmp/textless/{scope}/: text-removed images (same filenames as source)
+- .tmp/translated/{scope}/translated.json: translated lines JSON
+- .tmp/text-cleaner-venv/: separate Python venv for text removal pipeline
+
+Shared path config:
+- COMIC_TRANSLATOR_TEMP_DIR: root temp directory, default .tmp
+- COMIC_TRANSLATOR_FILES_DIR: OCR scan root, default .tmp/ocr
+- API_UPLOADS_DIR: API upload storage directory, default .tmp/upload
+- OCR_PREPARE_DIR: OCR preparation directory, default .tmp/ocr_prepare
+- OCR_OUTPUT_DIR: OCR output root directory, default .tmp/ocr_output
+- TEXTLESS_DIR: text removal output directory, default .tmp/textless
+- TRANSLATED_DIR: translation output root directory, default .tmp/translated
+- OCR_OUTPUT_FILE_NAME: OCR JSON file name, default ocr_output.json
+- OCR_QUEUE_FILE: OCR queue persistence file, default .tmp/program/ocrQueue.json
+- UPLOAD_RECORDS_FILE: upload metadata JSON path, default .tmp/program/uploadRecord.json
+- OCR_SOURCE_NAME: source label override written into OCR output JSON
+- TRANSLATE_QUEUE_FILE: translation queue persistence file, default .tmp/program/translateQueue.json
+- OLLAMA_HOST: Ollama API base URL, default http://192.168.20.200:11434
+- OLLAMA_TRANSLATE_MODEL: Ollama model for translation, default huihui_ai/qwen3.5-abliterated:9b
+- TRANSLATE_TARGET_LANGUAGE: default target language, default Chinese
+- TRANSLATE_CONTEXT_PAGES: number of recently-translated pages to include as context per call, default 8 (-1 = all, 0 = none)
+
+Data model:
+- uploadId (UUID) is the sole identifier across the entire pipeline. Generated once per POST /api/upload request.
+- UploadRecord: { uploadId, sourceType, originalName, storedName, storedPath, relativePath, contentType, size, createdAt, archiveName, archiveEntryName }
+  - All files from one upload share the same uploadId. No per-file ID.
+  - sourceType is image, pdf, zip, or zip-entry.
+- OcrJobRecord: { uploadId, status, outputFile, createdAt, updatedAt, startedAt, completedAt, lastError }
+  - One record per uploadId. Keyed and upserted by uploadId.
+- TranslationJobRecord: { uploadId, status, outputFile, targetLanguage, pageRecords[], createdAt, updatedAt, startedAt, completedAt, lastError }
+  - One record per uploadId. Keyed by uploadId.
+  - pageRecords tracks per-page status: pending / completed / failed.
+- TranslationOutput is an array of TranslatedPage: { pageNumber, lines: TranslatedLine[] }
+- TranslatedLine: { lineIndex, translated }
+- uploadId flows through: upload → OCR queue → ocr_prepare/{uploadId}/ → ocr_output/{uploadId}/ → textless/{uploadId}/ → translated/{uploadId}/
+
+Frontend component architecture (src/frontend/):
+- All pages and components use Container / View split + React Context for cross-cutting state.
+- OcrPreviewPanel uses OcrEditorContext (showTranslation, showBoxes, polygonBgColor, onPolygonBgColorChange, lines, translatedLines, selectedLineIndex, etc.) shared between Container, sub-components, and hooks.
+- EditorSnapshot and useEditorHistory track OCR lines + translatedLines together for unified undo/redo.
+- SvgOverlay renders polygon drag handles + optional translation overlay (semi-transparent bg + fitted text inside each polygon).
+- polygonTextLayout.ts (src/frontend/components/OcrPreviewPanel/utils/) computes AABB, binary-search max font size, horizontal wrap, and vertical right-to-left column layout; CJK chars ≈1em wide, ASCII ≈0.6em wide.
+- ImageToolbar has 3 toggle groups: image mode (original/textless), show/hide boxes, show/hide translation (default hidden); also has ARGB polygon background color picker (MUI Popover with native <input type="color"> for RGB + MUI Slider for alpha + live preview swatch).
+- polygonBgColor (ARGB rgba string) is stored in OcrPreviewPanelContainer state; persisted to localStorage keyed by `polygonBgColor:${uploadId}`; exposed via OcrEditorContext (polygonBgColor, onPolygonBgColorChange) and included in OcrPreviewPanelRef.getViewState().
+- SvgOverlay uses polygonBgColor from context for polygon fill and polygonTextColor(polygonBgColor) from src/frontend/config.ts to automatically choose white or #1a1a1a text color based on WCAG relative luminance (alpha-composited on white).
+- src/frontend/config.ts exports DEFAULT_POLYGON_BG_COLOR constant and polygonTextColor(bgColor: string) helper.
+- TranslationEditor (bottom-right panel) shows editable translated text for the selected OCR line.
+- TranslateDialog (Container + View) lets user pick model, language, and scope (all pages / current page); polls translation job status until complete.
+- UploadDialogContainer exposes uploadError state; UploadDialogView renders an Alert on failure.
+
+Current OCR runtime config:
+- OCR_MODEL: paddleocr or paddleocr-vl-1.5
+- OCR_LANGUAGE: passed into standard PaddleOCR, default japan
+- OCR_DEVICE: default auto
+- OCR_CONCURRENCY: maximum parallel GPU batches, default 1; only effective with multiple GPUs when device is auto
+
+Text removal config:
+- TEXT_CLEANER_INPAINTING_SIZE: inpainting resolution, default 2560
+- TEXT_CLEANER_MASK_DILATION: mask dilation in pixels, default 5
+- TEXT_CLEANER_PASSES: number of inpainting passes per page, default 1
+- TEXT_CLEANER_DEVICE: device for inpainting model, default auto
+
+Current OCR pipeline details:
+- src/python/paddleocr_runner.py supports both PaddleOCR and PaddleOCR-VL-1.5.
+- Standard OCR path:
+- uses PaddleOCR(..., use_textline_orientation=True)
+- returns line confidence directly from rec_scores
+- VL path:
+- uses PaddleOCRVL(pipeline_version="v1.5", ...)
+- normalizes parsing_res_list / spotting_res into the shared output schema
+- adds orientation for each line/block
+- VL does not expose confidence values
+
+Output schema expectations:
+- Top level fields:
+- source
+- ocrEngine
+- ocrModel
+- language
+- device
+- generatedAt
+- pageCount
+- pages[]
+- Each page contains:
+- pageNumber
+- fileName
+- filePath
+- lines[]
+- Each line contains:
+- lineIndex (0-based index within the page)
+- text
+- box as [x1, y1, x2, y2]
+- orientation
+- polygon (array of [x, y] coordinate pairs)
+
+Current key files:
+- src/logger.ts:
+- log4js-based logging with colored stdout output: [dd-MM-yyyy hh:mm:ss] LEVEL CATEGORY message
+- 10 named categories: default, server, upload, ocr, prepare, batch, translate, textless, python, delete
+- all categories default to level info
+- getLogger(category): returns a log4js Logger for the named category
+- forwardPythonLine(logger, line): routes a single Python stderr line to the correct log level based on [ERROR]/[WARN]/[INFO] prefix
+- forwardPythonLogs(logger, stderr): splits a multi-line stderr buffer and delegates each line to forwardPythonLine
+- src/config.ts:
+- shared config entrypoint for file roots, temp paths, upload metadata path, OCR source name, API host/port defaults, and text cleaner settings
+- src/main.ts:
+- thin Bun entrypoint only
+- delegates OCR flow to src/ocr/
+- src/api/server.ts:
+- Bun HTTP server entrypoint
+- exposes GET /health, GET /api/config, GET /api/files, POST /api/upload
+- exposes OCR queue routes under /api/ocr
+- exposes textless queue routes under /api/textless
+- exposes translation queue routes under /api/translate
+- thin route dispatcher: delegates all business logic to services
+- uses shared parseUploadPath(prefix, pathname) helper to parse /{prefix}/{uploadId}[/{page}] routes
+- calls ocrQueueService.prepareUpload() after upload (non-fatal; OCR queue falls back if needed)
+- src/api/services/ocr-queue-service.ts:
+- persists and manages OCR queue state per uploadId
+- runs a background OCR worker using Ready, Queued, Processing, and Completed states
+- prepareUpload(uploadId, storedPaths): public method to eagerly prepare OCR inputs at upload time
+- src/api/services/textless-queue-service.ts:
+- persists and manages textless queue state per uploadId
+- runs a background textless worker using Ready, Queued, Processing, and Completed states
+- supports per-page tracking and re-enqueue
+- src/api/services/textless-processing.ts:
+- shared textless processing functions (page processing, OCR output loading)
+- uses local Python text-cleaner pipeline with PaddleOCR bounding boxes + lama_large inpainting
+- uses resolveOutputFileForScope() from ocr/runtime-context.ts as the single source of truth for OCR output path
+- src/api/services/translate-processing.ts:
+- core Ollama integration for translation
+- uses resolveOutputFileForScope() from ocr/runtime-context.ts to read OCR output (single source of truth)
+- extractFirstObject(): bracket-scanning JSON extractor tolerating surrounding text
+- buildSystemPrompt(): includes full OCR + already-translated pages as context for each page call
+- callOllamaPage(): streaming Ollama call for a single page (5-min timeout, stream:true, format:"json")
+- translateAll(): page-by-page loop with 3 retries per page; calls onPageDone callback after each success
+- Ollama options: num_predict:-1, num_ctx:262144, temperature:0.1
+- src/api/services/translate-queue-service.ts:
+- persists and manages translation queue state per uploadId
+- runs a background translation worker using Ready, Queued, Processing, and Completed states
+- supports per-page tracking and incremental saves via onPageDone callback
+- single-page retranslation: builds pagesToTranslate by filtering ocrOutput.pages to only requested pageNumbers before calling translateAll (prevents sending all pages to Ollama)
+- enqueue with specific pageNumbers: loads existing record, resets only requested pages to pending, preserves statuses of other pages (prevents wholesale record overwrite)
+- finalPageRecords uses [...pageRecordMap.values()] to persist only pages that were part of this job (prevents phantom pending entries for untranslated pages)
+- src/api/repositories/file-ocr-job-repository.ts:
+- current file-backed OCR queue state store using .tmp/program/ocrQueue.json by default
+- src/api/repositories/file-textless-job-repository.ts:
+- current file-backed textless queue state store using .tmp/program/textlessQueue.json by default
+- src/api/repositories/translation-job-repository.ts:
+- repository interface for translation queue state persistence
+- src/api/repositories/file-translation-job-repository.ts:
+- current file-backed translation queue state store using .tmp/program/translateQueue.json by default
+- src/api/services/config-service.ts:
+- builds API config response from the real OCR/runtime settings
+- src/api/services/upload-service.ts:
+- generates one uploadId (UUID) per POST /api/upload request; all files in the batch share that uploadId
+- stores uploaded images/PDFs and ZIP archives under .tmp/upload/{uploadId}/
+- extracts supported entries from ZIP archives into subfolders
+- each stored file becomes an UploadRecord with the shared uploadId (no per-file ID)
+- returns OCR-ready stored records and skipped archive entries
+- src/api/repositories/upload-record-repository.ts:
+- repository interface for upload metadata persistence
+- intended seam for future database implementation
+- src/api/repositories/file-upload-record-repository.ts:
+- current file-backed upload metadata store using the configured metadata JSON path
+- src/api/runtime-context.ts:
+- API routes and API-specific derived runtime constants
+- src/api/utils/:
+- ZIP extraction, path sanitization, HTTP helpers, and time utilities (nowIso)
+- src/scripts/shell-utils.ts:
+- shared shell utilities (decodeBuffer, commandAvailable, commandOutput) used by all detection/bootstrap scripts
+- src/ocr/run-ocr.ts:
+- high-level Bun OCR workflow entry
+- starts scan, groups inputs by output scope, runs batch execution, and writes one merged JSON per scope
+- src/ocr/preparation.ts:
+- expands PDFs into page jobs
+- writes PDF split artifacts into the output scope artifact directory
+- src/ocr/execution.ts:
+- runs batch OCR: all pages for a scope in a single Python process
+- supports multi-GPU: when OCR_CONCURRENCY > 1 and multiple NVIDIA GPUs are detected, splits jobs round-robin across parallel batches pinned to gpu:0, gpu:1, etc.
+- resolves available GPU devices via nvidia-smi at runtime
+- maps batch output pages back to their corresponding prepared jobs
+- reassembles results in original job order after parallel batch execution
+- writes per-batch manifests and intermediate OCR JSON files into the output scope artifact directory
+- src/ocr/merge.ts:
+- merges concurrent results back in stable order
+- src/ocr/config/ocr-model.ts:
+- supported OCR model definitions and OcrModel type
+- src/ocr/config/index.ts:
+- thin barrel that re-exports OCR model definitions from src/ocr/config/ocr-model.ts
+- src/ocr/interfaces/:
+- Bun-layer interfaces split one file per type
+- index.ts re-exports the interface set for simpler imports
+- src/ocr/utils/:
+- OCR-specific file and job helper utilities
+- src/scripts/python-run.ts:
+- caches Python environment detection (per projectRoot Map)
+- runs ocr.runner module with ZLUDA env injection when AMD GPU + ZLUDA are detected
+- runs ocr.pdf module
+- runs textless.runner module
+- all Python scripts invoked via `python -m <module>` with PYTHONPATH=src/python/
+- forwards configured source/path values into Python entrypoints
+- Python-Bun message channel protocol:
+  - stderr = logging channel: Python scripts write lines with [INFO]/[WARN]/[ERROR] prefixes to sys.stderr
+  - stdout = data channel: used for structured result data (or unused when writing to file)
+  - Poetry scripts (OCR, PDF splitter) use Bun.spawn() with piped stdout+stderr, invoked as `poetry run python -m ocr.runner` / `poetry run python -m ocr.pdf`
+    - stderr is streamed line-by-line via readStreamLines() and forwarded through forwardPythonLine()
+    - stdout is drained fully as string; returned to caller
+    - both streams consumed concurrently with Promise.all to prevent pipe-buffer deadlocks
+  - Text cleaner uses Bun $ shell tag with .nothrow(), invoked as `python -m textless.runner`; stderr forwarded via forwardPythonLogs() after exit
+  - ocr.runner: writes JSON to --output file (not stdout); stderr has progress lines
+  - ocr.pdf: writes JSON manifest to --output file (not stdout)
+  - textless.runner: last non-empty stdout line is JSON {success, outputPath} or {success, error}
+  - OCR progress extraction: regex /\[INFO\] Processing page (\d+)\/(\d+)/ on stderr onLine callback triggers onProgress(current, total)
+  - Non-zero exit codes throw Error("{prefix} failed with exit code {code}")
+  - PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True set inside ocr/runner.py
+  - LD_LIBRARY_PATH extended with ZLUDA path for AMD GPU support via resolveZludaEnv()
+  - PYTHONPATH set to src/python/ for all Python invocations so relative imports resolve correctly
+- src/scripts/text-cleaner-bootstrap.ts:
+	- creates .tmp/text-cleaner-venv/ with PyTorch (cu126), manga-text-cleaner, and lama-cleaner dependencies
+	- downloads model weights into src/python/models/ (lama_large_512px.ckpt and detect-20241225.ckpt)
+	- idempotent: skips venv creation if already exists, skips model download if files already present
+	- uses .part files for atomic downloads
+- src/scripts/textless.ts:
+- text removal CLI: bun run textless <scope> [page]
+- reads OCR output JSON for the given scope to find source image paths
+- processes each page through the local text-cleaner pipeline
+- saves text-removed PNGs under .tmp/textless/{scope}/
+- src/scripts/translate.ts:
+- translation CLI: bun run translate <scope> [page] [--lang <language>]
+- reads OCR output JSON for the given scope
+- calls translateAll() which sends each page to Ollama with full OCR + accumulated translations as context
+- saves output incrementally to .tmp/translated/{scope}/translated.json
+- single-page mode: sends all pages for context, updates only the target page in the existing translated.json
+- src/scripts/amd-detect.ts:
+- AMD GPU detection via rocm-smi, sysfs, lspci, and WSL2 GPU-PV driver INF scanning
+- WSL2 detection counts 3D controllers, subtracts NVIDIA GPUs, scans /usr/lib/wsl/drivers/ INF files for AMD model names
+- detects ZLUDA installation at common paths or ZLUDA_PATH env
+- detects ROCm version and HIP runtime availability
+- src/scripts/nvidia-detect.ts:
+- NVIDIA GPU detection via nvidia-smi
+- extracts driver version, CUDA version, GPU names and count
+- src/scripts/cuda-detect.ts:
+- CUDA capability detection combining nvidia-smi and nvcc
+- ZLUDA compatibility check for AMD GPU fallback
+- src/scripts/system-detect.ts:
+- aggregates NVIDIA, AMD, and CUDA detection results
+- resolves gpuBackend: nvidia, amd-zluda, or cpu
+- src/python/ocr/runner.py:
+- Python package module (invoked as `python -m ocr.runner`)
+- executes OCR for a batch of image inputs in a single pipeline invocation
+- loads the OCR model once and processes all images sequentially
+- logs per-page progress during batch processing
+- supports PaddleOCR and PaddleOCR-VL-1.5
+- normalizes result payloads
+- computes orientation
+- uses relative imports from the ocr package (geometry module)
+- src/python/ocr/pdf.py:
+- Python package module (invoked as `python -m ocr.pdf`)
+- renders PDF pages to PNG using pypdfium2
+- writes a JSON manifest describing page order and paths
+- src/python/ocr/geometry.py:
+- polygon and bounding-box geometry helpers shared within the ocr package
+- src/python/textless/runner.py:
+- Python package module (invoked as `python -m textless.runner`)
+- uses OCR bounding boxes to create text masks
+- dispatches to inpainting strategy (lama_large by default)
+- supports polygon and box-based masking
+- uses relative imports from the textless package (config, inpainting, utils)
+- src/python/textless/config.py:
+- text cleaner configuration (model paths, device selection)
+- src/python/textless/inpainting/:
+- inpainting strategy dispatch: base interface, lama implementation, no-op, original passthrough
+- src/python/textless/utils/:
+- shared utilities: generic helpers, model inference, Python-side logging, thread pool management
+
+Dependencies and environment:
+- pyproject.toml currently declares:
+- paddleocr 3.4.0 with doc-parser extra
+- paddlex 3.4.3 with ocr extra
+- paddlepaddle-gpu 3.2.1 from the paddle-cu126 source
+- Python scripts must run as modules (python -m) with PYTHONPATH=src/python/ — not as standalone scripts.
+- Text cleaner uses a separate venv (.tmp/text-cleaner-venv/) bootstrapped via bun run text-cleaner:bootstrap.
+- Text cleaner venv uses PyTorch with cu129 (CUDA 12.9+), matching the PaddlePaddle cu129 environment.
+- Model weights are stored in src/python/models/ (gitignored, downloaded by bootstrapper).
+
+Text removal (textless) behavior:
+- Uses a local Python pipeline with manga-text-cleaner for mask generation and lama_large for inpainting.
+- OCR bounding boxes (polygons or axis-aligned boxes) are used to create precise text masks.
+- Mask dilation is configurable via TEXT_CLEANER_MASK_DILATION (default 5px).
+- bun run textless <scope> [page] reads OCR output JSON to find source images and processes them locally.
+- Text-removed PNGs are saved under .tmp/textless/{scope}/ with the same filenames as source images.
+- Speech bubble text is cleanly removed; scattered SFX/onomatopoeia depends on OCR detection quality.
+
+Commands:
+- bun install
+- bun run api
+- bun run ocr
+- bun run textless <scope> [page]
+- bun run translate <scope> [page] [--lang <language>]
+- bun run text-cleaner:bootstrap
+- bun run doctor
+- bun run system:detect
+- bun run system:bootstrap
+- bun run python:detect
+- bun run python:bootstrap
+- bun run nvidia:detect
+- bun run cuda:detect
+- bun run amd:detect
+- bun run typecheck
+
+Useful run examples:
+- bun run api
+- bun run ocr
+- COMIC_TRANSLATOR_FILES_DIR=.tmp/upload bun run ocr
+- COMIC_TRANSLATOR_FILES_DIR=./library bun run ocr
+- COMIC_TRANSLATOR_FILES_DIR=./library API_UPLOADS_DIR=./library/inbox bun run api
+- OCR_OUTPUT_DIR=./output/ocr_output bun run ocr
+- OCR_MODEL=paddleocr OCR_LANGUAGE=japan bun run ocr
+- OCR_MODEL=paddleocr-vl-1.5 bun run ocr
+- OCR_CONCURRENCY=2 bun run ocr
+- OCR_MODEL=paddleocr OCR_CONCURRENCY=2 bun run ocr
+- bun run textless ocr
+- bun run textless ocr 3
+- bun run translate ocr
+- bun run translate ocr 5
+- bun run translate ocr --lang Japanese
+- OLLAMA_HOST=http://192.168.20.200:11434 bun run translate ocr
+- TRANSLATE_TARGET_LANGUAGE=French bun run translate ocr
+
+Known caveats / editing guidance:
+- Keep Bun responsible for filesystem, orchestration, logging, and config.
+- Keep Bun API code inside src/api/ and keep OCR orchestration inside src/ocr/.
+- Keep Python code organized as packages under src/python/ (ocr/ and textless/). Use relative imports within packages.
+- Keep Bun invoking Python via `python -m <module>` with PYTHONPATH, never as standalone script files.
+- Keep Python responsible for OCR runtime work and PDF rendering.
+- Keep Bun OCR code inside src/ocr/ rather than moving orchestration back into src/main.ts.
+- For upload persistence changes, prefer extending the repository abstraction rather than coupling server routes directly to file storage.
+- When adding Bun OCR types, prefer creating a dedicated file under src/ocr/interfaces/ and exporting it through src/ocr/interfaces/index.ts.
+- When adding API types, prefer creating a dedicated file under src/api/interfaces/ and exporting it through src/api/interfaces/index.ts.
+- When adding API modules, prefer exporting them via src/api/index.ts or folder-level index.ts files.
+- When adding Bun OCR submodules, prefer exporting them via src/ocr/index.ts or the relevant folder index.ts.
+- Preserve the normalized output schema unless a task explicitly requires changing it.
+- Preserve stable merge ordering for concurrent OCR results.
+- Prefer small targeted edits; avoid undoing the WSL2 + Poetry + Bun layered design.
+- Do not reintroduce Docker unless explicitly requested.
+- Ollama runs on the Windows host (192.168.20.200:11434) when running in WSL2 — do not install Ollama inside WSL2.
+- Translation uses streaming mode (stream:true) with per-page calls to avoid LLM output truncation.
+- Each translation call includes the full OCR text and all already-translated pages in the system prompt for translation consistency.
+- extractFirstObject() in translate-processing.ts is the robust JSON parser — do not replace with plain JSON.parse.
+
+Frontend architecture:
+- React 18 + Material UI SPA served by Vite. Bun runtime for dev server and build.
+- i18next for internationalization (en.json + zh.json).
+- Dark MUI theme defined in src/frontend/theme/index.ts.
+- All components follow the Container / View pattern:
+  - *Container.tsx — all hooks, state, business logic. No raw JSX beyond wiring to the View.
+  - *View.tsx — pure render. Receives props or reads from context. May use useTranslation/useTheme.
+  - index.tsx — thin re-export only.
+- Complex components use React Context to avoid prop drilling between Container, View, and sub-components.
+- Complex components extract logic into custom hooks under hooks/ and sub-views under components/.
+
+Frontend component inventory:
+- src/frontend/pages/HomePage/: gallery of upload cards (HomePageContainer → HomePageView)
+- src/frontend/pages/UploadDetailPage/: detail page with image strip, OCR editor, dialogs
+  - UploadDetailPageContainer.tsx: page-level state, global keyboard shortcuts (Ctrl+Z/Shift+Z/S, PageUp/PageDown), dialog management, OCR/textless/translate queue interactions, PDF export wiring; pageCountRef (filled by onPagesLoaded), selectedPageRef, handleSelectPageRef as stable refs for keydown handler; PageUp/PageDown navigate to adjacent pages with bounds checking
+  - UploadDetailPageView.tsx: AppBar + ImageStripPanel + OcrPreviewPanel + dialogs layout; passes onPagesLoaded to ImageStripPanel
+- src/frontend/components/UploadCard/: portrait card with cover image, metadata, delete button
+- src/frontend/components/UploadDialog/: drag-and-drop upload with reorderable file list (DndContext)
+- src/frontend/components/DeleteConfirmDialog/: confirmation dialog for permanent upload deletion
+- src/frontend/components/OcrDialog/: dialog to trigger page-level OCR with model selection
+- src/frontend/components/TextlessDialog/: dialog to trigger page-level text removal
+- src/frontend/components/ImageStripPanel/: vertical thumbnail strip for page navigation
+  - ImageStripPanelContainer.tsx: fetches pages for uploadId; fires optional onPagesLoaded(count) callback after fetch; exposes onPagesLoaded?: (count: number) => void in ImageStripPanelProps
+  - ImageStripPanelView.tsx: renders thumbnails with four-color status dots based on OCR line summaries (normal/long/short/critical-short)
+- src/frontend/components/OcrPreviewPanel/: main OCR editor — the most complex component
+  - OcrEditorContext.tsx: 5 React Contexts (OcrLinesContext, OcrViewContext, OcrTranslationContext, OcrActionsContext, OcrSummaryContext) with typed hooks (useOcrLines, useOcrView, useOcrTranslation, useOcrActions, useOcrSummary)
+  - OcrPreviewPanelContainer.tsx: orchestrator — owns all state, wires custom hooks, provides 4 context providers
+  - OcrPreviewPanelView.tsx: thin compositor — assembles sub-components, reads from OcrViewContext
+  - types.ts: DragState, ContextMenuState, EditorSnapshot, PageHistoryState
+  - helpers.ts: pure functions (normalizeLineIndices, cloneLines, sameLines, etc.) + module-scoped uploadHistoryStore
+  - hooks/useEditorHistory.ts: undo/redo with per-page snapshot persistence (MAX_HISTORY_STEPS=5)
+  - hooks/usePolygonDrag.ts: polygon move/point drag with requestAnimationFrame throttling
+  - hooks/useTextlessPolling.ts: polls textless availability every 2s via HEAD/GET probe
+  - components/ImageToolbar.tsx: text/textless toggle + show/hide boxes toggle
+  - components/PolygonBgColorPicker.tsx: ARGB polygon background color picker (MUI Popover)
+  - components/SvgOverlay.tsx: SVG polygon rendering with drag handles over the page image
+  - components/LineSummaryPanel.tsx: wrapper composing CurrentPageLines + ProblemNavigator
+  - components/CurrentPageLines.tsx: scrollable line cards with status-colored indicators
+  - components/ProblemNavigator.tsx: cross-page problem pagination navigator
+  - components/LineEditor.tsx: bottom panel with orientation toggle, text field, save button
+  - components/TranslationEditor.tsx: bottom panel with translated text editor (blur-commit pattern)
+  - components/EditorContextMenu.tsx: right-click menu for add/delete polygon points, lines, OCR/textless actions
+- src/frontend/utils/ocr-line-summary.ts: summarizeOcrLines, buildOcrSummarySignature, sameOcrSummaries
+- src/frontend/utils/exportPdf.ts: WYSIWYG PDF export — renders each page to JPEG on OffscreenCanvas with SVG overlay composited via HTMLImageElement + object URL; minimal inline PDF encoder (DCTDecode/raw JPEG); ExportPdfOptions.polygonBgColor forwarded through to buildOverlaySvgString; pages processed in concurrent batches of PDF_EXPORT_PAGE_CONCURRENCY
+- src/frontend/api/index.ts: typed fetch wrappers for all API endpoints
+
+OcrPreviewPanelRef imperative handle (exposed to parent via forwardRef):
+- saveIfDirty(): save current edits
+- reloadPage(): reload OCR data from server
+- undo() / redo(): editor state undo/redo
+- getViewState(): returns { showBoxes, showTranslation, polygonBgColor, imageMode, isTextlessAvailable } — used by PDF export to replicate the current visual state
+
+Coding standards:
+- TypeScript strict mode with verbatimModuleSyntax. Use `import type` for type-only imports.
+- Directory barrel imports omit /index.ts: `from "../interfaces"`. Direct file imports keep .ts extension: `from "../config.ts"`.
+- One interface/type per file under interfaces/ directories, with barrel index.ts for re-export.
+- Files use kebab-case. Interfaces/types use PascalCase. Functions/variables use camelCase.
+- Shared status types use a single JobStatus union (Ready | Queued | Processing | Completed) across all queue services.
+- Queue services follow the same state machine: Ready → Queued → Processing → Completed.
+- Repository interfaces are async (seam for future database migration). Services receive repositories via constructor injection.
+- Scripts in src/scripts/ are thin CLI wrappers — import logic from service modules, no duplicated business logic.
+- Shared utilities extracted to dedicated files: src/scripts/shell-utils.ts, src/api/utils/time-utils.ts, etc.
+- Environment variables resolved once in src/config.ts with sensible defaults.
+- No barrel index.ts re-exports implementation details — only public API surfaces.
+- Frontend components follow Container/View pattern. Complex components use React Context + custom hooks + sub-components.
+- Keep frontend component logic in hooks/ and sub-views in components/. Do not put business logic in View components.
+- OcrPreviewPanel sub-components read from focused contexts via useOcrLines(), useOcrView(), useOcrTranslation(), useOcrActions() — each component only subscribes to the contexts it needs. Do not use a monolithic context.
