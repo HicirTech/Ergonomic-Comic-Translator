@@ -60,8 +60,8 @@ function layoutVerticalCjk(
   const flat = text.replace(/\n/g, "");
   if (flat.length === 0) return [{ chars: "", x: bounds.cx, startY: bounds.cy }];
 
-  const insetX = bounds.w * 0.02;
-  const availableW = bounds.w - insetX * 2;
+  const padX = fontSize * 0.4;
+  const availableW = bounds.w - padX * 2;
   const maxCols = Math.floor(availableW / colW);
   if (maxCols < 1) return null;
 
@@ -77,9 +77,10 @@ function layoutVerticalCjk(
     const span = polygonSpanAtX(polygon, colX);
     if (!span) continue;
 
-    const colHeight = (span.bottom - span.top) * 0.96;
+    const padY = fontSize * 0.4;
+    const colHeight = (span.bottom - span.top) - padY * 2;
     const charsPerCol = Math.max(1, Math.floor(colHeight / charH));
-    const colStartY = span.top + (span.bottom - span.top) * 0.02 + fontSize;
+    const colStartY = span.top + padY + fontSize;
 
     const chunk = remaining.slice(0, charsPerCol);
     columns.push({ chars: chunk, x: colX, startY: colStartY });

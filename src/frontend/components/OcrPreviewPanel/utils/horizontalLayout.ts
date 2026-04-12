@@ -83,9 +83,9 @@ function layoutHorizontal(
 ): HorizontalLayoutRow[] | null {
   const lineHeight = fontSize * 1.2;
   const useCjk = isCjk(text);
-  const insetY = lineHeight * 0.1; // small top/bottom padding
-  const minY = bounds.y + insetY + fontSize; // first possible baseline
-  const maxY = bounds.y + bounds.h - insetY;
+  const padY = fontSize * 0.4; // vertical padding from polygon edge
+  const minY = bounds.y + padY + fontSize; // first possible baseline
+  const maxY = bounds.y + bounds.h - padY;
 
   // 1. Build list of candidate slots (Y positions with usable width).
   //    Sample the polygon span at multiple vertical offsets within each text
@@ -108,9 +108,12 @@ function layoutHorizontal(
       if (span.right < narrowRight) narrowRight = span.right;
     }
     if (miss) continue;
-    const w = (narrowRight - narrowLeft) * 0.94; // 6% total inset
+    const padX = fontSize * 0.35; // horizontal padding from polygon edge
+    const left = narrowLeft + padX;
+    const right = narrowRight - padX;
+    const w = right - left;
     if (w < fontSize * 0.6) continue; // too narrow for even one character
-    slots.push({ y, width: w, cx: (narrowLeft + narrowRight) / 2 });
+    slots.push({ y, width: w, cx: (left + right) / 2 });
   }
   if (slots.length === 0) return null;
 
@@ -165,7 +168,8 @@ function layoutHorizontal(
         // Shifted position is outside polygon — abort shift
         return usedRows;
       }
-      const w = (narrowRight - narrowLeft) * 0.94;
+      const padX2 = fontSize * 0.35;
+      const w = (narrowRight - narrowLeft) - padX2 * 2;
       const cx = (narrowLeft + narrowRight) / 2;
       const rowText = useCjk
         ? consumeCharRow(reRemaining, fontSize, w)

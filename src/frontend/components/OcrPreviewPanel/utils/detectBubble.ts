@@ -21,8 +21,10 @@
 const RAY_COUNT = 360;
 const RAY_STEP = 1;
 const MAX_RAY_LENGTH = 800;
-// How many consecutive edge pixels must be hit before declaring a boundary
-const EDGE_RUN_LENGTH = 3;
+// How many consecutive boundary-flagged pixels must be hit before declaring a boundary
+const BOUNDARY_RUN_LENGTH = 3;
+// Color deviation threshold (Euclidean distance in RGB space)
+const COLOR_DEVIATION_THRESHOLD = 45;
 
 /** Perceived luminance (0–255) at pixel (x, y). Returns 0 for out-of-bounds. */
 function brightness(data: Uint8ClampedArray, w: number, h: number, x: number, y: number): number {
@@ -96,6 +98,45 @@ function computeAdaptiveThreshold(
   const p75 = samples[Math.floor(samples.length * 0.75)];
   // Clamp to a reasonable range
   return Math.max(25, Math.min(120, p75 * 1.5 + 15));
+}
+
+/**
+ * Sample the average RGB color in a small area around (cx, cy).
+ * Used as the "interior baseline color" for color-deviation boundary detection.
+ */
+function sampleInteriorColor(
+  data: Uint8ClampedArray, w: number, h: number,
+  cx: number, cy: number, radius = 8,
+): [number, number, number] {
+  let rSum = 0, gSum = 0, bSum = 0, count = 0;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const x = cx + dx;
+      const y = cy + dy;
+      if (x < 0 || y < 0 || x >= w || y >= h) continue;
+      if (dx * dx + dy * dy > radius * radius) continue;
+      const off = (y * w + x) * 4;
+      rSum += data[off];
+      gSum += data[off + 1];
+      bSum += data[off + 2];
+      count++;
+    }
+  }
+  if (count === 0) return [128, 128, 128];
+  return [rSum / count, gSum / count, bSum / count];
+}
+
+/** Euclidean distance between pixel at (x,y) and a reference RGB color. */
+function colorDeviation(
+  data: Uint8ClampedArray, w: number,
+  x: number, y: number,
+  refR: number, refG: number, refB: number,
+): number {
+  const off = (y * w + x) * 4;
+  const dr = data[off] - refR;
+  const dg = data[off + 1] - refG;
+  const db = data[off + 2] - refB;
+  return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
 /**
@@ -214,7 +255,14 @@ export async function detectBubbleBoundary(
   avgR /= polygon.length;
   const edgeThreshold = computeAdaptiveThreshold(edgeMap, w, h, cx, cy, Math.max(10, avgR * 0.5));
 
+  // Sample interior color for color-deviation detection
+  // This helps detect semi-transparent colored bubbles where Sobel edges are weak
+  const [refR, refG, refB] = sampleInteriorColor(data, w, h, cx, cy);
+
   // Cast rays from centroid and find boundary points
+  // Dual detection criteria:
+  //   A) Strong Sobel edge (consecutive edge pixels) — works for sharp boundaries
+  //   B) Color deviation from interior — works for gradual/semi-transparent transitions
   const boundaryPoints: [number, number][] = [];
   for (let i = 0; i < RAY_COUNT; i++) {
     const angle = (2 * Math.PI * i) / RAY_COUNT;
@@ -224,6 +272,7 @@ export async function detectBubbleBoundary(
     let x = cx;
     let y = cy;
     let edgeRunCount = 0;
+    let colorRunCount = 0;
     let hitX = -1, hitY = -1;
 
     for (let step = 0; step < MAX_RAY_LENGTH / RAY_STEP; step++) {
@@ -239,13 +288,24 @@ export async function detectBubbleBoundary(
         break;
       }
 
+      // Criterion A: Sobel edge
       const edgeVal = edgeMap[iy * w + ix];
-      if (edgeVal >= edgeThreshold) {
-        edgeRunCount++;
-        if (edgeRunCount === 1) { hitX = ix; hitY = iy; }
-        if (edgeRunCount >= EDGE_RUN_LENGTH) break;
+      const isEdge = edgeVal >= edgeThreshold;
+
+      // Criterion B: color deviation from interior baseline
+      const deviation = colorDeviation(data, w, ix, iy, refR, refG, refB);
+      const isColorDeviant = deviation >= COLOR_DEVIATION_THRESHOLD;
+
+      // A pixel is a boundary candidate if it has a strong edge OR significant color change
+      if (isEdge || isColorDeviant) {
+        if (isEdge) edgeRunCount++; else edgeRunCount = 0;
+        colorRunCount++;
+        if (colorRunCount === 1) { hitX = ix; hitY = iy; }
+        // Require shorter run for Sobel edges (strong signal), longer for color-only
+        if (edgeRunCount >= BOUNDARY_RUN_LENGTH || colorRunCount >= BOUNDARY_RUN_LENGTH + 2) break;
       } else {
         edgeRunCount = 0;
+        colorRunCount = 0;
         hitX = -1;
         hitY = -1;
       }
