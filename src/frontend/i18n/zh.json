@@ -134,7 +134,14 @@
     "translationEditorTitle": "译文编辑器",
     "translationPlaceholder": "输入译文...",
     "selectLineToTranslate": "选择文字行以编辑译文",
-    "exportPng": "导出当前页为 PNG"
+    "exportPng": "导出当前页为 PNG",
+    "mergeSelectedLines": "合并选中行",
+    "mergePreviewTitle": "合并行 — 确认顺序",
+    "mergePreviewHint": "拖拽调整行的顺序。原文和译文将按此顺序拼接。",
+    "mergeConfirm": "合并",
+    "rectifyPolygon": "转为长方形",
+    "snapToBubble": "对齐到对话框",
+    "snapToBubbleNoTextless": "请先生成无文字页面"
   },
   "contextPanel": {
     "title": "术语表",

@@ -67,17 +67,21 @@ function buildOverlaySvgString(
       body += `<polygon points="${pts}" fill="${polygonBgColor}"/>`;
 
       if (layout.kind === "horizontal") {
-        for (let i = 0; i < layout.lines.length; i++) {
-          const y = layout.startY + i * layout.lineHeight;
-          body += `<text x="${layout.cx}" y="${y}" text-anchor="middle" font-size="${layout.fontSize}" fill="${polygonTextColor(polygonBgColor)}" font-family="sans-serif">${escapeSvg(layout.lines[i])}</text>`;
+        for (const row of layout.rows) {
+          body += `<text x="${row.cx}" y="${row.y}" text-anchor="middle" font-size="${layout.fontSize}" fill="${polygonTextColor(polygonBgColor)}" font-family="sans-serif">${escapeSvg(row.text)}</text>`;
         }
+      } else if (layout.subKind === "rotated") {
+        body += `<g transform="rotate(90, ${layout.rotateCx}, ${layout.rotateCy})">`;
+        for (const row of layout.rows) {
+          body += `<text x="${row.cx}" y="${row.y}" text-anchor="middle" font-size="${layout.fontSize}" fill="${polygonTextColor(polygonBgColor)}" font-family="sans-serif">${escapeSvg(row.text)}</text>`;
+        }
+        body += "</g>";
       } else {
-        for (let ci = 0; ci < layout.columns.length; ci++) {
-          const x = layout.startX - ci * layout.columnWidth;
-          const chars = layout.columns[ci].split("");
+        for (const col of layout.columns) {
+          const chars = col.chars.split("");
           for (let ri = 0; ri < chars.length; ri++) {
-            const y = layout.startY + ri * (layout.fontSize * 1.1);
-            body += `<text x="${x}" y="${y}" text-anchor="middle" font-size="${layout.fontSize}" fill="${polygonTextColor(polygonBgColor)}" font-family="sans-serif">${escapeSvg(chars[ri])}</text>`;
+            const y = col.startY + ri * (layout.fontSize * 1.1);
+            body += `<text x="${col.x}" y="${y}" text-anchor="middle" font-size="${layout.fontSize}" fill="${polygonTextColor(polygonBgColor)}" font-family="sans-serif">${escapeSvg(chars[ri])}</text>`;
           }
         }
       }

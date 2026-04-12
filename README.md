@@ -61,11 +61,15 @@ A React + Material UI interface for the full workflow:
 | **Text Editing** | Per-line text editor with vertical/horizontal orientation toggle |
 | **Translation Editor** | Side-by-side original and translated text editing |
 | **Translation Overlay** | Rendered translated text inside polygons, orientation-aware with auto-fitted font size |
+| **Polygon Text Layout** | Scanline-based text wrapping that conforms to irregular polygon shapes — CJK characters stack in right-to-left columns for vertical orientation, non-CJK text uses word-boundary wrapping with rotated rendering |
+| **Polygon Merging** | Select multiple polygons (Ctrl+click) and merge them into one — preview dialog with drag-and-drop to reorder text before confirming |
+| **Snap to Bubble** | Right-click a polygon to auto-detect the surrounding speech bubble boundary using flood-fill edge detection, then snap the polygon to fit the bubble interior (requires textless page) |
+| **Rectify to Rectangle** | Right-click a polygon to convert any irregular shape to its axis-aligned bounding rectangle |
 | **Text/Textless Toggle** | Switch between original and text-removed image |
 | **Polygon Styling** | ARGB color picker for polygon overlay background |
 | **Line Summary** | Status-colored indicators (normal / long / short / critical-short) |
 | **Cross-page Problems** | Navigate OCR issues across all pages |
-| **Context Menu** | Right-click to add/delete lines, trigger OCR/textless/translation per page |
+| **Context Menu** | Right-click to add/delete lines, snap to bubble, rectify to rectangle, merge selected, trigger OCR/textless/translation per page |
 | **Undo / Redo** | Per-page history with snapshot persistence |
 | **PDF Export** | WYSIWYG export of all pages with current overlay settings |
 | **Keyboard Shortcuts** | Ctrl+S, Ctrl+Z, PageUp/PageDown, Delete |

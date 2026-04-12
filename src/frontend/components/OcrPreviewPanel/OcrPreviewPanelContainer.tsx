@@ -16,6 +16,7 @@ import { useContextMenuActions } from "./hooks/useContextMenuActions.ts";
 import { usePanelKeyboard } from "./hooks/usePanelKeyboard.ts";
 import { OcrLinesContext, OcrViewContext, OcrTranslationContext, OcrActionsContext, OcrSummaryContext } from "./OcrEditorContext.tsx";
 import OcrPreviewPanelView from "./OcrPreviewPanelView.tsx";
+import MergePreviewDialog from "./components/MergePreviewDialog.tsx";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -206,9 +207,13 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       contextMenu, setContextMenu, openPolygonMenu,
       handleAddPolygonPoint, handleDeletePolygonPoint,
       handleDeleteTextLine, handleAddNewLine,
+      handleOpenMergePreview, handleConfirmMerge, handleCancelMerge,
+      handleRectifyPolygon, handleSnapToBubble,
+      mergePreviewOpen, mergePreviewItems,
     } = useContextMenuActions(
       linesRef, translatedLinesRef, lines.length,
       applyHistoryEdit, updateLine, getSvgPoint, setSelectedLineIndex,
+      setSelectedLineIndices, selectedLineIndicesRef, textlessImageUrl,
     );
 
     // ── Keyboard handler ─────────────────────────────────────────────────
@@ -244,6 +249,25 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       rootRef.current?.focus();
     }, []);
 
+    /** Ctrl+click: toggle a line in the multi-selection set. */
+    const handleToggleLineSelection = useCallback((index: number) => {
+      setSelectedLineIndices((prev) => {
+        const next = new Set(prev);
+        // If nothing was multi-selected yet, seed with the current single selection
+        if (next.size === 0 && selectedLineIndexRef.current !== null) {
+          next.add(selectedLineIndexRef.current);
+        }
+        if (next.has(index)) {
+          next.delete(index);
+        } else {
+          next.add(index);
+        }
+        return next;
+      });
+      setSelectedLineIndex(index);
+      rootRef.current?.focus();
+    }, []);
+
     const handleExportPng = useCallback(() => {
       if (!naturalSize) return;
       void exportPageAsPng(imgUrl, naturalSize, svgRef.current, `page-${pageIndex + 1}.png`);
@@ -275,9 +299,10 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       selectedLine,
       lineSummaries,
       onSelectLine: handleSelectLine,
+      onToggleLineSelection: handleToggleLineSelection,
       onUpdateLine: updateLine,
       setSelectedLineIndex: setSelectedLineSingle,
-    }), [lines, selectedLineIndex, selectedLineIndices, selectedLine, lineSummaries, handleSelectLine, updateLine, setSelectedLineSingle]);
+    }), [lines, selectedLineIndex, selectedLineIndices, selectedLine, lineSummaries, handleSelectLine, handleToggleLineSelection, updateLine, setSelectedLineSingle]);
 
     const viewCtxValue = useMemo(() => ({
       rootRef,
@@ -318,6 +343,9 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       onDeletePolygonPoint: handleDeletePolygonPoint,
       onDeleteTextLine: handleDeleteTextLine,
       onAddNewLine: handleAddNewLine,
+      onMergeSelectedLines: handleOpenMergePreview,
+      onRectifyPolygon: handleRectifyPolygon,
+      onSnapToBubble: handleSnapToBubble,
       onSave: handleSave,
       onOcrPage,
       onTextlessPageWithSave: handleTextlessPageWithSave,
@@ -325,8 +353,9 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       onExportPng: handleExportPng,
     }), [isDirty, saving, saveMessage, errorMessage, contextMenu, setContextMenu, getSvgPoint,
       startPolygonMoveDrag, startPolygonPointDrag, openPolygonMenu, handleAddPolygonPoint,
-      handleDeletePolygonPoint, handleDeleteTextLine, handleAddNewLine, handleSave,
-      onOcrPage, handleTextlessPageWithSave, onTranslatePage, handleExportPng]);
+      handleDeletePolygonPoint, handleDeleteTextLine, handleAddNewLine, handleOpenMergePreview,
+      handleRectifyPolygon, handleSnapToBubble,
+      handleSave, onOcrPage, handleTextlessPageWithSave, onTranslatePage, handleExportPng]);
 
     const summaryCtxValue = useMemo(() => ({
       allPageLineSummaries,
@@ -340,6 +369,12 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
             <OcrTranslationContext.Provider value={translationCtxValue}>
               <OcrActionsContext.Provider value={actionsCtxValue}>
                 <OcrPreviewPanelView />
+                <MergePreviewDialog
+                  open={mergePreviewOpen}
+                  items={mergePreviewItems}
+                  onConfirm={handleConfirmMerge}
+                  onCancel={handleCancelMerge}
+                />
               </OcrActionsContext.Provider>
             </OcrTranslationContext.Provider>
           </OcrViewContext.Provider>

@@ -1,10 +1,11 @@
 import React from "react";
-import { Menu, MenuItem } from "@mui/material";
+import { Menu, MenuItem, Tooltip } from "@mui/material";
 import { useTranslation } from "react-i18next";
-import { useOcrLines, useOcrActions } from "../OcrEditorContext.tsx";
+import { useOcrLines, useOcrActions, useOcrView } from "../OcrEditorContext.tsx";
 
 const EditorContextMenu: React.FC = () => {
-  const { lines } = useOcrLines();
+  const { lines, selectedLineIndices } = useOcrLines();
+  const { isTextlessAvailable } = useOcrView();
   const {
     contextMenu,
     setContextMenu,
@@ -12,6 +13,9 @@ const EditorContextMenu: React.FC = () => {
     onAddPolygonPoint,
     onDeletePolygonPoint,
     onDeleteTextLine,
+    onMergeSelectedLines,
+    onRectifyPolygon,
+    onSnapToBubble,
     onOcrPage,
     onTextlessPageWithSave,
     onTranslatePage,
@@ -52,6 +56,22 @@ const EditorContextMenu: React.FC = () => {
 
       {contextMenu?.kind === "polygon" && (
         <MenuItem onClick={onDeleteTextLine}>{t("ocrPreview.deleteTextLine")}</MenuItem>
+      )}
+
+      {contextMenu?.kind === "polygon" && (
+        <MenuItem onClick={onRectifyPolygon}>{t("ocrPreview.rectifyPolygon")}</MenuItem>
+      )}
+
+      {contextMenu?.kind === "polygon" && (
+        <Tooltip title={isTextlessAvailable ? "" : t("ocrPreview.snapToBubbleNoTextless")} placement="right">
+          <span>
+            <MenuItem onClick={onSnapToBubble} disabled={!isTextlessAvailable}>{t("ocrPreview.snapToBubble")}</MenuItem>
+          </span>
+        </Tooltip>
+      )}
+
+      {selectedLineIndices.size >= 2 && (
+        <MenuItem onClick={onMergeSelectedLines}>{t("ocrPreview.mergeSelectedLines")}</MenuItem>
       )}
 
       <MenuItem

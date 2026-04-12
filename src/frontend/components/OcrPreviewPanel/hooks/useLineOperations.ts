@@ -1,6 +1,7 @@
-import { useCallback } from "react";
+import React, { useCallback } from "react";
 import type { OcrLineItem, TranslatedLine } from "../../../api/index.ts";
-import { normalizeLineIndices } from "../helpers.ts";
+import { normalizeLineIndices, convexHull } from "../helpers.ts";
+import { polyBounds } from "../utils/polygonGeometry.ts";
 
 /**
  * Exposes updateLine, deleteLines, deleteSelectedLine built on top of
@@ -86,4 +87,42 @@ export function useLineOperations(
   );
 
   return { updateLine, deleteLines, deleteSelectedLine };
+}
+
+/**
+ * Merge multiple lines into a single line with a convex-hull polygon.
+ * Lines are used in the order provided (caller controls reading order).
+ * Returns the merged line or null if fewer than 2 lines are provided.
+ */
+export function buildMergedLine(lines: OcrLineItem[], startIndex: number): OcrLineItem | null {
+  if (lines.length < 2) return null;
+
+  // Merge text (newline-separated) — caller provides the desired order
+  const mergedText = lines.map((l) => l.text).join("\n");
+
+  // Collect all polygon vertices and compute convex hull
+  const allPoints: [number, number][] = [];
+  for (const line of lines) {
+    if (line.polygon) {
+      for (const p of line.polygon) allPoints.push([p[0], p[1]]);
+    }
+  }
+  const hull = allPoints.length >= 3 ? convexHull(allPoints) : allPoints;
+
+  // Compute AABB from hull
+  const bounds = hull.length >= 3 ? polyBounds(hull) : null;
+  const box: [number, number, number, number] | null = bounds
+    ? [bounds.x, bounds.y, bounds.x + bounds.w, bounds.y + bounds.h]
+    : null;
+
+  // Use orientation from first line
+  const orientation = lines[0].orientation;
+
+  return {
+    lineIndex: startIndex,
+    text: mergedText,
+    box,
+    polygon: hull.length >= 3 ? hull : null,
+    orientation,
+  };
 }

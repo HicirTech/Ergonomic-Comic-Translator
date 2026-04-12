@@ -1,7 +1,10 @@
 import React, { useCallback, useState } from "react";
 import type { OcrLineItem, TranslatedLine } from "../../../api/index.ts";
-import type { ContextMenuState } from "../types.ts";
+import type { ContextMenuState, MergePreviewItem } from "../types.ts";
 import { findNearestSegmentInsertIndex, normalizeLineIndices } from "../helpers.ts";
+import { buildMergedLine } from "./useLineOperations.ts";
+import { polyBounds } from "../utils/polygonGeometry.ts";
+import { detectBubbleBoundary } from "../utils/detectBubble.ts";
 
 /**
  * Manages the SVG context-menu state and the five actions available from it:
@@ -19,6 +22,9 @@ export function useContextMenuActions(
   updateLine: (index: number, updater: (line: OcrLineItem) => OcrLineItem) => void,
   getSvgPoint: (event: React.MouseEvent | MouseEvent) => [number, number] | null,
   setSelectedLineIndex: React.Dispatch<React.SetStateAction<number | null>>,
+  setSelectedLineIndices: React.Dispatch<React.SetStateAction<ReadonlySet<number>>>,
+  selectedLineIndicesRef: React.RefObject<ReadonlySet<number>>,
+  textlessImageUrl: string,
 ) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
@@ -113,6 +119,170 @@ export function useContextMenuActions(
     setContextMenu(null);
   }, [contextMenu, linesLength, applyHistoryEdit]);
 
+  // ── Merge preview dialog state ──────────────────────────────────────
+  const [mergePreviewItems, setMergePreviewItems] = useState<MergePreviewItem[]>([]);
+  const [mergePreviewOpen, setMergePreviewOpen] = useState(false);
+
+  /** Open the merge-preview dialog (called from context menu). */
+  const handleOpenMergePreview = useCallback(() => {
+    const indices = Array.from(selectedLineIndicesRef.current).sort((a, b) => a - b);
+    if (indices.length < 2) return;
+
+    // Build preview items sorted by centroid Y (default reading order)
+    const items: MergePreviewItem[] = indices
+      .map((i) => {
+        const line = linesRef.current[i];
+        if (!line) return null;
+        const ocrIdx = line.lineIndex;
+        const translated =
+          translatedLinesRef.current.find((tl) => tl.lineIndex === ocrIdx)?.translated ?? "";
+        return { arrayIndex: i, text: line.text, translated } as MergePreviewItem;
+      })
+      .filter((it): it is MergePreviewItem => it !== null)
+      .sort((a, b) => {
+        const aLine = linesRef.current[a.arrayIndex];
+        const bLine = linesRef.current[b.arrayIndex];
+        const aY = aLine?.polygon ? polyBounds(aLine.polygon).cy : 0;
+        const bY = bLine?.polygon ? polyBounds(bLine.polygon).cy : 0;
+        return aY - bY;
+      });
+
+    if (items.length < 2) return;
+    setMergePreviewItems(items);
+    setMergePreviewOpen(true);
+    setContextMenu(null);
+  }, []);
+
+  /** Execute merge with user-confirmed order. */
+  const handleConfirmMerge = useCallback((orderedItems: MergePreviewItem[]) => {
+    setMergePreviewOpen(false);
+
+    const orderedIndices = orderedItems.map((it) => it.arrayIndex);
+    const linesToMerge = orderedIndices.map((i) => linesRef.current[i]).filter(Boolean);
+    if (linesToMerge.length < 2) return;
+
+    const keepIndex = orderedIndices[0];
+    const merged = buildMergedLine(linesToMerge, linesRef.current[keepIndex].lineIndex);
+    if (!merged) return;
+
+    // Remove merged lines (except the first) and replace the first with merged
+    const removeSet = new Set(orderedIndices.slice(1));
+    const ocrIndicesToRemove = new Set(orderedIndices.slice(1).map((i) => linesRef.current[i]?.lineIndex));
+    const nextLines: OcrLineItem[] = [];
+    for (let i = 0; i < linesRef.current.length; i++) {
+      if (removeSet.has(i)) continue;
+      if (i === keepIndex) {
+        nextLines.push(merged);
+      } else {
+        nextLines.push(linesRef.current[i]);
+      }
+    }
+
+    // Merge translations in user-specified order
+    const mergedTranslation = orderedItems
+      .map((it) => it.translated)
+      .filter(Boolean)
+      .join("\n");
+
+    const nextTranslated = translatedLinesRef.current
+      .filter((tl) => !ocrIndicesToRemove.has(tl.lineIndex));
+    const keepOcrIdx = linesRef.current[keepIndex].lineIndex;
+    const existingTlIdx = nextTranslated.findIndex((tl) => tl.lineIndex === keepOcrIdx);
+    if (mergedTranslation) {
+      if (existingTlIdx >= 0) {
+        nextTranslated[existingTlIdx] = { lineIndex: keepOcrIdx, translated: mergedTranslation };
+      } else {
+        nextTranslated.push({ lineIndex: keepOcrIdx, translated: mergedTranslation });
+      }
+    }
+
+    const normalized = normalizeLineIndices(nextLines);
+    const oldToNew = new Map<number, number>();
+    nextLines.forEach((line, i) => oldToNew.set(line.lineIndex, i));
+    const remappedTranslated = nextTranslated
+      .map((tl) => {
+        const n = oldToNew.get(tl.lineIndex);
+        return n !== undefined ? { ...tl, lineIndex: n } : null;
+      })
+      .filter((tl): tl is TranslatedLine => tl !== null);
+
+    applyHistoryEdit(normalized, undefined, remappedTranslated);
+    setSelectedLineIndex(0);
+    setSelectedLineIndices(new Set());
+  }, [applyHistoryEdit]);
+
+  const handleCancelMerge = useCallback(() => {
+    setMergePreviewOpen(false);
+  }, []);
+
+  // ── Rectify polygon to rectangle ──────────────────────────────────
+  const handleRectifyPolygon = useCallback(() => {
+    if (!contextMenu) return;
+    const line = linesRef.current[contextMenu.lineIndex];
+    if (!line?.polygon || line.polygon.length < 3) return;
+    const lineIndex = contextMenu.lineIndex;
+    setContextMenu(null);
+
+    // Compute axis-aligned bounding box of current polygon
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [px, py] of line.polygon) {
+      if (px < minX) minX = px;
+      if (py < minY) minY = py;
+      if (px > maxX) maxX = px;
+      if (py > maxY) maxY = py;
+    }
+
+    const rectPolygon: [number, number][] = [
+      [minX, minY],
+      [maxX, minY],
+      [maxX, maxY],
+      [minX, maxY],
+    ];
+
+    updateLine(lineIndex, (l) => ({
+      ...l,
+      polygon: rectPolygon,
+      box: [minX, minY, maxX, maxY],
+    }));
+  }, [contextMenu, updateLine]);
+
+  // ── Snap polygon to bubble ────────────────────────────────────────
+  const handleSnapToBubble = useCallback(() => {
+    if (!contextMenu) return;
+    const line = linesRef.current[contextMenu.lineIndex];
+    if (!line?.polygon || line.polygon.length < 3) return;
+    // Capture the stable lineIndex id so we can re-find the correct array
+    // position after the async detection resolves (user may add/delete lines).
+    const stableLineIndex = line.lineIndex;
+    setContextMenu(null);
+
+    void detectBubbleBoundary(textlessImageUrl, line.polygon, 5).then((snapped) => {
+      if (!snapped) {
+        console.warn("[snap-to-bubble] No dialogue bubble detected for polygon", stableLineIndex);
+        return;
+      }
+
+      // Re-find the array index by stable lineIndex
+      const currentIdx = linesRef.current.findIndex((l) => l.lineIndex === stableLineIndex);
+      if (currentIdx === -1) return; // line was deleted while detecting
+
+      // Compute AABB from new polygon
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const [px, py] of snapped) {
+        if (px < minX) minX = px;
+        if (py < minY) minY = py;
+        if (px > maxX) maxX = px;
+        if (py > maxY) maxY = py;
+      }
+
+      updateLine(currentIdx, (l) => ({
+        ...l,
+        polygon: snapped,
+        box: [minX, minY, maxX, maxY],
+      }));
+    }).catch((err) => { console.error("[snap-to-bubble] Bubble detection failed", err); });
+  }, [contextMenu, updateLine, textlessImageUrl]);
+
   return {
     contextMenu,
     setContextMenu,
@@ -121,5 +291,12 @@ export function useContextMenuActions(
     handleDeletePolygonPoint,
     handleDeleteTextLine,
     handleAddNewLine,
+    handleOpenMergePreview,
+    handleConfirmMerge,
+    handleCancelMerge,
+    handleRectifyPolygon,
+    handleSnapToBubble,
+    mergePreviewOpen,
+    mergePreviewItems,
   };
 }

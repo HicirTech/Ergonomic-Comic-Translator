@@ -23,7 +23,6 @@ import {
   enqueueOcrPage,
   enqueueTextlessPage,
   fetchOcrConfig,
-  fetchOcrJobStatus,
   fetchTextlessJobStatus,
   fetchUploadPages,
   fetchAllOcrPageLines,
@@ -36,8 +35,6 @@ import { sameOcrSummaries, type OcrLineSummary } from "../../utils/ocr-line-summ
 import { exportAllPagesAsPdf } from "../../components/OcrPreviewPanel/utils/exportPdf.ts";
 import { usePageNavigation } from "./usePageNavigation.ts";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts.ts";
-
-const MAX_PAGE_HISTORY_STEPS = 5;
 
 const UploadDetailPageContainer: React.FC = () => {
   const { t } = useTranslation();
@@ -157,16 +154,6 @@ const UploadDetailPageContainer: React.FC = () => {
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  const waitForOcrSettled = async (): Promise<string | null> => {
-    if (!uploadId) return null;
-    for (let i = 0; i < 240; i += 1) {
-      const status = await fetchOcrJobStatus(uploadId);
-      if (status.status !== "Queued" && status.status !== "Processing") return status.lastError;
-      await sleep(1500);
-    }
-    return null;
-  };
-
   const handleTextlessPage = async (pageIndex: number) => {
     if (!uploadId) return;
     setTextlessPageOpen(true);
@@ -217,15 +204,12 @@ const UploadDetailPageContainer: React.FC = () => {
     setOcrSubmitting(true);
     setOcrPageError(null);
     try {
-      if (ocrPageIndex === selectedPage) {
-        await saveCurrentPageIfDirty();
-      }
+      // Always save unsaved edits before OCR overwrites the file or we reload
+      await saveCurrentPageIfDirty();
+      // enqueueOcrPage runs OCR synchronously on the server —
+      // when the POST resolves, the output file is already updated.
       await enqueueOcrPage(uploadId, ocrPageIndex + 1, ocrModel, ocrLanguage);
-      const lastError = await waitForOcrSettled();
-      if (lastError) {
-        setOcrPageError(lastError);
-        return;
-      }
+      // Refresh the preview panel so the new lines replace old state
       if (ocrPageIndex === selectedPage) {
         await refreshCurrentPreviewPage();
       }

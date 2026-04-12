@@ -41,3 +41,10 @@ export interface OcrPreviewPanelRef {
   redo(): boolean;
   getViewState(): { showBoxes: boolean; showTranslation: boolean; polygonBgColor: string; imageMode: "text" | "textless"; isTextlessAvailable: boolean };
 }
+
+export interface MergePreviewItem {
+  /** Original array index in the lines array */
+  arrayIndex: number;
+  text: string;
+  translated: string;
+}
