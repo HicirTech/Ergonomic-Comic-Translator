@@ -5,36 +5,34 @@
  * Uses the textless page image (text already removed) so that inpainted text
  * doesn't interfere with boundary detection.
  *
- * Algorithm — gradient-based ray-casting with polygon-aware minimum distance:
+ * Algorithm — flood-fill on edge-thresholded image:
  * 1. Load the image and compute a Sobel edge-magnitude map (with Gaussian pre-blur).
- * 2. Compute the minimum per-ray distance from the polygon boundary.
- *    Since text is inside the bubble, no bubble edge can be closer than the polygon edge.
- * 3. Cast 360 rays from the polygon centroid outward.
- *    Skip any edge hit closer than the polygon boundary for that direction.
- * 4. Apply median smoothing on hit distances to reject remaining outliers.
- * 5. Build an ordered contour from the smoothed hit points.
- * 6. Simplify the contour with Douglas-Peucker.
- * 7. Inset each vertex by `insetPx` toward the centroid.
+ * 2. Binarize: pixels with edge > threshold become "walls".
+ * 3. Dilate walls to close tiny gaps in thin outlines.
+ * 4. Flood-fill from the polygon centroid — fills the bubble interior.
+ * 5. Morphological closing (dilate+erode) on the filled mask to bridge
+ *    ghost wall gaps from other bubbles visible through semi-transparent fill.
+ * 6. Extract boundary pixels, group by angular bucket, take 75th percentile.
+ * 7. Simplify with Douglas-Peucker, inset.
  *
- * Works with both light and dark bubble backgrounds because it relies on
- * brightness *changes* (edges) rather than absolute brightness values.
+ * Unlike ray-casting on the raw edge map, flood-fill correctly handles:
+ * - Concave regions (speech tails)
+ * - Ghost edges from other bubbles visible through semi-transparent fill
+ *   (they form isolated wall fragments, not closed contours)
  */
 
 const RAY_COUNT = 360;
-const RAY_STEP = 1;
-const MAX_RAY_LENGTH = 800;
-// Sobel edge threshold. After 5×5 Gaussian blur, bubble outlines (even thin
-// semi-transparent ones) produce Sobel ≈ 25–37. Threshold 20 catches them
-// while staying above blur-suppressed noise.
-const SOBEL_THRESHOLD = 20;
-// How many consecutive edge pixels to declare a boundary.
-// Pre-blur widens thin 1-2px outlines to ~3-4px.
-const EDGE_RUN_LENGTH = 3;
-// Angular half-window (in buckets) for median smoothing of hit distances.
-// ±20 = 40° window.
-const MEDIAN_HALF_WINDOW = 20;
-// Outlier rejection: ray distance < median × this fraction is replaced.
-const OUTLIER_RATIO = 0.55;
+// Sobel threshold for binarization. Bubble outlines produce Sobel ≈ 25–37
+// after Gaussian blur. Threshold 15 catches even weak outline spots while
+// letting the flood fill work around interior noise fragments.
+const SOBEL_THRESHOLD = 15;
+// Dilation radius (iterations). Closes 1–2px gaps in thin outlines.
+const DILATE_RADIUS = 2;
+// If flood fill covers more than this fraction of the image, the outline
+// has a gap and the fill leaked outside the bubble.
+const MAX_FILL_RATIO = 0.3;
+// Morphological closing radius to bridge ghost wall gaps inside filled mask.
+const CLOSE_RADIUS = 8;
 
 /** Load an image from a URL. */
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -117,44 +115,108 @@ function computeEdgeMap(data: Uint8ClampedArray, w: number, h: number): Float32A
 }
 
 /**
- * Compute minimum ray distance per angular bucket from the polygon boundary.
- * For each ray, compute where it exits the polygon (ray–segment intersection).
- * Since the text polygon is inside the bubble, no bubble edge can be closer
- * to the centroid than the polygon boundary in that direction.
+ * Dilate a binary wall mask: any 0-pixel adjacent (4-connected) to a 1-pixel
+ * becomes 1. Repeated `radius` times to close small gaps in outlines.
  */
-function computeMinDistances(
-  polygon: [number, number][],
-  cx: number, cy: number,
-  bucketCount: number,
-): Float32Array {
-  const minDist = new Float32Array(bucketCount);
-  const n = polygon.length;
-
-  for (let i = 0; i < bucketCount; i++) {
-    const angle = (2 * Math.PI * i) / bucketCount;
-    const rdx = Math.cos(angle);
-    const rdy = Math.sin(angle);
-
-    let bestDist = 0;
-    // Test ray against every polygon edge
-    for (let j = 0; j < n; j++) {
-      const [ax, ay] = polygon[j];
-      const [bx, by] = polygon[(j + 1) % n];
-      const ex = bx - ax;
-      const ey = by - ay;
-      // Solve: (cx + rdx*t) = (ax + ex*u), (cy + rdy*t) = (ay + ey*u)
-      const denom = rdx * ey - rdy * ex;
-      if (Math.abs(denom) < 1e-9) continue;
-      const t = ((ax - cx) * ey - (ay - cy) * ex) / denom;
-      const u = ((ax - cx) * rdy - (ay - cy) * rdx) / denom;
-      if (t > 0 && u >= 0 && u <= 1) {
-        if (t > bestDist) bestDist = t;
+function dilateWalls(walls: Uint8Array, w: number, h: number, radius: number): Uint8Array {
+  let current = walls;
+  for (let r = 0; r < radius; r++) {
+    const next = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+        if (current[idx]) { next[idx] = 1; continue; }
+        if (
+          (x > 0 && current[idx - 1]) ||
+          (x < w - 1 && current[idx + 1]) ||
+          (y > 0 && current[idx - w]) ||
+          (y < h - 1 && current[idx + w])
+        ) {
+          next[idx] = 1;
+        }
       }
     }
-    minDist[i] = bestDist;
+    current = next;
+  }
+  return current;
+}
+
+/**
+ * Erode a binary mask: any 1-pixel with a 0-neighbor (4-connected) becomes 0.
+ * Repeated `radius` times.
+ */
+function erodeMask(mask: Uint8Array, w: number, h: number, radius: number): Uint8Array {
+  let current = mask;
+  for (let r = 0; r < radius; r++) {
+    const next = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+        if (!current[idx]) continue;
+        if (
+          (x === 0 || !current[idx - 1]) ||
+          (x === w - 1 || !current[idx + 1]) ||
+          (y === 0 || !current[idx - w]) ||
+          (y === h - 1 || !current[idx + w])
+        ) continue;
+        next[idx] = 1;
+      }
+    }
+    current = next;
+  }
+  return current;
+}
+
+/**
+ * BFS flood fill from (sx, sy) on a binary wall mask.
+ * Returns a filled mask (1 = reachable from start, 0 = wall or unreachable).
+ * Also returns the fill count for leak detection.
+ */
+function floodFill(
+  walls: Uint8Array, w: number, h: number, sx: number, sy: number,
+): { filled: Uint8Array; count: number } {
+  const filled = new Uint8Array(w * h);
+  if (sx < 0 || sy < 0 || sx >= w || sy >= h) return { filled, count: 0 };
+  if (walls[sy * w + sx]) {
+    // Start pixel is inside a wall — find nearest non-wall pixel
+    for (let r = 1; r < 30; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const ny = sy + dy, nx = sx + dx;
+          if (ny >= 0 && ny < h && nx >= 0 && nx < w && !walls[ny * w + nx]) {
+            sx = nx; sy = ny;
+            // Break out of all 3 loops
+            r = 30; dy = r + 1; break;
+          }
+        }
+      }
+    }
+    if (walls[sy * w + sx]) return { filled, count: 0 };
   }
 
-  return minDist;
+  const queue = new Int32Array(w * h * 2); // x, y pairs
+  let head = 0, tail = 0;
+  queue[tail++] = sx; queue[tail++] = sy;
+  filled[sy * w + sx] = 1;
+  let count = 1;
+
+  while (head < tail) {
+    const x = queue[head++];
+    const y = queue[head++];
+    // 4-connected neighbors
+    for (let d = 0; d < 4; d++) {
+      const nx = x + (d === 0 ? -1 : d === 1 ? 1 : 0);
+      const ny = y + (d === 2 ? -1 : d === 3 ? 1 : 0);
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const nIdx = ny * w + nx;
+      if (filled[nIdx] || walls[nIdx]) continue;
+      filled[nIdx] = 1;
+      count++;
+      queue[tail++] = nx; queue[tail++] = ny;
+    }
+  }
+
+  return { filled, count };
 }
 
 // ── Douglas-Peucker simplification ──────────────────────────────────────────
@@ -186,19 +248,11 @@ function douglasPeucker(points: [number, number][], epsilon: number): [number, n
   return [first, last];
 }
 
-function simplifyClosedPolygon(points: [number, number][], epsilon: number): [number, number][] {
-  if (points.length <= 4) return points;
-  const doubled = [...points, ...points];
-  const simplified = douglasPeucker(doubled, epsilon);
-  const n = Math.ceil(simplified.length / 2);
-  return simplified.slice(0, n);
-}
-
 /**
  * Given an image URL and a polygon, detect the surrounding speech bubble
  * and return a new polygon snapped to the bubble interior with `insetPx` padding.
  *
- * Returns `null` if detection fails.
+ * Returns `null` if detection fails (no bubble found or fill leaked).
  */
 export async function detectBubbleBoundary(
   imageUrl: string,
@@ -229,6 +283,25 @@ export async function detectBubbleBoundary(
   // Compute Sobel edge map (with Gaussian pre-blur)
   const edgeMap = computeEdgeMap(data, w, h);
 
+  // Binarize: edge > threshold → wall
+  const walls = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    if (edgeMap[i] >= SOBEL_THRESHOLD) walls[i] = 1;
+  }
+
+  // Dilate walls to close tiny gaps in thin outlines
+  const dilated = dilateWalls(walls, w, h, DILATE_RADIUS);
+
+  // Add walls at image border to prevent flood fill from flowing along edges
+  for (let x = 0; x < w; x++) {
+    dilated[x] = 1;                   // top row
+    dilated[(h - 1) * w + x] = 1;     // bottom row
+  }
+  for (let y = 0; y < h; y++) {
+    dilated[y * w] = 1;               // left column
+    dilated[y * w + (w - 1)] = 1;     // right column
+  }
+
   // Compute centroid of the input polygon
   let cx = 0, cy = 0;
   for (const [px, py] of polygon) { cx += px; cy += py; }
@@ -237,124 +310,102 @@ export async function detectBubbleBoundary(
 
   if (cx < 0 || cy < 0 || cx >= w || cy >= h) return null;
 
-  // Compute minimum distance per ray direction from the polygon boundary.
-  // Since the text polygon is inside the bubble, no bubble edge can be
-  // closer to the centroid than the polygon edge in that direction.
-  const minDistances = computeMinDistances(polygon, cx, cy, RAY_COUNT);
+  // Flood fill from centroid — fills the bubble interior
+  const { filled, count } = floodFill(dilated, w, h, cx, cy);
 
-  // ── Phase 1: Cast rays and collect raw hit distances ──────────────
-  const hitDistances = new Float32Array(RAY_COUNT); // 0 = no hit
-  const hitPoints: ([number, number] | null)[] = new Array(RAY_COUNT).fill(null);
+  // Leak detection: if fill covers too much of the image, the outline has
+  // a gap and the fill escaped the bubble
+  if (count === 0 || count / (w * h) > MAX_FILL_RATIO) return null;
 
+  // ── Morphological closing to remove internal ghost walls ──────────
+  // Ghost edges from other bubbles visible through semi-transparent fill
+  // create narrow wall fragments inside the filled region. Closing
+  // (dilate then erode) bridges across these gaps.
+  const closedMask = erodeMask(
+    dilateWalls(filled, w, h, CLOSE_RADIUS),
+    w, h, CLOSE_RADIUS,
+  );
+
+  // ── Extract boundary from closed mask ─────────────────────────────
+  // Group boundary pixels by angular bucket and take 75th percentile
+  // distance for robustness against residual noise.
+  const buckets: number[][] = Array.from({ length: RAY_COUNT }, () => []);
+
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = y * w + x;
+      if (!closedMask[idx]) continue;
+      // Check if this is a boundary pixel (has at least one non-filled neighbor)
+      if (closedMask[idx - 1] && closedMask[idx + 1] && closedMask[idx - w] && closedMask[idx + w]) continue;
+
+      const angleDeg = ((Math.atan2(y - cy, x - cx) * 180 / Math.PI) % 360 + 360) % 360;
+      const bucket = Math.floor(angleDeg) % RAY_COUNT;
+      const dist = Math.hypot(x - cx, y - cy);
+      buckets[bucket].push(dist);
+    }
+  }
+
+  // Take 75th percentile distance per bucket
+  const bucketDist = new Float32Array(RAY_COUNT);
   for (let i = 0; i < RAY_COUNT; i++) {
-    const angle = (2 * Math.PI * i) / RAY_COUNT;
-    const dx = Math.cos(angle) * RAY_STEP;
-    const dy = Math.sin(angle) * RAY_STEP;
-    const minDist = minDistances[i];
-
-    let x = cx;
-    let y = cy;
-    let edgeRunCount = 0;
-    let hitX = -1, hitY = -1;
-
-    for (let step = 0; step < MAX_RAY_LENGTH / RAY_STEP; step++) {
-      x += dx;
-      y += dy;
-      const ix = Math.round(x);
-      const iy = Math.round(y);
-
-      if (ix < 0 || iy < 0 || ix >= w || iy >= h) {
-        if (hitX < 0) { hitX = ix - Math.round(dx); hitY = iy - Math.round(dy); }
-        break;
-      }
-
-      const dist = Math.hypot(ix - cx, iy - cy);
-
-      // Skip edge hits that are closer than the polygon boundary
-      if (dist < minDist) continue;
-
-      const edgeVal = edgeMap[iy * w + ix];
-      if (edgeVal >= SOBEL_THRESHOLD) {
-        edgeRunCount++;
-        if (edgeRunCount === 1) { hitX = ix; hitY = iy; }
-        if (edgeRunCount >= EDGE_RUN_LENGTH) break;
-      } else {
-        edgeRunCount = 0;
-        hitX = -1;
-        hitY = -1;
-      }
-    }
-
-    if (hitX >= 0 && hitY >= 0) {
-      hitDistances[i] = Math.hypot(hitX - cx, hitY - cy);
-      hitPoints[i] = [hitX, hitY];
-    }
+    if (buckets[i].length === 0) continue;
+    buckets[i].sort((a, b) => a - b);
+    const idx75 = Math.min(buckets[i].length - 1, Math.floor(buckets[i].length * 0.75));
+    bucketDist[i] = buckets[i][idx75];
   }
 
-  // ── Phase 2: Median smoothing to reject remaining outliers ────────
-  // An outlier is a ray whose hit distance is much shorter than its
-  // angular neighbors (caused by interior textures or overlapping bubbles).
-  const smoothedDistances = new Float32Array(RAY_COUNT);
+  // Interpolate empty buckets from nearest non-empty neighbors
   for (let i = 0; i < RAY_COUNT; i++) {
-    const neighbors: number[] = [];
-    for (let d = -MEDIAN_HALF_WINDOW; d <= MEDIAN_HALF_WINDOW; d++) {
-      const j = ((i + d) % RAY_COUNT + RAY_COUNT) % RAY_COUNT;
-      if (hitDistances[j] > 0) neighbors.push(hitDistances[j]);
+    if (bucketDist[i] > 0) continue;
+    let leftDist = 0, rightDist = 0;
+    for (let j = 1; j < RAY_COUNT; j++) {
+      const li = ((i - j) % RAY_COUNT + RAY_COUNT) % RAY_COUNT;
+      if (bucketDist[li] > 0) { leftDist = bucketDist[li]; break; }
     }
-    if (neighbors.length === 0) {
-      smoothedDistances[i] = 0;
-      continue;
+    for (let j = 1; j < RAY_COUNT; j++) {
+      const ri = (i + j) % RAY_COUNT;
+      if (bucketDist[ri] > 0) { rightDist = bucketDist[ri]; break; }
     }
-    neighbors.sort((a, b) => a - b);
-    smoothedDistances[i] = neighbors[Math.floor(neighbors.length / 2)];
-  }
-
-  // Replace outlier hits: if a ray's distance < median × OUTLIER_RATIO,
-  // use the median distance instead (place the point on the ray at that distance)
-  const boundaryPoints: [number, number][] = [];
-  for (let i = 0; i < RAY_COUNT; i++) {
-    const angle = (2 * Math.PI * i) / RAY_COUNT;
-    const median = smoothedDistances[i];
-    if (median === 0) continue;
-
-    const rawDist = hitDistances[i];
-    if (rawDist > 0 && rawDist >= median * OUTLIER_RATIO) {
-      // Keep original hit
-      boundaryPoints.push(hitPoints[i]!);
-    } else {
-      // Replace with median-distance point on this ray
-      const px = cx + Math.cos(angle) * median;
-      const py = cy + Math.sin(angle) * median;
-      boundaryPoints.push([Math.round(px), Math.round(py)]);
+    if (leftDist > 0 && rightDist > 0) {
+      bucketDist[i] = (leftDist + rightDist) / 2;
     }
   }
 
-  if (boundaryPoints.length < 10) return null;
-
-  // ── Phase 3: Build contour, simplify, inset ──────────────────────
-  // Build ordered contour using angular buckets (360 buckets = 1° resolution)
-  const buckets: ([number, number] | null)[] = new Array(360).fill(null);
-  for (const [bx, by] of boundaryPoints) {
-    const angle = Math.atan2(by - cy, bx - cx);
-    const bucket = Math.floor(((angle + Math.PI) / (2 * Math.PI)) * 360) % 360;
-    if (!buckets[bucket]) {
-      buckets[bucket] = [bx, by];
-    }
-  }
+  // Build contour from bucket distances
   const contour: [number, number][] = [];
-  for (const pt of buckets) {
-    if (pt) contour.push(pt);
+  for (let i = 0; i < RAY_COUNT; i++) {
+    if (bucketDist[i] === 0) continue;
+    const angleRad = (i * 2 * Math.PI) / RAY_COUNT;
+    const px = cx + Math.cos(angleRad) * bucketDist[i];
+    const py = cy + Math.sin(angleRad) * bucketDist[i];
+    contour.push([Math.round(px), Math.round(py)]);
   }
-  if (contour.length < 4) return null;
 
-  // Simplify — adaptive epsilon based on bubble size
+  if (contour.length < 10) return null;
+
+  // ── Simplify and inset ────────────────────────────────────────────
+  // Adaptive epsilon based on bubble size
   let maxR = 0;
   for (const [px, py] of contour) {
     const r = Math.hypot(px - cx, py - cy);
     if (r > maxR) maxR = r;
   }
-  const epsilon = Math.max(2, maxR * 0.02);
-  const simplified = simplifyClosedPolygon(contour, epsilon);
+  const epsilon = Math.max(3, maxR * 0.03);
+
+  // Closed polygon simplification: find the point farthest from centroid,
+  // rotate the array to start there, close, simplify, un-close.
+  let farthestIdx = 0;
+  let farthestDist = 0;
+  for (let i = 0; i < contour.length; i++) {
+    const d = Math.hypot(contour[i][0] - cx, contour[i][1] - cy);
+    if (d > farthestDist) { farthestDist = d; farthestIdx = i; }
+  }
+  const rotated = [...contour.slice(farthestIdx), ...contour.slice(0, farthestIdx)];
+  // Close the polygon by repeating the first point
+  rotated.push(rotated[0]);
+  const simplified = douglasPeucker(rotated, epsilon);
+  // Remove the closing duplicate
+  simplified.pop();
   if (simplified.length < 3) return null;
 
   // Inset each vertex toward the centroid by `insetPx`
