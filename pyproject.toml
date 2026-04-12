@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "ergonomic-comic-translator-python"
+version = "0.1.0"
+description = "Poetry-managed PaddleOCR runtime for Ergonomic Comic Translator"
+authors = []
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+paddleocr = { version = "3.4.0", extras = ["doc-parser"] }
+paddlex = { version = "3.4.3", extras = ["ocr"] }
+paddlepaddle-gpu = { version = "3.3.1", source = "paddle-cu130" }
+
+[[tool.poetry.source]]
+name = "paddle-cu130"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cu130/"
+priority = "explicit"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
