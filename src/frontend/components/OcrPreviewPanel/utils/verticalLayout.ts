@@ -127,8 +127,8 @@ function fitVerticalCjk(
 
 /**
  * For non-CJK text in a vertical polygon, we treat the polygon as if it were
- * rotated 90° CCW (swap width↔height), lay out text horizontally in that
- * rotated space, then tell the SVG renderer to rotate the text group 90° CW.
+ * rotated -90° (CW) (swap width↔height), lay out text horizontally in that
+ * rotated space, then the SVG renderer applies rotate(90°) to display it.
  *
  * This makes English text readable in tall/narrow speech bubbles.
  */

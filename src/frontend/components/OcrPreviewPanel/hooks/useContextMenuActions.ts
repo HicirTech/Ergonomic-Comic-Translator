@@ -251,14 +251,20 @@ export function useContextMenuActions(
     if (!contextMenu) return;
     const line = linesRef.current[contextMenu.lineIndex];
     if (!line?.polygon || line.polygon.length < 3) return;
-    const lineIndex = contextMenu.lineIndex;
+    // Capture the stable lineIndex id so we can re-find the correct array
+    // position after the async detection resolves (user may add/delete lines).
+    const stableLineIndex = line.lineIndex;
     setContextMenu(null);
 
     void detectBubbleBoundary(textlessImageUrl, line.polygon, 5).then((snapped) => {
       if (!snapped) {
-        console.warn("[snap-to-bubble] No dialogue bubble detected for polygon", lineIndex);
+        console.warn("[snap-to-bubble] No dialogue bubble detected for polygon", stableLineIndex);
         return;
       }
+
+      // Re-find the array index by stable lineIndex
+      const currentIdx = linesRef.current.findIndex((l) => l.lineIndex === stableLineIndex);
+      if (currentIdx === -1) return; // line was deleted while detecting
 
       // Compute AABB from new polygon
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -269,7 +275,7 @@ export function useContextMenuActions(
         if (py > maxY) maxY = py;
       }
 
-      updateLine(lineIndex, (l) => ({
+      updateLine(currentIdx, (l) => ({
         ...l,
         polygon: snapped,
         box: [minX, minY, maxX, maxY],
