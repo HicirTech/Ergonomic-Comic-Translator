@@ -187,7 +187,7 @@ export const contextQueueFile = resolveConfiguredPath(
   resolve(programDir, defaultContextQueueFileName),
 );
 
-export const defaultOllamaHost = "http://192.168.20.200:11434";
+export const defaultOllamaHost = "http://localhost:11434";
 export const ollamaHost = readStringEnv(process.env.OLLAMA_HOST, defaultOllamaHost);
 
 export const defaultOllamaTranslateModel = "translategemma:12b";

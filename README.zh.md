@@ -165,8 +165,8 @@ bun run doctor                 # 5. 验证安装
 | `COMIC_TRANSLATOR_FILES_DIR` | `.tmp/ocr` | CLI OCR 输入目录 |
 | `OCR_MODEL` | `paddleocr-vl-1.5` | OCR 模型（`paddleocr` 或 `paddleocr-vl-1.5`） |
 | `OCR_CONCURRENCY` | `1` | 并行 GPU 批次（需多 GPU） |
-| `OLLAMA_HOST` | `http://192.168.20.200:11434` | Ollama API 地址 |
-| `OLLAMA_TRANSLATE_MODEL` | `huihui_ai/qwen3.5-abliterated:9b` | 翻译模型 |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama API 地址 |
+| `OLLAMA_TRANSLATE_MODEL` | `translategemma:12b` | 翻译模型 |
 | `TRANSLATE_TARGET_LANGUAGE` | `Chinese` | 默认目标语言 |
 
 → [完整配置参考](docs/setup.zh.md#配置)
@@ -175,4 +175,4 @@ bun run doctor                 # 5. 验证安装
 
 ## 许可
 
-私有项目。保留所有权利。
+MIT — 详见 [LICENSE](LICENSE)。

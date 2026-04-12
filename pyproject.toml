@@ -2,7 +2,8 @@
 name = "ergonomic-comic-translator-python"
 version = "0.1.0"
 description = "Poetry-managed PaddleOCR runtime for Ergonomic Comic Translator"
-authors = []
+authors = ["Electronic hirci program <luozeting97@gmail.com>"]
+license = "MIT"
 package-mode = false
 
 [tool.poetry.dependencies]

@@ -165,8 +165,8 @@ All environment variables are resolved in `src/config.ts` with sensible defaults
 | `COMIC_TRANSLATOR_FILES_DIR` | `.tmp/ocr` | CLI OCR input directory |
 | `OCR_MODEL` | `paddleocr-vl-1.5` | OCR model (`paddleocr` or `paddleocr-vl-1.5`) |
 | `OCR_CONCURRENCY` | `1` | Parallel GPU batches (requires multiple GPUs) |
-| `OLLAMA_HOST` | `http://192.168.20.200:11434` | Ollama API URL |
-| `OLLAMA_TRANSLATE_MODEL` | `huihui_ai/qwen3.5-abliterated:9b` | Translation model |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama API URL |
+| `OLLAMA_TRANSLATE_MODEL` | `translategemma:12b` | Translation model |
 | `TRANSLATE_TARGET_LANGUAGE` | `Chinese` | Default target language |
 
 → [Full configuration reference](docs/setup.md#configuration)
@@ -175,4 +175,4 @@ All environment variables are resolved in `src/config.ts` with sensible defaults
 
 ## License
 
-Private project. All rights reserved.
+MIT — see [LICENSE](LICENSE).

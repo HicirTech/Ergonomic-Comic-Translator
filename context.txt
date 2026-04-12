@@ -79,8 +79,8 @@ Shared path config:
 - UPLOAD_RECORDS_FILE: upload metadata JSON path, default .tmp/program/uploadRecord.json
 - OCR_SOURCE_NAME: source label override written into OCR output JSON
 - TRANSLATE_QUEUE_FILE: translation queue persistence file, default .tmp/program/translateQueue.json
-- OLLAMA_HOST: Ollama API base URL, default http://192.168.20.200:11434
-- OLLAMA_TRANSLATE_MODEL: Ollama model for translation, default huihui_ai/qwen3.5-abliterated:9b
+- OLLAMA_HOST: Ollama API base URL, default http://localhost:11434
+- OLLAMA_TRANSLATE_MODEL: Ollama model for translation, default translategemma:12b
 - TRANSLATE_TARGET_LANGUAGE: default target language, default Chinese
 - TRANSLATE_CONTEXT_PAGES: number of recently-translated pages to include as context per call, default 8 (-1 = all, 0 = none)
 
@@ -389,7 +389,7 @@ Useful run examples:
 - bun run translate ocr
 - bun run translate ocr 5
 - bun run translate ocr --lang Japanese
-- OLLAMA_HOST=http://192.168.20.200:11434 bun run translate ocr
+- OLLAMA_HOST=http://your-ollama-host:11434 bun run translate ocr
 - TRANSLATE_TARGET_LANGUAGE=French bun run translate ocr
 
 Known caveats / editing guidance:
@@ -408,7 +408,7 @@ Known caveats / editing guidance:
 - Preserve stable merge ordering for concurrent OCR results.
 - Prefer small targeted edits; avoid undoing the WSL2 + Poetry + Bun layered design.
 - Do not reintroduce Docker unless explicitly requested.
-- Ollama runs on the Windows host (192.168.20.200:11434) when running in WSL2 — do not install Ollama inside WSL2.
+- Ollama runs externally (e.g. on a Windows host or separate server) — configure via OLLAMA_HOST env var.
 - Translation uses streaming mode (stream:true) with per-page calls to avoid LLM output truncation.
 - Each translation call includes the full OCR text and all already-translated pages in the system prompt for translation consistency.
 - extractFirstObject() in translate-processing.ts is the robust JSON parser — do not replace with plain JSON.parse.
