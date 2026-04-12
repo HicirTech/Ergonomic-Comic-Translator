@@ -65,7 +65,13 @@ function layoutVerticalCjk(
   const maxCols = Math.floor(availableW / colW);
   if (maxCols < 1) return null;
 
-  const totalW = Math.min(maxCols, Math.ceil(flat.length)) * colW;
+  // Estimate chars per column from polygon centre height to avoid overestimating column count
+  const centreSpan = polygonSpanAtX(polygon, bounds.cx);
+  const estCharsPerCol = centreSpan
+    ? Math.max(1, Math.floor(((centreSpan.bottom - centreSpan.top) - fontSize * 0.8) / charH))
+    : 1;
+  const estCols = Math.min(maxCols, Math.ceil(flat.length / estCharsPerCol));
+  const totalW = estCols * colW;
   // Columns flow right-to-left; rightmost column x
   const startX = bounds.cx + totalW / 2 - colW / 2;
 

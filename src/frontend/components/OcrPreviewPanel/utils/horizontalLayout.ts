@@ -53,7 +53,11 @@ function consumeWordRow(text: string, fontSize: number, maxWidth: number): strin
   for (const word of words) {
     const wordW = measureText(word, fontSize);
     const spaceW = row === "" ? 0 : fontSize * 0.6;
-    if (w + spaceW + wordW > maxWidth + 0.5 && row !== "") break;
+    if (w + spaceW + wordW > maxWidth + 0.5) {
+      // First word too wide — fall back to character-level splitting
+      if (row === "") return consumeCharRow(text, fontSize, maxWidth);
+      break;
+    }
     row = row === "" ? word : row + " " + word;
     w += spaceW + wordW;
   }
@@ -117,8 +121,8 @@ function layoutHorizontal(
   }
   if (slots.length === 0) return null;
 
-  // 2. Flatten text (collapse newlines)
-  let remaining = text.replace(/\n/g, useCjk ? "" : " ").trim();
+  // 2. Flatten text (collapse newlines and normalize whitespace)
+  let remaining = text.replace(/\n/g, useCjk ? "" : " ").replace(/\s+/g, useCjk ? "" : " ").trim();
   if (remaining.length === 0) return [{ text: "", cx: bounds.cx, y: bounds.cy }];
 
   // 3. Greedily fill slots

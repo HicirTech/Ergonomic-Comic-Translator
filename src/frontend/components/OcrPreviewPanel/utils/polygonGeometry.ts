@@ -49,7 +49,15 @@ export function polygonSpanAtY(polygon: [number, number][], y: number): { left: 
   }
   if (xs.length < 2) return null;
   xs.sort((a, b) => a - b);
-  return { left: xs[0], right: xs[xs.length - 1] };
+  // Pair intersections into interior segments and return the widest
+  let bestLeft = xs[0], bestRight = xs[1];
+  for (let i = 0; i + 1 < xs.length; i += 2) {
+    if (xs[i + 1] - xs[i] > bestRight - bestLeft) {
+      bestLeft = xs[i];
+      bestRight = xs[i + 1];
+    }
+  }
+  return { left: bestLeft, right: bestRight };
 }
 
 /**
@@ -69,7 +77,15 @@ export function polygonSpanAtX(polygon: [number, number][], x: number): { top: n
   }
   if (ys.length < 2) return null;
   ys.sort((a, b) => a - b);
-  return { top: ys[0], bottom: ys[ys.length - 1] };
+  // Pair intersections into interior segments and return the tallest
+  let bestTop = ys[0], bestBottom = ys[1];
+  for (let i = 0; i + 1 < ys.length; i += 2) {
+    if (ys[i + 1] - ys[i] > bestBottom - bestTop) {
+      bestTop = ys[i];
+      bestBottom = ys[i + 1];
+    }
+  }
+  return { top: bestTop, bottom: bestBottom };
 }
 
 // ── Text measurement helpers ─────────────────────────────────────────────────
