@@ -36,8 +36,6 @@ import { exportAllPagesAsPdf } from "../../components/OcrPreviewPanel/utils/expo
 import { usePageNavigation } from "./usePageNavigation.ts";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts.ts";
 
-const MAX_PAGE_HISTORY_STEPS = 5;
-
 const UploadDetailPageContainer: React.FC = () => {
   const { t } = useTranslation();
   const { uploadId } = useParams<{ uploadId: string }>();

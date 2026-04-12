@@ -31,7 +31,6 @@ import { CSS } from "@dnd-kit/utilities";
 import { useTranslation } from "react-i18next";
 
 import type { MergePreviewItem } from "../types.ts";
-export type { MergePreviewItem };
 
 interface MergePreviewDialogProps {
   open: boolean;

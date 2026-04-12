@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import React, { useCallback } from "react";
 import type { OcrLineItem, TranslatedLine } from "../../../api/index.ts";
 import { normalizeLineIndices, convexHull } from "../helpers.ts";
 import { polyBounds } from "../utils/polygonGeometry.ts";

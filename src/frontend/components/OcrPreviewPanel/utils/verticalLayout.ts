@@ -9,7 +9,7 @@
  */
 
 import type { PolyBounds } from "./polygonGeometry.ts";
-import { polygonSpanAtX, isCjk } from "./polygonGeometry.ts";
+import { polygonSpanAtX, isCjk, polyBounds } from "./polygonGeometry.ts";
 import { fitHorizontal } from "./horizontalLayout.ts";
 import type { HorizontalLayout, HorizontalLayoutRow } from "./horizontalLayout.ts";
 
@@ -142,8 +142,8 @@ function fitVerticalRotated(
     return [cx + dy, cy - dx] as [number, number];
   });
 
-  // Fit horizontally in the rotated polygon
-  const hLayout: HorizontalLayout = fitHorizontal(text, rotatedPoly, bounds, minSize, maxSize);
+  // Fit horizontally in the rotated polygon (use fresh bounds from rotated polygon)
+  const hLayout: HorizontalLayout = fitHorizontal(text, rotatedPoly, polyBounds(rotatedPoly), minSize, maxSize);
 
   return {
     kind: "vertical",

@@ -271,7 +271,7 @@ export function useContextMenuActions(
         polygon: snapped,
         box: [minX, minY, maxX, maxY],
       }));
-    });
+    }).catch(() => { /* bubble detection failed — silently ignore */ });
   }, [contextMenu, updateLine, textlessImageUrl]);
 
   return {

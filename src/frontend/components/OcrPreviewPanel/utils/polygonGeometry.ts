@@ -3,6 +3,9 @@
  * text measurement, and CJK detection.
  */
 
+/** Code point boundary above which characters are treated as CJK (full-width). */
+export const CJK_CODEPOINT_MIN = 0x2E7F;
+
 // ── Bounding box ─────────────────────────────────────────────────────────────
 
 export interface PolyBounds {
@@ -78,7 +81,7 @@ export function isCjk(text: string): boolean {
   for (const ch of text) {
     if (ch.trim() === "") continue;
     total++;
-    if (ch.charCodeAt(0) > 0x2E7F) cjk++;
+    if (ch.charCodeAt(0) > CJK_CODEPOINT_MIN) cjk++;
   }
   return total > 0 && cjk / total > 0.5;
 }
@@ -87,7 +90,7 @@ export function isCjk(text: string): boolean {
 export function measureText(text: string, fontSize: number): number {
   let w = 0;
   for (const ch of text) {
-    w += ch.charCodeAt(0) > 0x2E7F ? fontSize : fontSize * 0.6;
+    w += ch.charCodeAt(0) > CJK_CODEPOINT_MIN ? fontSize : fontSize * 0.6;
   }
   return w;
 }

@@ -6,7 +6,7 @@
  */
 
 import type { PolyBounds } from "./polygonGeometry.ts";
-import { polygonSpanAtY, isCjk, measureText } from "./polygonGeometry.ts";
+import { polygonSpanAtY, isCjk, measureText, CJK_CODEPOINT_MIN } from "./polygonGeometry.ts";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ function consumeCharRow(text: string, fontSize: number, maxWidth: number): strin
   let row = "";
   let w = 0;
   for (const ch of text) {
-    const charW = ch.charCodeAt(0) > 0x2E7F ? fontSize : fontSize * 0.6;
+    const charW = ch.charCodeAt(0) > CJK_CODEPOINT_MIN ? fontSize : fontSize * 0.6;
     if (w + charW > maxWidth + 0.5 && row !== "") break;
     row += ch;
     w += charW;

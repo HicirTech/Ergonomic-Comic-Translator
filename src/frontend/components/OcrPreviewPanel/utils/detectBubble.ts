@@ -179,14 +179,14 @@ function floodFill(
   if (sx < 0 || sy < 0 || sx >= w || sy >= h) return { filled, count: 0 };
   if (walls[sy * w + sx]) {
     // Start pixel is inside a wall — find nearest non-wall pixel
+    findFree:
     for (let r = 1; r < 30; r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           const ny = sy + dy, nx = sx + dx;
           if (ny >= 0 && ny < h && nx >= 0 && nx < w && !walls[ny * w + nx]) {
             sx = nx; sy = ny;
-            // Break out of all 3 loops
-            r = 30; dy = r + 1; break;
+            break findFree;
           }
         }
       }
