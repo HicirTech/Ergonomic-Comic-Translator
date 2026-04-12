@@ -213,7 +213,7 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
     } = useContextMenuActions(
       linesRef, translatedLinesRef, lines.length,
       applyHistoryEdit, updateLine, getSvgPoint, setSelectedLineIndex,
-      setSelectedLineIndices, selectedLineIndicesRef, imgRef,
+      setSelectedLineIndices, selectedLineIndicesRef, textlessImageUrl,
     );
 
     // ── Keyboard handler ─────────────────────────────────────────────────

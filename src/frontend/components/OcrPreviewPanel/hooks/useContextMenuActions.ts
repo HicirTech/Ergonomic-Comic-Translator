@@ -24,7 +24,7 @@ export function useContextMenuActions(
   setSelectedLineIndex: React.Dispatch<React.SetStateAction<number | null>>,
   setSelectedLineIndices: React.Dispatch<React.SetStateAction<ReadonlySet<number>>>,
   selectedLineIndicesRef: React.RefObject<ReadonlySet<number>>,
-  imgRef: React.RefObject<HTMLImageElement | null>,
+  textlessImageUrl: string,
 ) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
@@ -220,31 +220,28 @@ export function useContextMenuActions(
     if (!contextMenu) return;
     const line = linesRef.current[contextMenu.lineIndex];
     if (!line?.polygon || line.polygon.length < 3) return;
-    const img = imgRef.current;
-    if (!img) return;
-
-    const snapped = detectBubbleBoundary(img, line.polygon, 5);
-    if (!snapped) {
-      setContextMenu(null);
-      return;
-    }
-
-    // Compute AABB from new polygon
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const [px, py] of snapped) {
-      if (px < minX) minX = px;
-      if (py < minY) minY = py;
-      if (px > maxX) maxX = px;
-      if (py > maxY) maxY = py;
-    }
-
-    updateLine(contextMenu.lineIndex, (l) => ({
-      ...l,
-      polygon: snapped,
-      box: [minX, minY, maxX, maxY],
-    }));
+    const lineIndex = contextMenu.lineIndex;
     setContextMenu(null);
-  }, [contextMenu, updateLine]);
+
+    void detectBubbleBoundary(textlessImageUrl, line.polygon, 5).then((snapped) => {
+      if (!snapped) return;
+
+      // Compute AABB from new polygon
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const [px, py] of snapped) {
+        if (px < minX) minX = px;
+        if (py < minY) minY = py;
+        if (px > maxX) maxX = px;
+        if (py > maxY) maxY = py;
+      }
+
+      updateLine(lineIndex, (l) => ({
+        ...l,
+        polygon: snapped,
+        box: [minX, minY, maxX, maxY],
+      }));
+    });
+  }, [contextMenu, updateLine, textlessImageUrl]);
 
   return {
     contextMenu,

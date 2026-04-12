@@ -2,8 +2,11 @@
  * Detect the speech-bubble boundary around a polygon and return a new polygon
  * snapped to the inner edge of the bubble with a configurable inset.
  *
+ * Uses the textless page image (text already removed) so that rays are not
+ * blocked by the original text characters inside the bubble.
+ *
  * Algorithm:
- * 1. Draw the page image to an offscreen canvas and extract pixel data.
+ * 1. Load the provided image URL into an offscreen canvas.
  * 2. From the polygon centroid, cast rays at regular angular intervals.
  * 3. Walk each ray outward until hitting a "dark" pixel (the bubble outline).
  * 4. Collect all boundary points and compute their convex hull.
@@ -28,19 +31,38 @@ function brightness(data: Uint8ClampedArray, w: number, h: number, x: number, y:
   return data[off] * 0.299 + data[off + 1] * 0.587 + data[off + 2] * 0.114;
 }
 
+/** Load an image from a URL into a temporary HTMLImageElement. */
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+    img.src = url;
+  });
+}
+
 /**
- * Given an image element and a polygon, detect the surrounding speech bubble
+ * Given an image URL and a polygon, detect the surrounding speech bubble
  * and return a new polygon snapped to the bubble interior with `insetPx` padding.
  *
- * Returns `null` if detection fails (e.g. image not loaded, polygon invalid).
+ * Prefer passing the textless image URL so that original text doesn't interfere.
+ *
+ * Returns `null` if detection fails.
  */
-export function detectBubbleBoundary(
-  img: HTMLImageElement,
+export async function detectBubbleBoundary(
+  imageUrl: string,
   polygon: [number, number][],
   insetPx = 5,
-): [number, number][] | null {
-  if (!img.complete || img.naturalWidth === 0) return null;
+): Promise<[number, number][] | null> {
   if (polygon.length < 3) return null;
+
+  let img: HTMLImageElement;
+  try {
+    img = await loadImage(imageUrl);
+  } catch {
+    return null;
+  }
 
   const w = img.naturalWidth;
   const h = img.naturalHeight;
