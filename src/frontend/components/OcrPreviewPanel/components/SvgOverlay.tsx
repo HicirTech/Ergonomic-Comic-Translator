@@ -1,9 +1,71 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useOcrLines, useOcrView, useOcrTranslation, useOcrActions } from "../OcrEditorContext.tsx";
 import { fitTextInPolygon } from "../utils/polygonTextLayout.ts";
+import type { PolygonTextLayout } from "../utils/polygonTextLayout.ts";
 import { polygonTextColor } from "../../../config.ts";
 
 const HANDLE_RADIUS = 5;
+
+/** Render text elements for a computed layout (horizontal, vertical-CJK, or vertical-rotated). */
+function renderLayoutText(layout: PolygonTextLayout, fill: string): React.ReactNode {
+  if (layout.kind === "horizontal") {
+    return layout.rows.map((row, i) => (
+      <text
+        key={i}
+        x={row.cx}
+        y={row.y}
+        textAnchor="middle"
+        fontSize={layout.fontSize}
+        fill={fill}
+        fontFamily="sans-serif"
+        style={{ pointerEvents: "none" }}
+      >
+        {row.text}
+      </text>
+    ));
+  }
+
+  // Vertical layout
+  if (layout.subKind === "rotated") {
+    // Non-CJK: render horizontal rows inside a 90° CW rotation
+    return (
+      <g transform={`rotate(90, ${layout.rotateCx}, ${layout.rotateCy})`}>
+        {layout.rows.map((row, i) => (
+          <text
+            key={i}
+            x={row.cx}
+            y={row.y}
+            textAnchor="middle"
+            fontSize={layout.fontSize}
+            fill={fill}
+            fontFamily="sans-serif"
+            style={{ pointerEvents: "none" }}
+          >
+            {row.text}
+          </text>
+        ))}
+      </g>
+    );
+  }
+
+  // CJK vertical: individual characters stacked in columns
+  return layout.columns.map((col, ci) =>
+    col.chars.split("").map((ch, ri) => (
+      <text
+        key={`${ci}-${ri}`}
+        x={col.x}
+        y={col.startY + ri * (layout.fontSize * 1.1)}
+        textAnchor="middle"
+        fontSize={layout.fontSize}
+        fill={fill}
+        fontFamily="sans-serif"
+        style={{ pointerEvents: "none" }}
+      >
+        {ch}
+      </text>
+    ))
+  );
+}
 
 const SvgOverlay: React.FC = () => {
   const {
@@ -11,6 +73,7 @@ const SvgOverlay: React.FC = () => {
     selectedLineIndex,
     selectedLineIndices,
     setSelectedLineIndex,
+    onToggleLineSelection,
   } = useOcrLines();
 
   const {
@@ -108,6 +171,14 @@ const SvgOverlay: React.FC = () => {
       const polygon = line.polygon;
       const layout = showTranslation ? layoutMap.get(line.lineIndex) : undefined;
 
+      const handleClick = (event: React.MouseEvent) => {
+        if (event.ctrlKey || event.metaKey) {
+          onToggleLineSelection(lineIdx);
+        } else {
+          setSelectedLineIndex(lineIdx);
+        }
+      };
+
       return (
         <g key={`line-${lineIdx}`}>
           {polygon && polygon.length >= 3 && (
@@ -124,7 +195,7 @@ const SvgOverlay: React.FC = () => {
                     startPolygonMoveDrag(lineIdx, polygon, event);
                   }}
                   onContextMenu={(event) => openPolygonMenu(event, lineIdx, null)}
-                  onClick={() => setSelectedLineIndex(lineIdx)}
+                  onClick={handleClick}
                 />
               )}
 
@@ -143,40 +214,9 @@ const SvgOverlay: React.FC = () => {
                       startPolygonMoveDrag(lineIdx, polygon, event);
                     }}
                     onContextMenu={(event) => openPolygonMenu(event, lineIdx, null)}
-                    onClick={() => setSelectedLineIndex(lineIdx)}
+                    onClick={handleClick}
                   />
-                  {layout.kind === "horizontal"
-                    ? layout.rows.map((row, i) => (
-                      <text
-                        key={i}
-                        x={row.cx}
-                        y={row.y}
-                        textAnchor="middle"
-                        fontSize={layout.fontSize}
-                        fill={polygonTextColor(polygonBgColor)}
-                        fontFamily="sans-serif"
-                        style={{ pointerEvents: "none" }}
-                      >
-                        {row.text}
-                      </text>
-                    ))
-                    : layout.columns.map((col, ci) => {
-                      return col.chars.split("").map((ch, ri) => (
-                        <text
-                          key={`${ci}-${ri}`}
-                          x={col.x}
-                          y={col.startY + ri * (layout.fontSize * 1.1)}
-                          textAnchor="middle"
-                          fontSize={layout.fontSize}
-                          fill={polygonTextColor(polygonBgColor)}
-                          fontFamily="sans-serif"
-                          style={{ pointerEvents: "none" }}
-                        >
-                          {ch}
-                        </text>
-                      ));
-                    })
-                  }
+                  {renderLayoutText(layout, polygonTextColor(polygonBgColor))}
                 </g>
               )}
 

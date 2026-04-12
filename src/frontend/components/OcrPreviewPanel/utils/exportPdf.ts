@@ -70,6 +70,12 @@ function buildOverlaySvgString(
         for (const row of layout.rows) {
           body += `<text x="${row.cx}" y="${row.y}" text-anchor="middle" font-size="${layout.fontSize}" fill="${polygonTextColor(polygonBgColor)}" font-family="sans-serif">${escapeSvg(row.text)}</text>`;
         }
+      } else if (layout.subKind === "rotated") {
+        body += `<g transform="rotate(90, ${layout.rotateCx}, ${layout.rotateCy})">`;
+        for (const row of layout.rows) {
+          body += `<text x="${row.cx}" y="${row.y}" text-anchor="middle" font-size="${layout.fontSize}" fill="${polygonTextColor(polygonBgColor)}" font-family="sans-serif">${escapeSvg(row.text)}</text>`;
+        }
+        body += "</g>";
       } else {
         for (const col of layout.columns) {
           const chars = col.chars.split("");

@@ -245,6 +245,25 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       rootRef.current?.focus();
     }, []);
 
+    /** Ctrl+click: toggle a line in the multi-selection set. */
+    const handleToggleLineSelection = useCallback((index: number) => {
+      setSelectedLineIndices((prev) => {
+        const next = new Set(prev);
+        // If nothing was multi-selected yet, seed with the current single selection
+        if (next.size === 0 && selectedLineIndexRef.current !== null) {
+          next.add(selectedLineIndexRef.current);
+        }
+        if (next.has(index)) {
+          next.delete(index);
+        } else {
+          next.add(index);
+        }
+        return next;
+      });
+      setSelectedLineIndex(index);
+      rootRef.current?.focus();
+    }, []);
+
     const handleExportPng = useCallback(() => {
       if (!naturalSize) return;
       void exportPageAsPng(imgUrl, naturalSize, svgRef.current, `page-${pageIndex + 1}.png`);
@@ -276,9 +295,10 @@ const OcrPreviewPanelContainer = forwardRef<OcrPreviewPanelRef, Props>(
       selectedLine,
       lineSummaries,
       onSelectLine: handleSelectLine,
+      onToggleLineSelection: handleToggleLineSelection,
       onUpdateLine: updateLine,
       setSelectedLineIndex: setSelectedLineSingle,
-    }), [lines, selectedLineIndex, selectedLineIndices, selectedLine, lineSummaries, handleSelectLine, updateLine, setSelectedLineSingle]);
+    }), [lines, selectedLineIndex, selectedLineIndices, selectedLine, lineSummaries, handleSelectLine, handleToggleLineSelection, updateLine, setSelectedLineSingle]);
 
     const viewCtxValue = useMemo(() => ({
       rootRef,

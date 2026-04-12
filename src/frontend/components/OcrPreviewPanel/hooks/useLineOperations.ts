@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { OcrLineItem, TranslatedLine } from "../../../api/index.ts";
 import { normalizeLineIndices, convexHull } from "../helpers.ts";
-import { polyBounds } from "../utils/polygonTextLayout.ts";
+import { polyBounds } from "../utils/polygonGeometry.ts";
 
 /**
  * Exposes updateLine, deleteLines, deleteSelectedLine built on top of

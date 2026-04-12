@@ -13,6 +13,7 @@ export interface OcrLinesContextValue {
   selectedLine: OcrLineItem | null;
   lineSummaries: OcrLineSummary[];
   onSelectLine: (index: number) => void;
+  onToggleLineSelection: (index: number) => void;
   onUpdateLine: (index: number, updater: (line: OcrLineItem) => OcrLineItem) => void;
   setSelectedLineIndex: (index: number) => void;
 }
