@@ -121,7 +121,8 @@ bun install                    # 1. 安装 Bun 依赖
 bun run system:bootstrap       # 2. 通过 Homebrew 安装 Poetry + pyenv
 bun run python:bootstrap       # 3. 安装 Python 3.12 + PaddleOCR
 bun run text-cleaner:bootstrap # 4.（可选）安装文字去除模型
-bun run doctor                 # 5. 验证安装
+bun run memory:bootstrap       # 5.（可选）安装持久化翻译记忆（Mem0 + Qdrant）
+bun run doctor                 # 6. 验证安装
 ```
 
 → [详细安装指南](docs/setup.zh.md)
@@ -174,6 +175,10 @@ bun run doctor                 # 5. 验证安装
 | `TRANSLATE_TARGET_LANGUAGE` | `Chinese` | 默认目标语言 |
 | `TRANSLATE_CONTEXT_PAGES` | `8` | 每次调用保留的最近已翻译页数作为滚动上下文（`-1` = 全部，`0` = 不保留） |
 | `CONTEXT_CHUNK_PAGES` | `10` | 术语检测时每次 AI 调用发送的 OCR 页数（`-1` = 一次发送全部） |
+| `MEMORY_ENABLED` | `true` | 启用持久化翻译记忆（设为 `false` 可禁用） |
+| `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | 持久化记忆使用的 Ollama 嵌入模型 |
+| `QDRANT_STORAGE_PATH` | `.tmp/qdrant_storage` | Qdrant 向量数据库本地存储路径 |
+| `MEMORY_SEARCH_CONCURRENCY` | `4` | 术语预填充时的并行记忆查询数 |
 
 完整环境变量定义请以 `src/config.ts` 为准；安装与部署说明见 [docs/setup.zh.md](docs/setup.zh.md)。
 

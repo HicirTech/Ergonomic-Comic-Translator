@@ -15,6 +15,7 @@ Current architecture:
 - Bun layer: modular OCR code under src/ocr/, modular API code under src/api/, input discovery, runtime config, PDF preparation, batch OCR execution with multi-GPU support, logging, upload intake, and final JSON merge.
 - Text cleaner layer: separate Python venv (.tmp/text-cleaner-venv/) using the textless/ package with manga-text-cleaner and lama-cleaner for text removal using OCR bounding boxes.
 - Translation layer: Bun-driven Ollama integration (src/api/services/translate-processing.ts) translating OCR pages page-by-page using a local LLM. Each page call includes full OCR and accumulated translations as context. Output written incrementally to .tmp/translated/{scope}/translated.json.
+- Persistent memory layer: Mem0 + Qdrant vector database running in-process (no Docker). Enabled by default when MEMORY_ENABLED=true. Stores per-page translation pairs and glossary term explanations scoped to each uploadId. Queried on each page translation call to inject relevant snippets into the system prompt. Bootstrapped via `bun run memory:bootstrap` which creates .tmp/memory-venv/.
 
 Important current behavior:
 - Shared path config lives in src/config.ts.
@@ -65,6 +66,8 @@ Folder structure under .tmp/:
 - .tmp/textless/{scope}/: text-removed images (same filenames as source)
 - .tmp/translated/{scope}/translated.json: translated lines JSON
 - .tmp/text-cleaner-venv/: separate Python venv for text removal pipeline
+- .tmp/memory-venv/: separate Python venv for persistent memory (mem0ai + qdrant-client); created by memory:bootstrap
+- .tmp/qdrant_storage/: on-disk Qdrant vector database used by persistent memory
 
 Shared path config:
 - COMIC_TRANSLATOR_TEMP_DIR: root temp directory, default .tmp
@@ -196,6 +199,11 @@ Current key files:
 - shared textless processing functions (page processing, OCR output loading)
 - uses local Python text-cleaner pipeline with PaddleOCR bounding boxes + lama_large inpainting
 - uses resolveOutputFileForScope() from ocr/runtime-context.ts as the single source of truth for OCR output path
+- src/api/services/context-processing.ts:
+- detectContextTerms(): AI-assisted glossary term detection across OCR pages; queries OCR text in chunks of CONTEXT_CHUNK_PAGES pages per Ollama call; returns merged ContextTerm[] with term + explanation
+- memory pre-fill: before calling Ollama for explanations, looks up each new term in Qdrant (scoped to uploadId) using parallel runMemoryCli calls (up to MEMORY_SEARCH_CONCURRENCY at a time); terms resolved from memory skip the LLM call
+- new term explanations are fire-and-forgot into Qdrant memory after each Ollama response (scoped to uploadId)
+- syncTermsToMemory(uploadId, terms, targetLanguage?): fire-and-forget helper used by putTerms to persist user-edited term explanations into Qdrant; accepts optional targetLanguage to align content format with detectContextTerms entries for better retrieval
 - src/api/services/translate-processing.ts:
 - core Ollama integration for translation
 - uses resolveOutputFileForScope() from ocr/runtime-context.ts to read OCR output (single source of truth)
@@ -203,6 +211,8 @@ Current key files:
 - buildSystemPrompt(): includes a sliding window of recently-translated pages (last TRANSLATE_CONTEXT_PAGES pages) plus the glossary and persistent memory snippets for each page call
 - callOllamaPage(): streaming Ollama call for a single page (5-min timeout, stream:true, format:"json")
 - translateAll(): page-by-page loop with 3 retries per page; calls onPageDone callback after each success
+- memory search: when MEMORY_ENABLED=true and uploadId is set, queries Qdrant for up to 5 snippets scored ≥ 0.75 and injects them into the system prompt (scoped to uploadId to prevent cross-upload contamination)
+- translation memory (TM) store: after each successful page translation, persists the OCR source → translated text pair as a Qdrant memory entry scoped to uploadId (Mem0 handles ADD vs UPDATE to prevent duplicates on retranslation)
 - Ollama options: num_predict:-1, num_ctx:dynamic (computeNumCtx rounds estimated prompt tokens × 2 up to next power-of-2, clamped to [4096, 131072]), temperature:0.1
 - src/api/services/translate-queue-service.ts:
 - persists and manages translation queue state per uploadId
@@ -267,6 +277,7 @@ Current key files:
 - runs ocr.runner module with ZLUDA env injection when AMD GPU + ZLUDA are detected
 - runs ocr.pdf module
 - runs textless.runner module
+- runMemoryCli(args): invokes memory.cli via the memory-venv Python using Bun $ with .nothrow(); returns parsed JSON stdout or null on any failure (never rejects — errors are logged to stderr internally); disabled immediately when MEMORY_ENABLED=false or memory-venv is absent
 - all Python scripts invoked via `python -m <module>` with PYTHONPATH=src/python/
 - forwards configured source/path values into Python entrypoints
 - Python-Bun message channel protocol:
@@ -290,6 +301,11 @@ Current key files:
 	- downloads model weights into src/python/models/ (lama_large_512px.ckpt and detect-20241225.ckpt)
 	- idempotent: skips venv creation if already exists, skips model download if files already present
 	- uses .part files for atomic downloads
+- src/scripts/memory-bootstrap.ts:
+- creates .tmp/memory-venv/ with mem0ai and qdrant-client (pinned versions)
+- uses pyenv-managed Python 3.12 if available, falls back to system python3
+- idempotent: skips venv creation if .tmp/memory-venv/bin/python already exists
+- after bootstrap, user must run `ollama pull nomic-embed-text` once
 - src/scripts/textless.ts:
 - text removal CLI: bun run textless <scope> [page]
 - reads OCR output JSON for the given scope to find source image paths
@@ -342,6 +358,14 @@ Current key files:
 - inpainting strategy dispatch: base interface, lama implementation, no-op, original passthrough
 - src/python/textless/utils/:
 - shared utilities: generic helpers, model inference, Python-side logging, thread pool management
+- src/python/memory/cli.py:
+- Python package module (invoked as `python -m memory.cli`)
+- subcommands: add --content, search --query [--limit N], get-all, delete --memory-id
+- all subcommands accept --agent-id (default: comic_translator) and --user-id (optional, used for upload-scoped isolation)
+- results written as JSON to stdout; errors written to stderr
+- exits with code 2 on missing dependencies (prompts to run memory:bootstrap)
+- src/python/memory/service.py:
+- get_memory() factory: creates and caches a Mem0 Memory instance backed by local Qdrant (QDRANT_STORAGE_PATH) and Ollama embeddings (OLLAMA_EMBED_MODEL, OLLAMA_HOST)
 
 Dependencies and environment:
 - pyproject.toml currently declares:
@@ -352,6 +376,8 @@ Dependencies and environment:
 - Text cleaner uses a separate venv (.tmp/text-cleaner-venv/) bootstrapped via bun run text-cleaner:bootstrap.
 - Text cleaner venv uses PyTorch with cu129 (CUDA 12.9+), matching the PaddlePaddle cu129 environment.
 - Model weights are stored in src/python/models/ (gitignored, downloaded by bootstrapper).
+- Persistent memory uses a separate venv (.tmp/memory-venv/) bootstrapped via bun run memory:bootstrap (installs mem0ai + qdrant-client).
+- Memory venv is optional; runMemoryCli() returns null without error when absent or when MEMORY_ENABLED=false.
 
 Text removal (textless) behavior:
 - Uses a local Python pipeline with manga-text-cleaner for mask generation and lama_large for inpainting.
@@ -417,6 +443,9 @@ Known caveats / editing guidance:
 - Ollama runs externally (e.g. on a Windows host or separate server) — configure via OLLAMA_HOST env var.
 - Translation uses streaming mode (stream:true) with per-page calls to avoid LLM output truncation.
 - Each translation call includes a sliding window of recently-translated pages (TRANSLATE_CONTEXT_PAGES, default 8) plus glossary terms and persistent memory snippets in the system prompt for translation consistency.
+- runMemoryCli() always resolves (never rejects); on any failure it returns null and logs to stderr. Do NOT add .catch() handlers on fire-and-forget runMemoryCli() calls — they are dead code.
+- All runMemoryCli() memory operations must pass --user-id uploadId to scope entries to the current upload; never call memory search without uploadId to avoid unscoped global queries.
+- Memory constants (e.g. memoryTmMaxChars) live in src/config.ts — do not define them inline in processing files.
 - extractFirstObject() in translate-processing.ts is the robust JSON parser — do not replace with plain JSON.parse.
 
 Frontend architecture:

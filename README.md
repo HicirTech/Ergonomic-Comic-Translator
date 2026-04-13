@@ -121,7 +121,8 @@ bun install                    # 1. Install Bun dependencies
 bun run system:bootstrap       # 2. Install Poetry + pyenv via Homebrew
 bun run python:bootstrap       # 3. Install Python 3.12 + PaddleOCR
 bun run text-cleaner:bootstrap # 4. (Optional) Install text removal models
-bun run doctor                 # 5. Verify everything
+bun run memory:bootstrap       # 5. (Optional) Install persistent memory (Mem0 + Qdrant)
+bun run doctor                 # 6. Verify everything
 ```
 
 → [Detailed setup guide](docs/setup.md)
@@ -174,6 +175,10 @@ All environment variables are resolved in `src/config.ts` with sensible defaults
 | `TRANSLATE_TARGET_LANGUAGE` | `Chinese` | Default target language |
 | `TRANSLATE_CONTEXT_PAGES` | `8` | Recently-translated pages kept as rolling context (`-1` = all, `0` = none) |
 | `CONTEXT_CHUNK_PAGES` | `10` | OCR pages per AI call during term detection (`-1` = all in one call) |
+| `MEMORY_ENABLED` | `true` | Enable persistent translation memory (set `false` to disable) |
+| `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Ollama embedding model used by persistent memory |
+| `QDRANT_STORAGE_PATH` | `.tmp/qdrant_storage` | On-disk Qdrant vector store path |
+| `MEMORY_SEARCH_CONCURRENCY` | `4` | Parallel memory CLI lookups during term pre-fill |
 
 → For installation and environment setup, see the [Setup Guide](docs/setup.md).
 
