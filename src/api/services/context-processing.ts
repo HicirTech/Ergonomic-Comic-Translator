@@ -421,8 +421,8 @@ export const detectContextTerms = async (
       .join("\n");
 
     // ── Memory pre-fill: look up each new term in persistent memory ──────────
-    // When MEMORY_ENABLED=true this may resolve terms from previous uploads so
-    // fewer LLM explanation calls are needed.
+    // When MEMORY_ENABLED=true this may resolve terms already stored for this
+    // uploadId scope, reducing the number of LLM explanation calls needed.
     // Lookups are run in parallel (up to memorySearchConcurrency at a time) to
     // avoid sequential process-spawn overhead for large term lists.
     const termsBelowMemory: string[] = [];
@@ -485,9 +485,7 @@ export const detectContextTerms = async (
           "--content",
           `In manga/comic context, the term "${term}" translates to "${explanation}" in ${targetLanguage}.`,
           "--user-id", uploadId,
-        ]).catch((err) => {
-          logger.warn(`Failed to persist term explanation for "${term}": ${err instanceof Error ? err.message : String(err)}`);
-        });
+        ]);
       }
     }
   }
@@ -502,20 +500,27 @@ export const detectContextTerms = async (
  * Fire-and-forget: persist each term that has a non-empty explanation into
  * Qdrant memory, scoped to the given uploadId.
  *
+ * @param targetLanguage When provided, includes the language in the stored
+ *   content (e.g. "translates to X in Chinese") to match the format used by
+ *   `detectContextTerms`, improving semantic retrieval consistency.
+ *   When omitted (e.g. for language-agnostic saves), the language suffix is
+ *   skipped and the entry is still stored but may score slightly lower on
+ *   language-specific lookups.
+ *
  * Safe to call on every putTerms save — Mem0 will ADD new entries or UPDATE
  * existing ones as appropriate; it never creates duplicates.
  */
-export const syncTermsToMemory = (uploadId: string, terms: ContextTerm[]): void => {
-  const logger = getLogger("context");
+export const syncTermsToMemory = (uploadId: string, terms: ContextTerm[], targetLanguage?: string): void => {
   for (const term of terms) {
     if (!term.context.trim()) continue;
+    const content = targetLanguage
+      ? `In manga/comic context, the term "${term.term}" translates to "${term.context}" in ${targetLanguage}.`
+      : `In manga/comic context, the term "${term.term}" translates to "${term.context}".`;
     void runMemoryCli([
       "add",
       "--content",
-      `In manga/comic context, the term "${term.term}" translates to "${term.context}".`,
+      content,
       "--user-id", uploadId,
-    ]).catch((err) => {
-      logger.warn(`Failed to sync term "${term.term}" to memory: ${err instanceof Error ? err.message : String(err)}`);
-    });
+    ]);
   }
 };

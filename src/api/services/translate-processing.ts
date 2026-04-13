@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, resolve } from "path";
-import { ollamaHost, ollamaTranslateModel, translateContextPages, translatedRootDir } from "../../config.ts";
+import { ollamaHost, ollamaTranslateModel, translateContextPages, translatedRootDir, memoryTmMaxChars } from "../../config.ts";
 import { resolveOutputFileForScope } from "../../ocr/runtime-context.ts";
 import type { OcrOutput, OcrPage } from "../../ocr/interfaces";
 import { getLogger } from "../../logger.ts";
@@ -121,9 +121,6 @@ const MEMORY_QUERY_MAX_LENGTH = 300;
 /** Minimum similarity score (0–1) for a memory snippet to be injected into the translation prompt. */
 const MEMORY_SNIPPET_MIN_SCORE = 0.75;
 
-/** Maximum characters for source/translated text in a translation memory entry. */
-const MAX_TM_CHARS = 400;
-
 const buildSystemPrompt = (targetLanguage: string, translatedSoFar: TranslationOutput, uploadId?: string, memorySnippets?: string[]): string => {
   // Sliding window: only send the most recent N translated pages as context to keep the
   // system prompt size stable regardless of how many pages have already been translated.
@@ -186,16 +183,16 @@ const callOllamaPage = async (
   }));
 
   // ── Memory: fetch relevant snippets to inject into the system prompt ────────
-  // Build a search query from the OCR text of this page (first 300 chars to
-  // keep the query concise) plus the target language.
+  // Only performed when an uploadId is available so the search is scoped to this
+  // upload — without uploadId the query would be unscoped/global.
   let memorySnippets: string[] | undefined;
   const pageText = page.lines.map((l) => l.text.trim()).filter(Boolean).join(" ");
-  if (pageText) {
+  if (pageText && uploadId) {
     const memResult = await runMemoryCli([
       "search",
       "--query", `manga translation ${targetLanguage}: ${pageText.slice(0, MEMORY_QUERY_MAX_LENGTH)}`,
       "--limit", "5",
-      ...(uploadId ? ["--user-id", uploadId] : []),
+      "--user-id", uploadId,
     ]) as { results?: Array<{ memory?: string; score?: number }> } | null;
     const hits = (memResult?.results ?? [])
       .filter((r) => r.memory && (r.score ?? 0) >= MEMORY_SNIPPET_MIN_SCORE)
@@ -268,17 +265,15 @@ const callOllamaPage = async (
   // Mem0 handles ADD vs UPDATE internally, so re-translating the same page
   // will update the existing memory entry rather than create a duplicate.
   if (uploadId) {
-    const srcText = page.lines.map((l) => l.text.trim()).filter(Boolean).join(" | ").slice(0, MAX_TM_CHARS);
-    const trlText = resultLines.map((l) => l.translated).join(" | ").slice(0, MAX_TM_CHARS);
+    const srcText = page.lines.map((l) => l.text.trim()).filter(Boolean).join(" | ").slice(0, memoryTmMaxChars);
+    const trlText = resultLines.map((l) => l.translated).join(" | ").slice(0, memoryTmMaxChars);
     if (srcText && trlText) {
       void runMemoryCli([
         "add",
         "--content",
         `[Page ${page.pageNumber}] ${targetLanguage} translation: ${srcText} → ${trlText}`,
         "--user-id", uploadId,
-      ]).catch((err) => {
-        getLogger("translate").warn(`Failed to store TM for page ${page.pageNumber}: ${err instanceof Error ? err.message : String(err)}`);
-      });
+      ]);
     }
   }
 

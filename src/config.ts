@@ -284,6 +284,13 @@ export const qdrantStoragePath = resolveConfiguredPath(
   resolve(tempRootDir, "qdrant_storage"),
 );
 
+/**
+ * Maximum characters for the combined source and translated text in a
+ * per-page Translation Memory entry stored after each page is translated.
+ * Keeps individual memory entries compact to avoid Qdrant payload bloat.
+ */
+export const memoryTmMaxChars = 400;
+
 // --- Text Cleaner (local textless Python pipeline) ---
 export const textCleanerVenvDir = resolve(tempRootDir, "text-cleaner-venv");
 export const textCleanerPython = resolve(textCleanerVenvDir, "bin", "python");
