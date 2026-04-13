@@ -12,7 +12,7 @@
 | `bun run textless <scope> [page]` | 从已处理页面中去除文字 |
 | `bun run translate <scope> [page] [--lang <language>]` | 通过 Ollama 翻译提取的文字 |
 | `bun run delete <uploadId>` | 永久删除某次上传的所有数据 |
-| `bun run context <scope>` | 导出上下文信息 |
+| `bun run context <scope>` | 通过 AI 从 OCR 文本中检测术语表 |
 
 ## 服务器命令
 
@@ -30,6 +30,7 @@
 | `bun run system:bootstrap` | 通过 Homebrew 安装 Poetry + pyenv |
 | `bun run python:bootstrap` | 安装 Python 3.12 + Poetry 虚拟环境 + PaddleOCR |
 | `bun run text-cleaner:bootstrap` | 创建文字清除器虚拟环境 + PyTorch + 模型 |
+| `bun run memory:bootstrap` | 创建记忆层虚拟环境 + Mem0 + Qdrant（可选） |
 
 ## 诊断命令
 

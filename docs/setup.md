@@ -60,7 +60,18 @@ Required for text removal. Creates a separate Python venv with PyTorch (CUDA 12.
 bun run text-cleaner:bootstrap
 ```
 
-### 5. Verify the setup
+### 5. Bootstrap the memory layer (optional)
+
+Required for persistent translation memory. Creates a separate Python venv with `mem0ai` and `qdrant-client` (no Docker or external server needed). After bootstrapping, pull the embedding model once:
+
+```bash
+bun run memory:bootstrap
+ollama pull nomic-embed-text
+```
+
+Memory is enabled by default when the venv is present. Set `MEMORY_ENABLED=false` to disable it without removing the venv.
+
+### 6. Verify the setup
 
 ```bash
 bun run doctor
@@ -68,7 +79,7 @@ bun run doctor
 
 ## Python Environments
 
-The project maintains two separate Python environments:
+The project maintains three separate Python environments:
 
 ### Poetry Venv (OCR)
 
@@ -82,6 +93,15 @@ The project maintains two separate Python environments:
 - Contains: PyTorch (CUDA 12.9), torchvision, craft-text-detector
 - Invoked via: `.tmp/text-cleaner-venv/bin/python -m textless.runner`
 - Created by `bun run text-cleaner:bootstrap`
+
+### Memory Venv (Persistent Memory)
+
+- Located at `.tmp/memory-venv/`
+- Contains: `mem0ai`, `qdrant-client` (pinned versions)
+- Invoked via: `.tmp/memory-venv/bin/python -m memory.cli`
+- Created by `bun run memory:bootstrap`
+- Requires Ollama with the embedding model: `ollama pull nomic-embed-text`
+- Optional — if absent, all memory operations silently degrade to no-ops
 
 ## Diagnostics
 

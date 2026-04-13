@@ -57,20 +57,21 @@ OCR 流水线的高层 TypeScript 编排：
 
 | 命令 | 脚本 | 说明 |
 |------|------|------|
-| `bun run ocr` | `scripts/textless.ts` | 运行 OCR 流水线 |
+| `bun run ocr` | `main.ts` | 运行 OCR 流水线 |
 | `bun run textless` | `scripts/textless.ts` | 文字去除 |
 | `bun run translate` | `scripts/translate.ts` | 通过 Ollama 翻译 |
 | `bun run delete` | `scripts/delete.ts` | 永久删除上传 |
-| `bun run context` | `scripts/context.ts` | 上下文导出工具 |
+| `bun run context` | `scripts/context.ts` | 从 OCR 文本中检测术语表 |
 
 ### 5. Python 层
 
-`src/python/` 下的两个领域包，以模块方式调用，`PYTHONPATH=src/python/`：
+`src/python/` 下的三个领域包，以模块方式调用，`PYTHONPATH=src/python/`：
 
 | 包 | 虚拟环境 | 入口 | 用途 |
 |----|---------|------|------|
 | `ocr/` | Poetry | `python -m ocr.runner` | PaddleOCR / PaddleOCR-VL 批量处理 |
 | `textless/` | text-cleaner-venv | `python -m textless.runner` | 基于修复模型的文字去除 |
+| `memory/` | memory-venv | `python -m memory.cli` | 持久化翻译记忆（Mem0 + Qdrant） |
 
 与 Bun 的通信使用双通道协议：
 - **stderr** → 日志（`[INFO]`、`[WARN]`、`[ERROR]` 前缀），转发给 log4js
@@ -83,6 +84,7 @@ OCR 流水线的高层 TypeScript 编排：
 1. `system:bootstrap` — Homebrew、Poetry、pyenv
 2. `python:bootstrap` — Python 3.12、Poetry 虚拟环境、PaddleOCR 轮子
 3. `text-cleaner:bootstrap` — 独立虚拟环境 + PyTorch + 修复模型
+4. `memory:bootstrap` — 独立虚拟环境 + Mem0 + Qdrant（可选）
 
 检测脚本探测硬件和软件：
 - `doctor` — 完整系统检查
@@ -92,9 +94,9 @@ OCR 流水线的高层 TypeScript 编排：
 ## 数据流
 
 ```
-上传 → OCR 准备 → OCR 执行 → 合并 → 文字去除 → 翻译
-  ↓        ↓          ↓         ↓        ↓         ↓
-upload/ ocr_prepare/ (批次)  ocr_output/ textless/ translated/
+上传 → OCR 准备 → OCR 执行 → 合并 → 文字去除 → 上下文检测 → 翻译
+  ↓        ↓          ↓         ↓        ↓            ↓          ↓
+upload/ ocr_prepare/ (批次)  ocr_output/ textless/  context/  translated/
 ```
 
 所有数据存储在 `.tmp/` 下（可通过环境变量配置）。每次上传获得一个 UUID 作为作用域；CLI 使用 `ocr` 作为作用域。

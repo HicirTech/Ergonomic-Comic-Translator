@@ -29,6 +29,10 @@ src/python/
 │       ├── inference.py       ← Model inference utilities
 │       ├── log.py             ← Logging ([INFO]/[WARN]/[ERROR] to stderr)
 │       └── threading.py       ← Thread pool management
+├── memory/                    ← Persistent memory package (memory-venv)
+│   ├── __init__.py
+│   ├── cli.py                 ← CLI entry point (add/search/get-all/delete)
+│   └── service.py             ← Mem0 Memory factory (Qdrant + Ollama embeddings)
 └── models/                    ← Model weights (gitignored, downloaded by bootstrapper)
 ```
 
@@ -45,6 +49,10 @@ poetry run python -m ocr.pdf --input ... --output ...
 
 // Text removal (text-cleaner-venv)
 .tmp/text-cleaner-venv/bin/python -m textless.runner --input ... --ocr-json ... --output ...
+
+// Persistent memory (memory-venv)
+.tmp/memory-venv/bin/python -m memory.cli search --query "..." --user-id <uploadId>
+.tmp/memory-venv/bin/python -m memory.cli add --content "..." --user-id <uploadId>
 ```
 
 The `PYTHONPATH` environment variable is always set to `src/python/` so Python resolves the package imports correctly.
@@ -67,6 +75,7 @@ The `PYTHONPATH` environment variable is always set to `src/python/` so Python r
 | `ocr.runner` | unused | Writes JSON to `--output` file |
 | `ocr.pdf` | unused | Writes JSON manifest to `--output` file |
 | `textless.runner` | last line = JSON | `{success, outputPath}` or `{success, error}` |
+| `memory.cli` | JSON result | Parsed directly from stdout by `runMemoryCli()` |
 
 ## Progress Reporting
 

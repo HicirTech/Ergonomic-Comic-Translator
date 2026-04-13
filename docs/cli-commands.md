@@ -12,7 +12,7 @@ All CLI commands are defined in `package.json` and implemented as thin wrappers 
 | `bun run textless <scope> [page]` | Remove text from processed pages |
 | `bun run translate <scope> [page] [--lang <language>]` | Translate extracted text via Ollama |
 | `bun run delete <uploadId>` | Permanently delete all data for an upload |
-| `bun run context <scope>` | Dump context information |
+| `bun run context <scope>` | Detect glossary terms from OCR text via AI |
 
 ## Server Commands
 
@@ -30,6 +30,7 @@ All CLI commands are defined in `package.json` and implemented as thin wrappers 
 | `bun run system:bootstrap` | Install Poetry + pyenv via Homebrew |
 | `bun run python:bootstrap` | Install Python 3.12 + Poetry venv + PaddleOCR |
 | `bun run text-cleaner:bootstrap` | Create text-cleaner venv with PyTorch + models |
+| `bun run memory:bootstrap` | Create memory venv with Mem0 + Qdrant (optional) |
 
 ## Diagnostic Commands
 

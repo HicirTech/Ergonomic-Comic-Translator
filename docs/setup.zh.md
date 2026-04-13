@@ -60,7 +60,18 @@ bun run python:bootstrap
 bun run text-cleaner:bootstrap
 ```
 
-### 5. 验证安装
+### 5. 引导记忆层（可选）
+
+持久化翻译记忆所需。创建独立 Python 虚拟环境，安装 `mem0ai` 和 `qdrant-client`（无需 Docker 或外部服务器）。引导完成后，拉取嵌入模型一次：
+
+```bash
+bun run memory:bootstrap
+ollama pull nomic-embed-text
+```
+
+当虚拟环境存在时，记忆功能默认启用。设置 `MEMORY_ENABLED=false` 可在不删除虚拟环境的情况下禁用它。
+
+### 6. 验证安装
 
 ```bash
 bun run doctor
@@ -68,7 +79,7 @@ bun run doctor
 
 ## Python 环境
 
-项目维护两个独立的 Python 环境：
+项目维护三个独立的 Python 环境：
 
 ### Poetry 虚拟环境（OCR）
 
@@ -82,6 +93,15 @@ bun run doctor
 - 包含：PyTorch（CUDA 12.9）、torchvision、craft-text-detector
 - 调用方式：`.tmp/text-cleaner-venv/bin/python -m textless.runner`
 - 由 `bun run text-cleaner:bootstrap` 创建
+
+### 记忆层虚拟环境（Persistent Memory）
+
+- 位于 `.tmp/memory-venv/`
+- 包含：`mem0ai`、`qdrant-client`（锁定版本）
+- 调用方式：`.tmp/memory-venv/bin/python -m memory.cli`
+- 由 `bun run memory:bootstrap` 创建
+- 需要 Ollama 提供嵌入模型：`ollama pull nomic-embed-text`
+- 可选 — 若虚拟环境不存在，所有记忆操作会静默降级为空操作
 
 ## 诊断
 

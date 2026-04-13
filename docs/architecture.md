@@ -57,11 +57,11 @@ Thin wrappers that import logic from service modules:
 
 | Command | Script | Description |
 |---------|--------|-------------|
-| `bun run ocr` | `scripts/textless.ts` | Run OCR pipeline |
+| `bun run ocr` | `main.ts` | Run OCR pipeline |
 | `bun run textless` | `scripts/textless.ts` | Text removal |
 | `bun run translate` | `scripts/translate.ts` | Translation via Ollama |
 | `bun run delete` | `scripts/delete.ts` | Permanent upload deletion |
-| `bun run context` | `scripts/context.ts` | Context dump utility |
+| `bun run context` | `scripts/context.ts` | Detect glossary terms from OCR text |
 
 ### 5. Python Layer
 
@@ -71,6 +71,7 @@ Two domain packages under `src/python/`, invoked as modules with `PYTHONPATH=src
 |---------|------|-------------|---------|
 | `ocr/` | Poetry | `python -m ocr.runner` | PaddleOCR / PaddleOCR-VL batch processing |
 | `textless/` | text-cleaner-venv | `python -m textless.runner` | Inpainting-based text removal |
+| `memory/` | memory-venv | `python -m memory.cli` | Persistent translation memory (Mem0 + Qdrant) |
 
 Communication with Bun uses a two-channel protocol:
 - **stderr** → logging (`[INFO]`, `[WARN]`, `[ERROR]` prefixes), forwarded to log4js
@@ -83,6 +84,7 @@ Bootstrap scripts install dependencies in layers:
 1. `system:bootstrap` — Homebrew, Poetry, pyenv
 2. `python:bootstrap` — Python 3.12, Poetry venv, PaddleOCR wheels
 3. `text-cleaner:bootstrap` — Separate venv with PyTorch + inpainting models
+4. `memory:bootstrap` — Separate venv with Mem0 + Qdrant (optional)
 
 Detection scripts probe hardware and software:
 - `doctor` — Full system check
@@ -92,9 +94,9 @@ Detection scripts probe hardware and software:
 ## Data Flow
 
 ```
-Upload → OCR Prepare → OCR Execute → Merge → Textless → Translate
-  ↓          ↓              ↓           ↓         ↓          ↓
-upload/   ocr_prepare/   (batches)   ocr_output/ textless/ translated/
+Upload → OCR Prepare → OCR Execute → Merge → Textless → Context → Translate
+  ↓          ↓              ↓           ↓         ↓          ↓         ↓
+upload/   ocr_prepare/   (batches)   ocr_output/ textless/ context/ translated/
 ```
 
 All data stored under `.tmp/` (configurable via env vars). Each upload gets a UUID scope; CLI uses `ocr` as the scope.

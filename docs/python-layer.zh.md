@@ -29,6 +29,10 @@ src/python/
 │       ├── inference.py       ← 模型推理工具
 │       ├── log.py             ← 日志（[INFO]/[WARN]/[ERROR] 输出到 stderr）
 │       └── threading.py       ← 线程池管理
+├── memory/                    ← 持久化记忆包（memory-venv）
+│   ├── __init__.py
+│   ├── cli.py                 ← CLI 入口（add/search/get-all/delete）
+│   └── service.py             ← Mem0 Memory 工厂（Qdrant + Ollama 嵌入）
 └── models/                    ← 模型权重（gitignore，由引导脚本下载）
 ```
 
@@ -45,6 +49,10 @@ poetry run python -m ocr.pdf --input ... --output ...
 
 // 文字去除（text-cleaner-venv）
 .tmp/text-cleaner-venv/bin/python -m textless.runner --input ... --ocr-json ... --output ...
+
+// 持久化记忆（memory-venv）
+.tmp/memory-venv/bin/python -m memory.cli search --query "..." --user-id <uploadId>
+.tmp/memory-venv/bin/python -m memory.cli add --content "..." --user-id <uploadId>
 ```
 
 `PYTHONPATH` 环境变量始终设置为 `src/python/`，确保 Python 正确解析包导入。
@@ -67,6 +75,7 @@ poetry run python -m ocr.pdf --input ... --output ...
 | `ocr.runner` | 未使用 | JSON 写入 `--output` 文件 |
 | `ocr.pdf` | 未使用 | JSON 清单写入 `--output` 文件 |
 | `textless.runner` | 最后一行 = JSON | `{success, outputPath}` 或 `{success, error}` |
+| `memory.cli` | JSON 结果 | 由 `runMemoryCli()` 直接从 stdout 解析 |
 
 ## 进度报告
 
