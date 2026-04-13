@@ -83,6 +83,7 @@ Shared path config:
 - OLLAMA_TRANSLATE_MODEL: Ollama model for translation, default translategemma:12b
 - TRANSLATE_TARGET_LANGUAGE: default target language, default Chinese
 - TRANSLATE_CONTEXT_PAGES: number of recently-translated pages to include as context per call, default 8 (-1 = all, 0 = none)
+- CONTEXT_CHUNK_PAGES: number of OCR pages to send per AI call during context/term detection, default 10 (-1 = all pages in one call)
 
 Data model:
 - uploadId (UUID) is the sole identifier across the entire pipeline. Generated once per POST /api/upload request.
@@ -195,10 +196,10 @@ Current key files:
 - core Ollama integration for translation
 - uses resolveOutputFileForScope() from ocr/runtime-context.ts to read OCR output (single source of truth)
 - extractFirstObject(): bracket-scanning JSON extractor tolerating surrounding text
-- buildSystemPrompt(): includes full OCR + already-translated pages as context for each page call
+- buildSystemPrompt(): includes a sliding window of recently-translated pages (last TRANSLATE_CONTEXT_PAGES pages) plus the glossary and persistent memory snippets for each page call
 - callOllamaPage(): streaming Ollama call for a single page (5-min timeout, stream:true, format:"json")
 - translateAll(): page-by-page loop with 3 retries per page; calls onPageDone callback after each success
-- Ollama options: num_predict:-1, num_ctx:262144, temperature:0.1
+- Ollama options: num_predict:-1, num_ctx:dynamic (computeNumCtx rounds estimated prompt tokens × 2 up to next power-of-2, clamped to [4096, 131072]), temperature:0.1
 - src/api/services/translate-queue-service.ts:
 - persists and manages translation queue state per uploadId
 - runs a background translation worker using Ready, Queued, Processing, and Completed states
@@ -410,7 +411,7 @@ Known caveats / editing guidance:
 - Do not reintroduce Docker unless explicitly requested.
 - Ollama runs externally (e.g. on a Windows host or separate server) — configure via OLLAMA_HOST env var.
 - Translation uses streaming mode (stream:true) with per-page calls to avoid LLM output truncation.
-- Each translation call includes the full OCR text and all already-translated pages in the system prompt for translation consistency.
+- Each translation call includes a sliding window of recently-translated pages (TRANSLATE_CONTEXT_PAGES, default 8) plus glossary terms and persistent memory snippets in the system prompt for translation consistency.
 - extractFirstObject() in translate-processing.ts is the robust JSON parser — do not replace with plain JSON.parse.
 
 Frontend architecture:

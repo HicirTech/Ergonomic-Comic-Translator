@@ -172,6 +172,8 @@ bun run doctor                 # 5. 验证安装
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama API 地址 |
 | `OLLAMA_TRANSLATE_MODEL` | `translategemma:12b` | 翻译模型 |
 | `TRANSLATE_TARGET_LANGUAGE` | `Chinese` | 默认目标语言 |
+| `TRANSLATE_CONTEXT_PAGES` | `8` | 每次调用保留的最近已翻译页数作为滚动上下文（`-1` = 全部，`0` = 不保留） |
+| `CONTEXT_CHUNK_PAGES` | `10` | 术语检测时每次 AI 调用发送的 OCR 页数（`-1` = 一次发送全部） |
 
 → [完整配置参考](docs/setup.zh.md#配置)
 

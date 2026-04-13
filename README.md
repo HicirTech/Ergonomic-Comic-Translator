@@ -172,6 +172,8 @@ All environment variables are resolved in `src/config.ts` with sensible defaults
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama API URL |
 | `OLLAMA_TRANSLATE_MODEL` | `translategemma:12b` | Translation model |
 | `TRANSLATE_TARGET_LANGUAGE` | `Chinese` | Default target language |
+| `TRANSLATE_CONTEXT_PAGES` | `8` | Recently-translated pages kept as rolling context (`-1` = all, `0` = none) |
+| `CONTEXT_CHUNK_PAGES` | `10` | OCR pages per AI call during term detection (`-1` = all in one call) |
 
 → [Full configuration reference](docs/setup.md#configuration)
 
