@@ -102,6 +102,14 @@ export function isCjk(text: string): boolean {
   return total > 0 && cjk / total > 0.5;
 }
 
+/** Returns true if the text contains at least one CJK character. */
+export function hasCjk(text: string): boolean {
+  for (const ch of text) {
+    if (ch.charCodeAt(0) > CJK_CODEPOINT_MIN) return true;
+  }
+  return false;
+}
+
 /** Estimate text width in pixels. CJK ≈ 1em, ASCII ≈ 0.6em. */
 export function measureText(text: string, fontSize: number): number {
   let w = 0;
