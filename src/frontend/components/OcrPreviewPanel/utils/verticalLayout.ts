@@ -1,15 +1,16 @@
 /**
  * Vertical text layout — fits translated text into a polygon.
  *
- * - **CJK text**: stacks characters top-to-bottom in right-to-left columns,
- *   using scanline intersection for polygon-aware column heights.
+ * - **CJK text** (any CJK character present): stacks characters top-to-bottom
+ *   in right-to-left columns, using scanline intersection for polygon-aware
+ *   column heights.
  * - **Non-CJK text** (English etc.): renders horizontally but rotated 90° CW
  *   within the polygon, since vertically stacked Latin letters are unreadable.
  *   The SVG renderer applies `transform="rotate(90, cx, cy)"` on the text group.
  */
 
 import type { PolyBounds } from "./polygonGeometry.ts";
-import { polygonSpanAtX, isCjk, polyBounds } from "./polygonGeometry.ts";
+import { polygonSpanAtX, hasCjk, polyBounds } from "./polygonGeometry.ts";
 import { fitHorizontal } from "./horizontalLayout.ts";
 import type { HorizontalLayout, HorizontalLayoutRow } from "./horizontalLayout.ts";
 
@@ -172,7 +173,7 @@ export function fitVertical(
   minSize = 8,
   maxSize = 72,
 ): VerticalLayout {
-  if (isCjk(text)) {
+  if (hasCjk(text)) {
     return fitVerticalCjk(text, polygon, bounds, minSize, maxSize);
   }
   return fitVerticalRotated(text, polygon, bounds, minSize, maxSize);
