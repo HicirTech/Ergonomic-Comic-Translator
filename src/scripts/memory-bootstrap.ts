@@ -66,8 +66,9 @@ export const ensureMemoryVenv = async () => {
   }
 
   logStep("memory venv ready");
-  logStep("NOTE: make sure Ollama is running and the embedding model is available:");
+  logStep("NOTE: memory is enabled by default. Make sure Ollama is running and pull the embedding model:");
   logStep("  ollama pull nomic-embed-text");
+  logStep("To disable memory, set MEMORY_ENABLED=false in your environment.");
 
   return venvPython;
 };

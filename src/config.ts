@@ -235,17 +235,34 @@ export const contextChunkPages = parseContextChunkPages(process.env.CONTEXT_CHUN
 // --- Memory (Mem0 + local Qdrant + Ollama — no Docker required) ---
 
 /**
- * Set MEMORY_ENABLED=true to activate persistent translation memory.
- * When disabled (default) all memory operations are no-ops so existing
- * behaviour is unchanged.
+ * Persistent translation memory is ENABLED by default.
+ *
+ * Memory requires the memory venv to be installed (`bun run memory:bootstrap`)
+ * and Ollama to be running with the embedding model available
+ * (`ollama pull nomic-embed-text`).
+ *
+ * If the venv is not installed yet, all memory operations silently degrade to
+ * no-ops — the translation pipeline continues normally.
+ *
+ * Set MEMORY_ENABLED=false to completely disable memory if desired.
  */
-export const memoryEnabled = (process.env.MEMORY_ENABLED ?? "").toLowerCase() === "true";
+export const memoryEnabled = (process.env.MEMORY_ENABLED ?? "true").toLowerCase() !== "false";
 
 export const memoryVenvDir = resolve(tempRootDir, "memory-venv");
 export const memoryPython = resolve(memoryVenvDir, "bin", "python");
 
 /**
- * Ollama model used for embedding text into the Qdrant vector store.
+ * Ollama embedding model used to convert text into vector representations for
+ * semantic search in the Qdrant vector store.
+ *
+ * WHY a separate model?
+ *   - The translation LLM (e.g. translategemma:12b) generates text.
+ *   - The embedding model converts text → a fixed-size numeric vector so that
+ *     Qdrant can find semantically similar memories quickly (nearest-neighbour
+ *     search) without running a full LLM inference on every lookup.
+ *   - Embedding models are lightweight and fast; they run alongside the main
+ *     LLM without significant overhead.
+ *
  * Pull it once with: `ollama pull nomic-embed-text`
  */
 export const defaultOllamaEmbedModel = "nomic-embed-text";
