@@ -115,36 +115,29 @@ const computeNumCtx = (systemPrompt: string, userMessage: string): number => {
   return Math.min(Math.max(ctx, 4096), 131072);
 };
 
-const buildSystemPrompt = (targetLanguage: string, allOcrPages: OcrPage[], translatedSoFar: TranslationOutput, uploadId?: string): string => {
-  // Shape: same as translated.json — { pageNumber, lines: [{ lineIndex, translated }] }
-  // "translated" holds the source text here so both context sections share one schema.
-  const ocrContext = allOcrPages.map((p) => ({
-    pageNumber: p.pageNumber,
-    lines: p.lines.map((l) => ({
-      lineIndex: l.lineIndex,
-      translated: l.text,
-    })),
-  }));
-
+const buildSystemPrompt = (targetLanguage: string, translatedSoFar: TranslationOutput, uploadId?: string): string => {
   // Sliding window: only send the most recent N translated pages as context to keep the
   // system prompt size stable regardless of how many pages have already been translated.
   const windowedTranslations = translateContextPages === -1
     ? translatedSoFar
     : translatedSoFar.slice(-translateContextPages);
 
-  // Build glossary section from user-provided context terms (if any)
-  const contextTerms = uploadId ? loadContextTerms(uploadId).filter((t) => t.context.trim()) : [];
-  const glossarySection = contextTerms.length > 0
-    ? `\nGLOSSARY — user-provided term explanations (use these for accurate translation):\n${contextTerms.map((t) => `- ${t.term}: ${t.context}`).join("\n")}\n`
-    : "";
+  // Build glossary sections from extracted context terms.
+  // Terms with explanations provide authoritative translation guidance.
+  // Terms without explanations are still listed so the model keeps them consistent.
+  const allContextTerms = uploadId ? loadContextTerms(uploadId) : [];
+  const termsWithContext = allContextTerms.filter((t) => t.context.trim());
+  const termsWithoutContext = allContextTerms.filter((t) => !t.context.trim());
+
+  let glossarySection = "";
+  if (termsWithContext.length > 0) {
+    glossarySection += `\nGLOSSARY — story terms with translation context (use these for accurate translation):\n${termsWithContext.map((t) => `- ${t.term}: ${t.context}`).join("\n")}\n`;
+  }
+  if (termsWithoutContext.length > 0) {
+    glossarySection += `\nKNOWN TERMS — story-specific terms to keep consistent (transliterate or preserve as appropriate):\n${termsWithoutContext.map((t) => `- ${t.term}`).join("\n")}\n`;
+  }
 
   return `You are a professional manga/comic translator. Translate ONLY the page specified in the user message to ${targetLanguage}.
-
-Both context sections below share the same schema: {"pageNumber", "lines": [{"lineIndex", "translated"}]}.
-In the SOURCE section "translated" holds the original source text. In the ALREADY TRANSLATED section it holds the target-language text.
-
-SOURCE TEXT — all pages (for context and consistency):
-${JSON.stringify(ocrContext)}
 
 ALREADY TRANSLATED — last ${windowedTranslations.length} pages (for tone/term consistency — do NOT re-translate these):
 ${windowedTranslations.length > 0 ? JSON.stringify(windowedTranslations) : "(none yet)"}
@@ -156,6 +149,7 @@ RULES:
 - Keep translations concise — they fit inside speech bubbles.
 - Every lineIndex from the input page must appear in the output.
 - When translating terms listed in the GLOSSARY, use the provided explanation as authoritative context.
+- When translating KNOWN TERMS with no explanation, keep them consistent with any prior translations of those terms.
 
 REQUIRED OUTPUT FORMAT:
 {"pageNumber": <number>, "lines": [{"lineIndex": <number>, "translated": "<string>"}, ...]}
@@ -166,7 +160,6 @@ EXAMPLE:
 
 const callOllamaPage = async (
   page: OcrPage,
-  allOcrPages: OcrPage[],
   translatedSoFar: TranslationOutput,
   targetLanguage: string,
   model?: string,
@@ -177,7 +170,7 @@ const callOllamaPage = async (
     translated: l.text,
   }));
 
-  const systemPrompt = buildSystemPrompt(targetLanguage, allOcrPages, translatedSoFar, uploadId);
+  const systemPrompt = buildSystemPrompt(targetLanguage, translatedSoFar, uploadId);
   const userMessage = JSON.stringify({ pageNumber: page.pageNumber, lines: inputLines });
 
   const response = await fetch(`${ollamaHost}/api/chat`, {
@@ -247,17 +240,12 @@ export const translateAll = async (
   onPageDone?: (result: TranslatedPage) => void,
   model?: string,
   uploadId?: string,
-  allOcrPages?: OcrPage[],
   initialTranslations?: TranslationOutput,
 ): Promise<TranslationOutput> => {
   if (pages.length === 0) return [];
 
-  // Use full volume pages for source context so single-page and full-volume
-  // translations receive the same context, avoiding accuracy inconsistencies.
-  const sourcePages = allOcrPages ?? pages;
-
-  // Pre-seed already-translated pages so the model can maintain term/tone
-  // consistency even when retranslating a single page mid-volume.
+  // Pre-seed already-translated pages so the sliding-window context in the system prompt
+  // reflects prior translated pages even when retranslating a single page mid-volume.
   const translateSet = new Set(pages.map((p) => p.pageNumber));
   const seeded = (initialTranslations ?? []).filter((p) => !translateSet.has(p.pageNumber));
   const output: TranslationOutput = [...seeded];
@@ -273,7 +261,7 @@ export const translateAll = async (
     let result: TranslatedPage | null = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const translated = await callOllamaPage(page, sourcePages, output, targetLanguage, model, uploadId);
+        const translated = await callOllamaPage(page, output, targetLanguage, model, uploadId);
         result = { pageNumber: page.pageNumber, lines: translated.lines };
         break;
       } catch (err) {
