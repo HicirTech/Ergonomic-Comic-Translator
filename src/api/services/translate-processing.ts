@@ -6,6 +6,7 @@ import type { OcrOutput, OcrPage } from "../../ocr/interfaces";
 import { getLogger } from "../../logger.ts";
 import type { TranslatedLine, TranslatedPage, TranslationOutput } from "../interfaces";
 import { loadContextTerms } from "./context-processing.ts";
+import { runMemoryCli } from "../../scripts/python-run.ts";
 
 export const resolveTranslatedDir = (scope: string) =>
   resolve(translatedRootDir, scope);
@@ -115,7 +116,7 @@ const computeNumCtx = (systemPrompt: string, userMessage: string): number => {
   return Math.min(Math.max(ctx, 4096), 131072);
 };
 
-const buildSystemPrompt = (targetLanguage: string, translatedSoFar: TranslationOutput, uploadId?: string): string => {
+const buildSystemPrompt = (targetLanguage: string, translatedSoFar: TranslationOutput, uploadId?: string, memorySnippets?: string[]): string => {
   // Sliding window: only send the most recent N translated pages as context to keep the
   // system prompt size stable regardless of how many pages have already been translated.
   const windowedTranslations = translateContextPages === -1
@@ -137,11 +138,16 @@ const buildSystemPrompt = (targetLanguage: string, translatedSoFar: TranslationO
     glossarySection += `\nKNOWN TERMS — story-specific terms to keep consistent (transliterate or preserve as appropriate):\n${termsWithoutContext.map((t) => `- ${t.term}`).join("\n")}\n`;
   }
 
+  let memorySection = "";
+  if (memorySnippets && memorySnippets.length > 0) {
+    memorySection = `\nPERSISTENT MEMORY — translation knowledge from previous sessions (apply where relevant):\n${memorySnippets.map((s) => `- ${s}`).join("\n")}\n`;
+  }
+
   return `You are a professional manga/comic translator. Translate ONLY the page specified in the user message to ${targetLanguage}.
 
 ALREADY TRANSLATED — last ${windowedTranslations.length} pages (for tone/term consistency — do NOT re-translate these):
 ${windowedTranslations.length > 0 ? JSON.stringify(windowedTranslations) : "(none yet)"}
-${glossarySection}
+${glossarySection}${memorySection}
 RULES:
 - Output ONLY valid JSON in the exact format below. No markdown, no explanation.
 - Keep character names, terms, and tone consistent with already-translated pages above.
@@ -150,6 +156,7 @@ RULES:
 - Every lineIndex from the input page must appear in the output.
 - When translating terms listed in the GLOSSARY, use the provided explanation as authoritative context.
 - When translating KNOWN TERMS with no explanation, keep them consistent with any prior translations of those terms.
+- When translating terms found in PERSISTENT MEMORY, apply those established translations for consistency.
 
 REQUIRED OUTPUT FORMAT:
 {"pageNumber": <number>, "lines": [{"lineIndex": <number>, "translated": "<string>"}, ...]}
@@ -170,7 +177,24 @@ const callOllamaPage = async (
     translated: l.text,
   }));
 
-  const systemPrompt = buildSystemPrompt(targetLanguage, translatedSoFar, uploadId);
+  // ── Memory: fetch relevant snippets to inject into the system prompt ────────
+  // Build a search query from the OCR text of this page (first 300 chars to
+  // keep the query concise) plus the target language.
+  let memorySnippets: string[] | undefined;
+  const pageText = page.lines.map((l) => l.text.trim()).filter(Boolean).join(" ");
+  if (pageText) {
+    const memResult = await runMemoryCli([
+      "search",
+      "--query", `manga translation ${targetLanguage}: ${pageText.slice(0, 300)}`,
+      "--limit", "5",
+    ]) as { results?: Array<{ memory?: string; score?: number }> } | null;
+    const hits = (memResult?.results ?? [])
+      .filter((r) => r.memory && (r.score ?? 0) >= 0.75)
+      .map((r) => r.memory as string);
+    if (hits.length > 0) memorySnippets = hits;
+  }
+
+  const systemPrompt = buildSystemPrompt(targetLanguage, translatedSoFar, uploadId, memorySnippets);
   const userMessage = JSON.stringify({ pageNumber: page.pageNumber, lines: inputLines });
 
   const response = await fetch(`${ollamaHost}/api/chat`, {

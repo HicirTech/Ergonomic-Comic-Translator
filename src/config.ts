@@ -232,6 +232,34 @@ const parseContextChunkPages = (value: string | undefined, fallback: number): nu
 export const defaultContextChunkPages = 10;
 export const contextChunkPages = parseContextChunkPages(process.env.CONTEXT_CHUNK_PAGES, defaultContextChunkPages);
 
+// --- Memory (Mem0 + local Qdrant + Ollama — no Docker required) ---
+
+/**
+ * Set MEMORY_ENABLED=true to activate persistent translation memory.
+ * When disabled (default) all memory operations are no-ops so existing
+ * behaviour is unchanged.
+ */
+export const memoryEnabled = (process.env.MEMORY_ENABLED ?? "").toLowerCase() === "true";
+
+export const memoryVenvDir = resolve(tempRootDir, "memory-venv");
+export const memoryPython = resolve(memoryVenvDir, "bin", "python");
+
+/**
+ * Ollama model used for embedding text into the Qdrant vector store.
+ * Pull it once with: `ollama pull nomic-embed-text`
+ */
+export const defaultOllamaEmbedModel = "nomic-embed-text";
+export const ollamaEmbedModel = readStringEnv(process.env.OLLAMA_EMBED_MODEL, defaultOllamaEmbedModel);
+
+/**
+ * On-disk path for the embedded Qdrant database.
+ * No Qdrant server or Docker is required — the database runs in-process.
+ */
+export const qdrantStoragePath = resolveConfiguredPath(
+  process.env.QDRANT_STORAGE_PATH,
+  resolve(tempRootDir, "qdrant_storage"),
+);
+
 // --- Text Cleaner (local textless Python pipeline) ---
 export const textCleanerVenvDir = resolve(tempRootDir, "text-cleaner-venv");
 export const textCleanerPython = resolve(textCleanerVenvDir, "bin", "python");

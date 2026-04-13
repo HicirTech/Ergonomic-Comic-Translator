@@ -42,6 +42,7 @@
     "context": "bun run src/scripts/context.ts",
     "delete": "bun run src/scripts/delete.ts",
     "text-cleaner:bootstrap": "bun run src/scripts/text-cleaner-bootstrap.ts",
+    "memory:bootstrap": "bun run src/scripts/memory-bootstrap.ts",
     "typecheck": "bunx tsc -p tsconfig.json --noEmit",
     "typecheck:frontend": "bunx tsc -p tsconfig.frontend.json --noEmit",
     "dev:frontend": "vite",

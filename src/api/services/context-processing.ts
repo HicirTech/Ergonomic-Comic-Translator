@@ -5,6 +5,7 @@ import { resolveOutputFileForScope } from "../../ocr/runtime-context.ts";
 import type { OcrOutput, OcrPage } from "../../ocr/interfaces";
 import { getLogger } from "../../logger.ts";
 import type { ContextTerm } from "../interfaces/context-job-record.ts";
+import { runMemoryCli } from "../../scripts/python-run.ts";
 
 export const resolveContextDir = (uploadId: string) =>
   resolve(contextRootDir, uploadId);
@@ -416,16 +417,39 @@ export const detectContextTerms = async (
       .filter(Boolean)
       .join("\n");
 
+    // ── Memory pre-fill: look up each new term in persistent memory ──────────
+    // When MEMORY_ENABLED=true this may resolve terms from previous uploads so
+    // fewer LLM explanation calls are needed.
+    const termsBelowMemory: string[] = [];
+    const termMemoryMap: Record<string, string> = {};
+    for (const term of newTerms) {
+      const memResult = await runMemoryCli([
+        "search",
+        "--query", `translation of "${term}" in ${targetLanguage}`,
+        "--limit", "1",
+      ]) as { results?: Array<{ memory?: string; score?: number }> } | null;
+      const topHit = memResult?.results?.[0];
+      // Only use high-confidence hits (score ≥ 0.85) to avoid false matches.
+      if (topHit?.memory && (topHit.score ?? 0) >= 0.85) {
+        termMemoryMap[term] = topHit.memory;
+        logger.info(`context memory hit for "${term}": ${topHit.memory} (score=${topHit.score})`);
+      } else {
+        termsBelowMemory.push(term);
+      }
+    }
+
+    const termsToExplain = termsBelowMemory;
+
     const termBatches: string[][] = [];
-    for (let i = 0; i < newTerms.length; i += TERMS_EXPLAIN_BATCH_SIZE) {
-      termBatches.push(newTerms.slice(i, i + TERMS_EXPLAIN_BATCH_SIZE));
+    for (let i = 0; i < termsToExplain.length; i += TERMS_EXPLAIN_BATCH_SIZE) {
+      termBatches.push(termsToExplain.slice(i, i + TERMS_EXPLAIN_BATCH_SIZE));
     }
 
     const totalSteps = chunks.length + termBatches.length;
     onProgress?.(chunks.length, totalSteps);
-    logger.info(`context explanation for "${uploadId}": ${newTerms.length} term(s) in ${termBatches.length} batch(es) (targetLanguage="${targetLanguage}")`);
+    logger.info(`context explanation for "${uploadId}": ${termsToExplain.length} term(s) need LLM (${newTerms.length - termsToExplain.length} resolved from memory), ${termBatches.length} batch(es) (targetLanguage="${targetLanguage}")`);
 
-    const explanationMap: Record<string, string> = {};
+    const explanationMap: Record<string, string> = { ...termMemoryMap };
     for (const [batchIdx, batch] of termBatches.entries()) {
       logger.info(`context explanation for "${uploadId}": batch ${batchIdx + 1}/${termBatches.length} (${batch.length} term(s))…`);
       const explanations = await callOllamaForTermExplanations(batch, allOcrText, targetLanguage, model);
@@ -437,6 +461,19 @@ export const detectContextTerms = async (
     for (const entry of merged) {
       if (entry.context === "" && explanationMap[entry.term]) {
         entry.context = explanationMap[entry.term];
+      }
+    }
+
+    // ── Memory store: persist new explanations for future uploads ────────────
+    for (const term of termsToExplain) {
+      const explanation = explanationMap[term];
+      if (explanation) {
+        // Fire-and-forget: memory storage must not block or fail the main flow.
+        void runMemoryCli([
+          "add",
+          "--content",
+          `In manga/comic context, the term "${term}" translates to "${explanation}" in ${targetLanguage}.`,
+        ]).catch(() => { /* already logged inside runMemoryCli */ });
       }
     }
   }

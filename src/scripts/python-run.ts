@@ -11,6 +11,13 @@ import {
   textCleanerMaskDilation,
   textCleanerPasses,
   textCleanerDevice,
+  memoryEnabled,
+  memoryPython,
+  memoryVenvDir,
+  ollamaHost,
+  ollamaTranslateModel,
+  ollamaEmbedModel,
+  qdrantStoragePath,
 } from "../config.ts";
 import type { OcrModel } from "../ocr/config";
 import { getZludaLibraryPath } from "./amd-detect.ts";
@@ -275,5 +282,61 @@ export const runTextCleaner = async (options: TextCleanerOptions): Promise<TextC
   } catch {
     // If we can't parse JSON, treat the full output as diagnostic info
     return { success: false, error: `Unexpected output from text cleaner:\n${stdout}` };
+  }
+};
+
+// --- Memory (Mem0 + local Qdrant + Ollama) ---
+
+/**
+ * Run a memory CLI command and return the parsed JSON result.
+ *
+ * Returns `null` when memory is disabled or the venv is not yet installed.
+ * All errors are logged as warnings rather than thrown so that memory failures
+ * never interrupt the main translation pipeline.
+ *
+ * @param args  CLI arguments, e.g. ["add", "--content", "..."]
+ */
+export const runMemoryCli = async (args: string[]): Promise<unknown> => {
+  if (!memoryEnabled) {
+    return null;
+  }
+
+  const python = memoryPython;
+  const logger = getLogger("memory");
+
+  if (!existsSync(python)) {
+    logger.warn(`Memory venv not found at ${memoryVenvDir}. Run \`bun run memory:bootstrap\` to enable persistent memory.`);
+    return null;
+  }
+
+  const pythonSrc = resolve(defaultProjectRoot, "src", "python");
+
+  try {
+    const result = await $`${python} -m memory.cli ${args}`
+      .env({
+        ...process.env,
+        PYTHONPATH: pythonSrc,
+        OLLAMA_HOST: ollamaHost,
+        OLLAMA_TRANSLATE_MODEL: ollamaTranslateModel,
+        OLLAMA_EMBED_MODEL: ollamaEmbedModel,
+        QDRANT_STORAGE_PATH: qdrantStoragePath,
+      })
+      .nothrow();
+
+    const stderr = decodeBuffer(result.stderr).trim();
+    if (stderr) forwardPythonLogs(logger, stderr);
+
+    if (result.exitCode !== 0) {
+      logger.warn(`Memory CLI exited with code ${result.exitCode}. Memory operation skipped.`);
+      return null;
+    }
+
+    const stdout = decodeBuffer(result.stdout).trim();
+    if (!stdout) return null;
+
+    return JSON.parse(stdout) as unknown;
+  } catch (err) {
+    logger.warn(`Memory CLI error: ${err instanceof Error ? err.message : String(err)}. Memory operation skipped.`);
+    return null;
   }
 };
