@@ -121,6 +121,9 @@ const MEMORY_QUERY_MAX_LENGTH = 300;
 /** Minimum similarity score (0–1) for a memory snippet to be injected into the translation prompt. */
 const MEMORY_SNIPPET_MIN_SCORE = 0.75;
 
+/** Maximum characters for source/translated text in a translation memory entry. */
+const MAX_TM_CHARS = 400;
+
 const buildSystemPrompt = (targetLanguage: string, translatedSoFar: TranslationOutput, uploadId?: string, memorySnippets?: string[]): string => {
   // Sliding window: only send the most recent N translated pages as context to keep the
   // system prompt size stable regardless of how many pages have already been translated.
@@ -192,6 +195,7 @@ const callOllamaPage = async (
       "search",
       "--query", `manga translation ${targetLanguage}: ${pageText.slice(0, MEMORY_QUERY_MAX_LENGTH)}`,
       "--limit", "5",
+      ...(uploadId ? ["--user-id", uploadId] : []),
     ]) as { results?: Array<{ memory?: string; score?: number }> } | null;
     const hits = (memResult?.results ?? [])
       .filter((r) => r.memory && (r.score ?? 0) >= MEMORY_SNIPPET_MIN_SCORE)
@@ -255,11 +259,32 @@ const callOllamaPage = async (
     throw new Error(`No valid page object in response for page ${page.pageNumber}`);
   }
   const validIndices = new Set(inputLines.map((l) => l.lineIndex));
+  const resultLines = (parsed.lines ?? [])
+    .filter((l) => validIndices.has(l.lineIndex) && typeof l.translated === "string")
+    .map((l) => ({ lineIndex: l.lineIndex, translated: l.translated }));
+
+  // ── Translation Memory: persist source → translation pair for this page ────
+  // Scoped to uploadId so memories from different comics don't cross-contaminate.
+  // Mem0 handles ADD vs UPDATE internally, so re-translating the same page
+  // will update the existing memory entry rather than create a duplicate.
+  if (uploadId) {
+    const srcText = page.lines.map((l) => l.text.trim()).filter(Boolean).join(" | ").slice(0, MAX_TM_CHARS);
+    const trlText = resultLines.map((l) => l.translated).join(" | ").slice(0, MAX_TM_CHARS);
+    if (srcText && trlText) {
+      void runMemoryCli([
+        "add",
+        "--content",
+        `[Page ${page.pageNumber}] ${targetLanguage} translation: ${srcText} → ${trlText}`,
+        "--user-id", uploadId,
+      ]).catch((err) => {
+        getLogger("translate").warn(`Failed to store TM for page ${page.pageNumber}: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    }
+  }
+
   return {
     pageNumber: parsed.pageNumber ?? page.pageNumber,
-    lines: (parsed.lines ?? [])
-      .filter((l) => validIndices.has(l.lineIndex) && typeof l.translated === "string")
-      .map((l) => ({ lineIndex: l.lineIndex, translated: l.translated })),
+    lines: resultLines,
   };
 };
 

@@ -1,7 +1,7 @@
 import type { ContextJobRecord, ContextQueueStatusResponse } from "../interfaces";
 import type { ContextJobRepository } from "../repositories/context-job-repository.ts";
 import { nowIso } from "../utils";
-import { detectContextTerms, loadContextTerms, saveContextTerms } from "./context-processing.ts";
+import { detectContextTerms, loadContextTerms, saveContextTerms, syncTermsToMemory } from "./context-processing.ts";
 import { getLogger } from "../../logger.ts";
 import { createQueueProcessor } from "./base-queue-processor.ts";
 import type { ContextTerm } from "../interfaces/context-job-record.ts";
@@ -178,9 +178,12 @@ export const createContextQueueService = (contextJobRepository: ContextJobReposi
   /**
    * Replace the full terms list for an upload.
    * Used by the frontend when the user edits/deletes terms.
+   * Fire-and-forgets a memory sync so edited explanations are reflected
+   * in future translation and context lookups for this upload.
    */
   const putTerms = (uploadId: string, terms: ContextTerm[]): { statusCode: number; body: unknown } => {
     saveContextTerms(uploadId, terms);
+    syncTermsToMemory(uploadId, terms);
     return { statusCode: 200, body: { terms } };
   };
 

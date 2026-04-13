@@ -433,6 +433,7 @@ export const detectContextTerms = async (
         "search",
         "--query", `translation of "${term}" in ${targetLanguage}`,
         "--limit", "1",
+        "--user-id", uploadId,
       ]) as { results?: Array<{ memory?: string; score?: number }> } | null;
       const topHit = memResult?.results?.[0];
       // Only use high-confidence hits (score ≥ 0.85) to avoid false matches.
@@ -483,11 +484,38 @@ export const detectContextTerms = async (
           "add",
           "--content",
           `In manga/comic context, the term "${term}" translates to "${explanation}" in ${targetLanguage}.`,
-        ]).catch(() => { /* already logged inside runMemoryCli */ });
+          "--user-id", uploadId,
+        ]).catch((err) => {
+          logger.warn(`Failed to persist term explanation for "${term}": ${err instanceof Error ? err.message : String(err)}`);
+        });
       }
     }
   }
 
   saveContextTerms(uploadId, merged);
   return merged;
+};
+
+// ── Memory sync helper (used by putTerms for user-edited terms) ───────────────
+
+/**
+ * Fire-and-forget: persist each term that has a non-empty explanation into
+ * Qdrant memory, scoped to the given uploadId.
+ *
+ * Safe to call on every putTerms save — Mem0 will ADD new entries or UPDATE
+ * existing ones as appropriate; it never creates duplicates.
+ */
+export const syncTermsToMemory = (uploadId: string, terms: ContextTerm[]): void => {
+  const logger = getLogger("context");
+  for (const term of terms) {
+    if (!term.context.trim()) continue;
+    void runMemoryCli([
+      "add",
+      "--content",
+      `In manga/comic context, the term "${term.term}" translates to "${term.context}".`,
+      "--user-id", uploadId,
+    ]).catch((err) => {
+      logger.warn(`Failed to sync term "${term.term}" to memory: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
 };
