@@ -118,7 +118,7 @@ def _build_standard_pipeline(lang: str = "ch", device: str = "cpu") -> PaddleOCR
         device=device,
         use_doc_orientation_classify=False,
         use_doc_unwarping=False,
-        use_textline_orientation=True,
+        use_textline_orientation=False,
     )
 
 
