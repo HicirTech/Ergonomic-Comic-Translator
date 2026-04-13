@@ -175,7 +175,7 @@ bun run doctor                 # 5. 验证安装
 | `TRANSLATE_CONTEXT_PAGES` | `8` | 每次调用保留的最近已翻译页数作为滚动上下文（`-1` = 全部，`0` = 不保留） |
 | `CONTEXT_CHUNK_PAGES` | `10` | 术语检测时每次 AI 调用发送的 OCR 页数（`-1` = 一次发送全部） |
 
-→ [完整配置参考](docs/setup.zh.md#配置)
+完整环境变量定义请以 `src/config.ts` 为准；安装与部署说明见 [docs/setup.zh.md](docs/setup.zh.md)。
 
 ---
 

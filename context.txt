@@ -84,6 +84,9 @@ Shared path config:
 - TRANSLATE_TARGET_LANGUAGE: default target language, default Chinese
 - TRANSLATE_CONTEXT_PAGES: number of recently-translated pages to include as context per call, default 8 (-1 = all, 0 = none)
 - CONTEXT_CHUNK_PAGES: number of OCR pages to send per AI call during context/term detection, default 10 (-1 = all pages in one call)
+- MEMORY_ENABLED: enable persistent memory for translation/context enrichment, default true (set to false to disable)
+- OLLAMA_EMBED_MODEL: Ollama embedding model used by persistent memory, default nomic-embed-text
+- QDRANT_STORAGE_PATH: local on-disk Qdrant persistence directory used by memory storage, default .tmp/qdrant_storage
 
 Data model:
 - uploadId (UUID) is the sole identifier across the entire pipeline. Generated once per POST /api/upload request.
@@ -364,6 +367,7 @@ Commands:
 - bun run textless <scope> [page]
 - bun run translate <scope> [page] [--lang <language>]
 - bun run text-cleaner:bootstrap
+- bun run memory:bootstrap
 - bun run doctor
 - bun run system:detect
 - bun run system:bootstrap

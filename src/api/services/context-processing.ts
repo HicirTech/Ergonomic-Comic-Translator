@@ -423,9 +423,13 @@ export const detectContextTerms = async (
     // ── Memory pre-fill: look up each new term in persistent memory ──────────
     // When MEMORY_ENABLED=true this may resolve terms from previous uploads so
     // fewer LLM explanation calls are needed.
+    // Lookups are run in parallel (up to MEMORY_SEARCH_CONCURRENCY at a time) to
+    // avoid sequential process-spawn overhead for large term lists.
+    const MEMORY_SEARCH_CONCURRENCY = 4;
     const termsBelowMemory: string[] = [];
     const termMemoryMap: Record<string, string> = {};
-    for (const term of newTerms) {
+
+    const searchOneTerm = async (term: string): Promise<void> => {
       const memResult = await runMemoryCli([
         "search",
         "--query", `translation of "${term}" in ${targetLanguage}`,
@@ -439,6 +443,10 @@ export const detectContextTerms = async (
       } else {
         termsBelowMemory.push(term);
       }
+    };
+
+    for (let i = 0; i < newTerms.length; i += MEMORY_SEARCH_CONCURRENCY) {
+      await Promise.all(newTerms.slice(i, i + MEMORY_SEARCH_CONCURRENCY).map(searchOneTerm));
     }
 
     const termsToExplain = termsBelowMemory;

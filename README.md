@@ -175,7 +175,7 @@ All environment variables are resolved in `src/config.ts` with sensible defaults
 | `TRANSLATE_CONTEXT_PAGES` | `8` | Recently-translated pages kept as rolling context (`-1` = all, `0` = none) |
 | `CONTEXT_CHUNK_PAGES` | `10` | OCR pages per AI call during term detection (`-1` = all in one call) |
 
-→ [Full configuration reference](docs/setup.md#configuration)
+→ For installation and environment setup, see the [Setup Guide](docs/setup.md).
 
 ---
 
