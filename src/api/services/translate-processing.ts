@@ -247,10 +247,20 @@ export const translateAll = async (
   onPageDone?: (result: TranslatedPage) => void,
   model?: string,
   uploadId?: string,
+  allOcrPages?: OcrPage[],
+  initialTranslations?: TranslationOutput,
 ): Promise<TranslationOutput> => {
   if (pages.length === 0) return [];
 
-  const output: TranslationOutput = [];
+  // Use full volume pages for source context so single-page and full-volume
+  // translations receive the same context, avoiding accuracy inconsistencies.
+  const sourcePages = allOcrPages ?? pages;
+
+  // Pre-seed already-translated pages so the model can maintain term/tone
+  // consistency even when retranslating a single page mid-volume.
+  const translateSet = new Set(pages.map((p) => p.pageNumber));
+  const seeded = (initialTranslations ?? []).filter((p) => !translateSet.has(p.pageNumber));
+  const output: TranslationOutput = [...seeded];
 
   for (const page of pages) {
     if (page.lines.length === 0) {
@@ -263,7 +273,7 @@ export const translateAll = async (
     let result: TranslatedPage | null = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const translated = await callOllamaPage(page, pages, output, targetLanguage, model, uploadId);
+        const translated = await callOllamaPage(page, sourcePages, output, targetLanguage, model, uploadId);
         result = { pageNumber: page.pageNumber, lines: translated.lines };
         break;
       } catch (err) {
