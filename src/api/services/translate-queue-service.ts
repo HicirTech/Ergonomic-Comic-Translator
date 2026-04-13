@@ -124,7 +124,7 @@ export const createTranslateQueueService = (translateJobRepository: TranslationJ
           pages: [...pageRecordMap.values()],
           updatedAt: nowIso(),
         });
-      }, model, uploadId);
+      }, model, uploadId, loadTranslationOutput(uploadId) ?? []);
 
       const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
       const outputFile = resolveTranslatedOutputFile(uploadId);
