@@ -87,6 +87,7 @@ Shared path config:
 - MEMORY_ENABLED: enable persistent memory for translation/context enrichment, default true (set to false to disable)
 - OLLAMA_EMBED_MODEL: Ollama embedding model used by persistent memory, default nomic-embed-text
 - QDRANT_STORAGE_PATH: local on-disk Qdrant persistence directory used by memory storage, default .tmp/qdrant_storage
+- MEMORY_SEARCH_CONCURRENCY: number of parallel memory CLI lookups during term pre-fill, default 4
 
 Data model:
 - uploadId (UUID) is the sole identifier across the entire pipeline. Generated once per POST /api/upload request.

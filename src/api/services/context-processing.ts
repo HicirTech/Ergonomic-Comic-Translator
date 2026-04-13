@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
-import { contextChunkPages, contextRootDir, ollamaHost, ollamaTranslateModel } from "../../config.ts";
+import { contextChunkPages, contextRootDir, memorySearchConcurrency, ollamaHost, ollamaTranslateModel } from "../../config.ts";
 import { resolveOutputFileForScope } from "../../ocr/runtime-context.ts";
 import type { OcrOutput, OcrPage } from "../../ocr/interfaces";
 import { getLogger } from "../../logger.ts";
@@ -423,9 +423,8 @@ export const detectContextTerms = async (
     // ── Memory pre-fill: look up each new term in persistent memory ──────────
     // When MEMORY_ENABLED=true this may resolve terms from previous uploads so
     // fewer LLM explanation calls are needed.
-    // Lookups are run in parallel (up to MEMORY_SEARCH_CONCURRENCY at a time) to
+    // Lookups are run in parallel (up to memorySearchConcurrency at a time) to
     // avoid sequential process-spawn overhead for large term lists.
-    const MEMORY_SEARCH_CONCURRENCY = 4;
     const termsBelowMemory: string[] = [];
     const termMemoryMap: Record<string, string> = {};
 
@@ -445,8 +444,8 @@ export const detectContextTerms = async (
       }
     };
 
-    for (let i = 0; i < newTerms.length; i += MEMORY_SEARCH_CONCURRENCY) {
-      await Promise.all(newTerms.slice(i, i + MEMORY_SEARCH_CONCURRENCY).map(searchOneTerm));
+    for (let i = 0; i < newTerms.length; i += memorySearchConcurrency) {
+      await Promise.all(newTerms.slice(i, i + memorySearchConcurrency).map(searchOneTerm));
     }
 
     const termsToExplain = termsBelowMemory;

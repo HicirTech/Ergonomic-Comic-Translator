@@ -252,6 +252,13 @@ export const memoryVenvDir = resolve(tempRootDir, "memory-venv");
 export const memoryPython = resolve(memoryVenvDir, "bin", "python");
 
 /**
+ * Number of parallel memory CLI subprocess calls to run at the same time during
+ * term pre-fill lookups. Higher values reduce wall-clock time but increase
+ * process-spawn overhead; 4 is a sensible default for most machines.
+ */
+export const memorySearchConcurrency = parsePositiveInteger(process.env.MEMORY_SEARCH_CONCURRENCY, 4, "MEMORY_SEARCH_CONCURRENCY");
+
+/**
  * Ollama embedding model used to convert text into vector representations for
  * semantic search in the Qdrant vector store.
  *
