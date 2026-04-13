@@ -116,6 +116,11 @@ const computeNumCtx = (systemPrompt: string, userMessage: string): number => {
   return Math.min(Math.max(ctx, 4096), 131072);
 };
 
+/** Maximum characters of page OCR text to include in the memory search query. */
+const MEMORY_QUERY_MAX_LENGTH = 300;
+/** Minimum similarity score (0–1) for a memory snippet to be injected into the translation prompt. */
+const MEMORY_SNIPPET_MIN_SCORE = 0.75;
+
 const buildSystemPrompt = (targetLanguage: string, translatedSoFar: TranslationOutput, uploadId?: string, memorySnippets?: string[]): string => {
   // Sliding window: only send the most recent N translated pages as context to keep the
   // system prompt size stable regardless of how many pages have already been translated.
@@ -185,11 +190,11 @@ const callOllamaPage = async (
   if (pageText) {
     const memResult = await runMemoryCli([
       "search",
-      "--query", `manga translation ${targetLanguage}: ${pageText.slice(0, 300)}`,
+      "--query", `manga translation ${targetLanguage}: ${pageText.slice(0, MEMORY_QUERY_MAX_LENGTH)}`,
       "--limit", "5",
     ]) as { results?: Array<{ memory?: string; score?: number }> } | null;
     const hits = (memResult?.results ?? [])
-      .filter((r) => r.memory && (r.score ?? 0) >= 0.75)
+      .filter((r) => r.memory && (r.score ?? 0) >= MEMORY_SNIPPET_MIN_SCORE)
       .map((r) => r.memory as string);
     if (hits.length > 0) memorySnippets = hits;
   }

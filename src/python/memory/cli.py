@@ -72,23 +72,30 @@ def main() -> None:
 
     mem = get_memory()
 
-    if args.command == "add":
-        result = mem.add(args.content, **_shared_kwargs(args))
-        print(json.dumps(result, ensure_ascii=False, default=str))
+    try:
+        if args.command == "add":
+            result = mem.add(args.content, **_shared_kwargs(args))
+            print(json.dumps(result, ensure_ascii=False, default=str))
 
-    elif args.command == "search":
-        kwargs = _shared_kwargs(args)
-        kwargs["limit"] = args.limit
-        result = mem.search(args.query, **kwargs)
-        print(json.dumps(result, ensure_ascii=False, default=str))
+        elif args.command == "search":
+            kwargs = _shared_kwargs(args)
+            kwargs["limit"] = args.limit
+            result = mem.search(args.query, **kwargs)
+            print(json.dumps(result, ensure_ascii=False, default=str))
 
-    elif args.command == "get-all":
-        result = mem.get_all(**_shared_kwargs(args))
-        print(json.dumps(result, ensure_ascii=False, default=str))
+        elif args.command == "get-all":
+            result = mem.get_all(**_shared_kwargs(args))
+            print(json.dumps(result, ensure_ascii=False, default=str))
 
-    elif args.command == "delete":
-        mem.delete(args.memory_id)
-        print(json.dumps({"deleted": True, "memory_id": args.memory_id}))
+        elif args.command == "delete":
+            mem.delete(args.memory_id)
+            print(json.dumps({"deleted": True, "memory_id": args.memory_id}))
+
+    except Exception as exc:  # noqa: BLE001
+        error_msg = f"{type(exc).__name__}: {exc}"
+        print(f"[ERROR] Memory operation failed: {error_msg}", file=sys.stderr)
+        print(json.dumps({"error": error_msg}))
+        sys.exit(1)
 
 
 if __name__ == "__main__":

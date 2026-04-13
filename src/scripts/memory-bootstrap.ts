@@ -43,9 +43,10 @@ export const ensureMemoryVenv = async () => {
   logStep(`creating memory venv at ${venvDir}`);
 
   // Prefer pyenv-managed Python 3.12 to match the project's pinned version;
-  // fall back to the system python3 if pyenv is not available.
-  const pyenvPython = `${process.env.HOME}/.pyenv/versions/3.12.9/bin/python3.12`;
-  const systemPython = existsSync(pyenvPython) ? pyenvPython : "python3";
+  // fall back to the system python3 if pyenv is not available or HOME is not set.
+  const homeDir = process.env.HOME;
+  const pyenvPython = homeDir ? `${homeDir}/.pyenv/versions/3.12.9/bin/python3.12` : "";
+  const systemPython = (pyenvPython && existsSync(pyenvPython)) ? pyenvPython : "python3";
 
   const createResult = await $`${systemPython} -m venv ${venvDir}`.nothrow();
   if (createResult.exitCode !== 0) {

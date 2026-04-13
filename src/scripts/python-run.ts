@@ -334,7 +334,12 @@ export const runMemoryCli = async (args: string[]): Promise<unknown> => {
     const stdout = decodeBuffer(result.stdout).trim();
     if (!stdout) return null;
 
-    return JSON.parse(stdout) as unknown;
+    try {
+      return JSON.parse(stdout) as unknown;
+    } catch {
+      logger.warn(`Memory CLI returned non-JSON output: ${stdout.slice(0, 200)}. Memory operation skipped.`);
+      return null;
+    }
   } catch (err) {
     logger.warn(`Memory CLI error: ${err instanceof Error ? err.message : String(err)}. Memory operation skipped.`);
     return null;

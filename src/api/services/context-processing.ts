@@ -138,6 +138,9 @@ const extractFirstArray = (raw: string): unknown[] | null => {
 const TERMS_EXPLAIN_BATCH_SIZE = 10;
 const MAX_OCR_CONTEXT_CHARS = 8000;
 
+/** Minimum semantic similarity score (0–1) for a memory hit to be used as a term pre-fill. */
+const MEMORY_HIT_MIN_SCORE = 0.85;
+
 /**
  * Estimate prompt token count and round up to the next power of 2, clamped to [4096, 131072].
  * Same heuristic as translate-processing.ts.
@@ -430,7 +433,7 @@ export const detectContextTerms = async (
       ]) as { results?: Array<{ memory?: string; score?: number }> } | null;
       const topHit = memResult?.results?.[0];
       // Only use high-confidence hits (score ≥ 0.85) to avoid false matches.
-      if (topHit?.memory && (topHit.score ?? 0) >= 0.85) {
+      if (topHit?.memory && (topHit.score ?? 0) >= MEMORY_HIT_MIN_SCORE) {
         termMemoryMap[term] = topHit.memory;
         logger.info(`context memory hit for "${term}": ${topHit.memory} (score=${topHit.score})`);
       } else {
