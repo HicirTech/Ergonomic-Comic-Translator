@@ -28,6 +28,14 @@ const loadExtractedTerms = (scope: string): Record<string, string> => {
   }
 };
 
+/** Remove the extracted-terms file (e.g. before polish regenerates it). */
+export const clearExtractedTerms = (scope: string): void => {
+  const file = resolveExtractedTermsFile(scope);
+  if (existsSync(file)) {
+    writeFileSync(file, JSON.stringify({}, null, 2), "utf8");
+  }
+};
+
 /** Merge new terms into the accumulated file on disk. */
 const saveExtractedTerms = (scope: string, newTerms: Record<string, string>): void => {
   if (Object.keys(newTerms).length === 0) return;

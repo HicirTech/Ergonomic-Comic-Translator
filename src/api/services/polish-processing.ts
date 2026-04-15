@@ -4,7 +4,7 @@ import type { TranslatedPage, TranslationOutput } from "../interfaces";
 import type { OcrOutput } from "../../ocr/interfaces";
 import { computeNumCtx, extractFirstJson } from "../utils";
 import { loadContextTerms } from "./context-processing.ts";
-import { loadTranslationOutput, saveTranslationOutput, resolveExtractedTermsFile } from "./translate-processing.ts";
+import { clearExtractedTerms, loadTranslationOutput, saveTranslationOutput, resolveExtractedTermsFile } from "./translate-processing.ts";
 import { existsSync, readFileSync } from "fs";
 
 const logger = getLogger("polish");
@@ -196,6 +196,11 @@ export const polishAll = async (
   }
 
   if (pageInputs.length === 0) return translationOutput;
+
+  // Clear extracted terms before polishing to prevent unbounded growth
+  // across multiple polish runs. The terms were only needed during initial
+  // translation; after polish the translations themselves are canonical.
+  if (uploadId) clearExtractedTerms(uploadId);
 
   // Chunk pages
   const chunkSize = polishChunkPages === -1 ? pageInputs.length : polishChunkPages;
