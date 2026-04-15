@@ -1,11 +1,13 @@
 export { createFileJobRepository, type JobRepository } from "./file-job-repository.ts";
 export { createFileContextJobRepository } from "./file-context-job-repository.ts";
 export { createFileOcrJobRepository } from "./file-ocr-job-repository.ts";
+export { createFilePolishJobRepository } from "./file-polish-job-repository.ts";
 export { createFileTextlessJobRepository } from "./file-textless-job-repository.ts";
 export { createFileTranslationJobRepository } from "./file-translation-job-repository.ts";
 export { createFileUploadRecordRepository } from "./file-upload-record-repository.ts";
 export type { ContextJobRepository } from "./context-job-repository.ts";
 export type { OcrJobRepository } from "./ocr-job-repository.ts";
+export type { PolishJobRepository } from "./polish-job-repository.ts";
 export type { TextlessJobRepository } from "./textless-job-repository.ts";
 export type { TranslationJobRepository } from "./translation-job-repository.ts";
 export type { UploadRecordRepository } from "./upload-record-repository.ts";

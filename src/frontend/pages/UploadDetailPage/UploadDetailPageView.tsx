@@ -8,7 +8,7 @@ import {
   Typography,
   Button,
 } from "@mui/material";
-import { ArrowBack, AutoStories, DocumentScannerOutlined, CleaningServicesOutlined, TranslateOutlined, PictureAsPdfOutlined } from "@mui/icons-material";
+import { ArrowBack, AutoStories, DocumentScannerOutlined, CleaningServicesOutlined, TranslateOutlined, AutoFixHighOutlined, PictureAsPdfOutlined } from "@mui/icons-material";
 import { useTranslation } from "react-i18next";
 import ImageStripPanel from "../../components/ImageStripPanel/index.tsx";
 import ContextPanel from "../../components/ContextPanel/ContextPanelContainer.tsx";
@@ -26,6 +26,7 @@ export interface UploadDetailPageViewProps {
   onTextlessPage: (index: number) => void;
   onTranslateClick: () => void;
   onTranslatePage: () => void;
+  onPolishClick: () => void;
   onExportPdf: () => void;
   exportPdfExporting?: boolean;
   onPagesLoaded: (count: number) => void;
@@ -48,6 +49,7 @@ const UploadDetailPageView: React.FC<UploadDetailPageViewProps> = ({
   onTextlessPage,
   onTranslateClick,
   onTranslatePage,
+  onPolishClick,
   onExportPdf,
   exportPdfExporting = false,
   onPagesLoaded,
@@ -103,6 +105,17 @@ const UploadDetailPageView: React.FC<UploadDetailPageViewProps> = ({
             sx={{ borderColor: "rgba(255,255,255,0.4)", "&:hover": { borderColor: "rgba(255,255,255,0.8)" }, mr: 1 }}
           >
             {t("detail.translateButton")}
+          </Button>
+
+          <Button
+            color="inherit"
+            variant="outlined"
+            size="small"
+            startIcon={<AutoFixHighOutlined />}
+            onClick={onPolishClick}
+            sx={{ borderColor: "rgba(255,255,255,0.4)", "&:hover": { borderColor: "rgba(255,255,255,0.8)" }, mr: 1 }}
+          >
+            {t("detail.polishButton")}
           </Button>
 
           <Button

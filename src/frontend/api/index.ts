@@ -7,6 +7,8 @@ export type { TextlessJobStatusResult } from "./textless-api.ts";
 export { enqueueTextless, enqueueTextlessPage, fetchTextlessJobStatus } from "./textless-api.ts";
 export type { TranslationJobStatusResult } from "./translation-api.ts";
 export { fetchTranslationPage, fetchAllTranslationPages, saveTranslationPage, enqueueTranslation, enqueueTranslationPage, fetchTranslationJobStatus } from "./translation-api.ts";
+export type { PolishJobStatusResult } from "./polish-api.ts";
+export { enqueuePolish, fetchPolishJobStatus } from "./polish-api.ts";
 export type { ContextJobStatusResult } from "./context-api.ts";
 export { fetchContextTerms, saveContextTerms, enqueueContext, fetchContextJobStatus } from "./context-api.ts";
 

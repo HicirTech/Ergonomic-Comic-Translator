@@ -5,6 +5,8 @@ export type { JobStatus } from "./job-status.ts";
 export type { OcrJobRecord } from "./ocr-job-record.ts";
 export type { OcrJobResultResponse } from "./ocr-job-result-response.ts";
 export type { OcrQueueStatusResponse } from "./ocr-queue-status-response.ts";
+export type { PolishJobRecord, PolishPageRecord } from "./polish-job-record.ts";
+export type { PolishQueueStatusResponse } from "./polish-queue-status-response.ts";
 export type { TextlessJobRecord, TextlessPageRecord } from "./textless-job-record.ts";
 export type { TextlessQueueStatusResponse } from "./textless-queue-status-response.ts";
 export type { TranslatedLine, TranslatedPage, TranslationOutput } from "./translation-output.ts";

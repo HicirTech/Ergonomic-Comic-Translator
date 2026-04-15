@@ -51,6 +51,7 @@
     "textlessPage": "去除本页文字",
     "translateButton": "翻译",
     "translatePage": "翻译本页",
+    "polishButton": "润色",
     "exportPdf": "导出 PDF",
     "exportPdfStarting": "导出中...",
     "exportPdfExporting": "导出中... ({{done}}/{{total}})"
@@ -98,6 +99,15 @@
     "confirm": "开始翻译",
     "starting": "翻译中...",
     "completed": "翻译完成。"
+  },
+  "polishDialog": {
+    "title": "润色翻译",
+    "description": "对照原文全面审校翻译，确保语义通顺、用词一致、符合目标语言文化习惯。",
+    "model": "模型（可选）",
+    "modelHelper": "留空则使用服务器默认模型",
+    "targetLanguage": "目标语言",
+    "confirm": "开始润色",
+    "starting": "润色中..."
   },
   "ocrPreview": {
     "clickToSelect": "点击高亮区域查看识别文字",
