@@ -4,6 +4,8 @@ export type { ContextQueueService } from "./context-queue-service.ts";
 export { deleteUpload } from "./delete-service.ts";
 export { createOcrQueueService } from "./ocr-queue-service.ts";
 export type { OcrQueueService } from "./ocr-queue-service.ts";
+export { createPolishQueueService } from "./polish-queue-service.ts";
+export type { PolishQueueService } from "./polish-queue-service.ts";
 export { createTextlessQueueService } from "./textless-queue-service.ts";
 export type { TextlessQueueService } from "./textless-queue-service.ts";
 export { createTranslateQueueService } from "./translate-queue-service.ts";

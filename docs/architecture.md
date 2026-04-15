@@ -38,7 +38,7 @@ Sub-components only subscribe to the contexts they need:
 
 REST API with queue-based processing:
 
-- **Routes**: upload, ocr, textless, translate, context
+- **Routes**: upload, ocr, textless, translate, context, polish
 - **Services**: factory functions with dependency injection (no classes)
 - **Repositories**: async interfaces with file-backed implementations (seam for future DB migration)
 - **Queue pattern**: `Ready → Queued → Processing → Completed` state machine, shared via `createQueueProcessor<T>()` generic factory
@@ -92,9 +92,11 @@ Detection scripts probe hardware and software:
 ## Data Flow
 
 ```
-Upload → OCR Prepare → OCR Execute → Merge → Textless → Translate
-  ↓          ↓              ↓           ↓         ↓          ↓
-upload/   ocr_prepare/   (batches)   ocr_output/ textless/ translated/
+Upload → OCR Prepare → OCR Execute → Merge → Textless → Translate → Polish
+  ↓          ↓              ↓           ↓         ↓          ↓          ↓
+upload/   ocr_prepare/   (batches)   ocr_output/ textless/ translated/ translated/
 ```
+
+The Translate stage also produces `extracted-terms.json` as a side-output containing auto-detected glossary terms.
 
 All data stored under `.tmp/` (configurable via env vars). Each upload gets a UUID scope; CLI uses `ocr` as the scope.

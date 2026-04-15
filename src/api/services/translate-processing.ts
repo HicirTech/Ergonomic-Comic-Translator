@@ -5,6 +5,7 @@ import { resolveOutputFileForScope } from "../../ocr/runtime-context.ts";
 import type { OcrOutput, OcrPage } from "../../ocr/interfaces";
 import { getLogger } from "../../logger.ts";
 import type { TranslatedLine, TranslatedPage, TranslationOutput } from "../interfaces";
+import { computeNumCtx, extractFirstObject } from "../utils";
 import { loadContextTerms } from "./context-processing.ts";
 
 export const resolveTranslatedDir = (scope: string) =>
@@ -12,6 +13,38 @@ export const resolveTranslatedDir = (scope: string) =>
 
 export const resolveTranslatedOutputFile = (scope: string) =>
   resolve(resolveTranslatedDir(scope), "translated.json");
+
+export const resolveExtractedTermsFile = (scope: string) =>
+  resolve(resolveTranslatedDir(scope), "extracted-terms.json");
+
+/** Load accumulated auto-extracted term mappings (source → translated). */
+const loadExtractedTerms = (scope: string): Record<string, string> => {
+  const file = resolveExtractedTermsFile(scope);
+  if (!existsSync(file)) return {};
+  try {
+    return JSON.parse(readFileSync(file, "utf8")) as Record<string, string>;
+  } catch {
+    return {};
+  }
+};
+
+/** Remove the extracted-terms file (e.g. before polish regenerates it). */
+export const clearExtractedTerms = (scope: string): void => {
+  const file = resolveExtractedTermsFile(scope);
+  if (existsSync(file)) {
+    writeFileSync(file, JSON.stringify({}, null, 2), "utf8");
+  }
+};
+
+/** Merge new terms into the accumulated file on disk. */
+const saveExtractedTerms = (scope: string, newTerms: Record<string, string>): void => {
+  if (Object.keys(newTerms).length === 0) return;
+  const existing = loadExtractedTerms(scope);
+  const merged = { ...existing, ...newTerms };
+  const dir = resolveTranslatedDir(scope);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(resolveExtractedTermsFile(scope), JSON.stringify(merged, null, 2), "utf8");
+};
 
 export const loadOcrOutputForTranslate = (scope: string): OcrOutput | null => {
   const ocrFile = resolveOutputFileForScope(scope);
@@ -36,84 +69,7 @@ export const saveTranslationOutput = (scope: string, output: TranslationOutput):
   return outputFile;
 };
 
-// Extract the first complete `{...}` JSON object from a string, tolerating surrounding text.
-// Pre-cleans the input: strips <think>…</think> blocks, markdown fences, and fixes bare
-// control characters (literal newlines/tabs) inside JSON string values that would otherwise
-// cause JSON.parse to throw.
 
-const cleanRawResponse = (raw: string): string => {
-  let s = raw.replace(/<think>[\s\S]*?<\/think>/gi, "");
-  s = s.replace(/```(?:json)?\s*([\s\S]*?)```/gi, "$1");
-  return s.replace(/\r/g, "").trim();
-};
-
-const sanitizeJsonControlChars = (fragment: string): string => {
-  let result = "";
-  let inStr = false, esc = false;
-  for (let i = 0; i < fragment.length; i++) {
-    const ch = fragment[i];
-    const code = ch.charCodeAt(0);
-    if (esc) { esc = false; result += ch; continue; }
-    if (ch === "\\" && inStr) { esc = true; result += ch; continue; }
-    if (ch === '"') { inStr = !inStr; result += ch; continue; }
-    if (inStr && code < 0x20) {
-      if (ch === "\n") { result += "\\n"; continue; }
-      if (ch === "\t") { result += "\\t"; continue; }
-      if (ch === "\r") { result += "\\r"; continue; }
-      result += `\\u${code.toString(16).padStart(4, "0")}`;
-      continue;
-    }
-    result += ch;
-  }
-  return result;
-};
-
-const extractFirstObject = (raw: string): unknown => {
-  const cleaned = cleanRawResponse(raw);
-  let i = 0;
-  while (i < cleaned.length) {
-    while (i < cleaned.length && cleaned[i] !== "{") i++;
-    if (i >= cleaned.length) break;
-    let depth = 0, inStr = false, esc = false;
-    const start = i;
-    while (i < cleaned.length) {
-      const ch = cleaned[i];
-      if (esc) { esc = false; i++; continue; }
-      if (ch === "\\" && inStr) { esc = true; i++; continue; }
-      if (ch === '"') { inStr = !inStr; i++; continue; }
-      if (inStr) { i++; continue; }
-      if (ch === "{") depth++;
-      else if (ch === "}") {
-        depth--;
-        if (depth === 0) {
-          const fragment = cleaned.slice(start, i + 1);
-          try { return JSON.parse(fragment); } catch { /* try sanitized version */ }
-          try { return JSON.parse(sanitizeJsonControlChars(fragment)); } catch { /* try next */ }
-          i++; break;
-        }
-      }
-      i++;
-    }
-  }
-  const logger = getLogger("translate");
-  const preview = cleaned.slice(0, 300).replace(/\n/g, "\\n");
-  logger.warn(`extractFirstObject: no valid JSON found. Preview: ${preview}`);
-  return null;
-};
-
-/**
- * Estimate prompt token count (chars / 3 for CJK-heavy text, conservative)
- * and round up to the next power of 2, clamped to [4096, 131072].
- * This keeps KV-cache allocation proportional to actual content rather than
- * always reserving 256K tokens for a payload that may only need 8K.
- */
-const computeNumCtx = (systemPrompt: string, userMessage: string): number => {
-  const estimated = Math.ceil((systemPrompt.length + userMessage.length) / 3);
-  // Round up to next power of 2, minimum 4096, maximum 131072
-  let ctx = 4096;
-  while (ctx < estimated * 2) ctx *= 2; // 2× headroom for the response
-  return Math.min(Math.max(ctx, 4096), 131072);
-};
 
 const buildSystemPrompt = (targetLanguage: string, translatedSoFar: TranslationOutput, uploadId?: string): string => {
   // Sliding window: only send the most recent N translated pages as context to keep the
@@ -137,11 +93,38 @@ const buildSystemPrompt = (targetLanguage: string, translatedSoFar: TranslationO
     glossarySection += `\nKNOWN TERMS — story-specific terms to keep consistent (transliterate or preserve as appropriate):\n${termsWithoutContext.map((t) => `- ${t.term}`).join("\n")}\n`;
   }
 
+  // Auto-extracted terms from previous pages — provides cross-page consistency beyond
+  // the sliding window.  User GLOSSARY entries take priority over these.
+  const glossaryTermSet = new Set(allContextTerms.map((t) => t.term));
+  const extractedTerms = uploadId ? loadExtractedTerms(uploadId) : {};
+  const filteredExtracted = Object.entries(extractedTerms)
+    .filter(([src]) => !glossaryTermSet.has(src));
+
+  let extractedSection = "";
+  if (filteredExtracted.length > 0) {
+    extractedSection = `\nESTABLISHED TRANSLATIONS — terms you translated on earlier pages (maintain consistency):\n${filteredExtracted.map(([src, trl]) => `- ${src} → ${trl}`).join("\n")}\n`;
+  }
+
   return `You are a professional manga/comic translator. Translate ONLY the page specified in the user message to ${targetLanguage}.
 
 ALREADY TRANSLATED — last ${windowedTranslations.length} pages (for tone/term consistency — do NOT re-translate these):
 ${windowedTranslations.length > 0 ? JSON.stringify(windowedTranslations) : "(none yet)"}
-${glossarySection}
+${glossarySection}${extractedSection}
+JAPANESE PUNCTUATION & TONE MARKERS — how to handle them:
+- "……" or "…" = hesitation, trailing off, or pause. Translate the underlying emotion, not the dots literally. Use "……" sparingly in ${targetLanguage} only when the pause is dramatically significant.
+- "〜" (wave dash) after a syllable = elongated/drawn-out sound (e.g. "か〜ね" = "かね" said lazily). Translate the WORD naturally; convey the lazy/playful tone through word choice, not by copying "〜".
+- "ー" (chōon) = vowel lengthening for emphasis or tone. Interpret the word it belongs to, then translate naturally.
+- "っ" (small tsu) at end = abrupt cut-off or stutter. Reflect this as a cut-off in ${targetLanguage} (e.g. "什——").
+- "♥" / "♪" = keep these symbols as-is in the translation.
+- Repeated punctuation ("！！！", "？？") = intensity. Preserve the emphasis but don't over-duplicate.
+- These markers carry TONAL information — do NOT ignore them, but do NOT transliterate them mechanically. Convert the emotion they convey into natural ${targetLanguage} expression.
+
+SPEECH BUBBLE LINE BREAKS:
+- Each lineIndex corresponds to a separate speech bubble or text block in the image.
+- Translate each lineIndex independently so the translation fits its own bubble.
+- Do NOT merge the content of multiple lines into one and leave others empty.
+- If the original splits a sentence across two lines, the translation should split naturally across those same two lines.
+
 RULES:
 - Output ONLY valid JSON in the exact format below. No markdown, no explanation.
 - Keep character names, terms, and tone consistent with already-translated pages above.
@@ -150,12 +133,14 @@ RULES:
 - Every lineIndex from the input page must appear in the output.
 - When translating terms listed in the GLOSSARY, use the provided explanation as authoritative context.
 - When translating KNOWN TERMS with no explanation, keep them consistent with any prior translations of those terms.
+- When translating terms listed in ESTABLISHED TRANSLATIONS, use the same translation for consistency.
+- In the "terms" field, list ONLY proper nouns (character names, place names, organization names) and recurring important terms (techniques, titles, catchphrases) that appear on this page, with their ${targetLanguage} translations. Do NOT include common words.
 
 REQUIRED OUTPUT FORMAT:
-{"pageNumber": <number>, "lines": [{"lineIndex": <number>, "translated": "<string>"}, ...]}
+{"pageNumber": <number>, "lines": [{"lineIndex": <number>, "translated": "<string>"}, ...], "terms": {"<source_term>": "<${targetLanguage}_translation>", ...}}
 
 EXAMPLE:
-{"pageNumber": 3, "lines": [{"lineIndex": 0, "translated": "什么事？"}, {"lineIndex": 1, "translated": "别过来！"}]}`;
+{"pageNumber": 3, "lines": [{"lineIndex": 0, "translated": "什么事？"}, {"lineIndex": 1, "translated": "别过来！"}], "terms": {"太郎": "太郎", "必殺技": "必杀技"}}`;
 };
 
 const callOllamaPage = async (
@@ -221,11 +206,23 @@ const callOllamaPage = async (
     if (chunk.message?.content) rawContent += chunk.message.content;
   }
 
-  const parsed = extractFirstObject(rawContent) as { pageNumber: number; lines: Array<{ lineIndex: number; translated: string }> } | null;
+  const parsed = extractFirstObject(rawContent) as { pageNumber: number; lines: Array<{ lineIndex: number; translated: string }>; terms?: Record<string, string> } | null;
   if (!parsed || typeof parsed.pageNumber !== "number" || !Array.isArray(parsed.lines)) {
     throw new Error(`No valid page object in response for page ${page.pageNumber}`);
   }
   const validIndices = new Set(inputLines.map((l) => l.lineIndex));
+
+  // Accumulate auto-extracted terms to disk for cross-page consistency.
+  if (uploadId && parsed.terms && typeof parsed.terms === "object") {
+    const cleanTerms: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed.terms)) {
+      if (typeof k === "string" && typeof v === "string" && k.trim() && v.trim()) {
+        cleanTerms[k.trim()] = v.trim();
+      }
+    }
+    saveExtractedTerms(uploadId, cleanTerms);
+  }
+
   return {
     pageNumber: parsed.pageNumber ?? page.pageNumber,
     lines: (parsed.lines ?? [])

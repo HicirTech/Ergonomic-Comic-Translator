@@ -51,6 +51,7 @@
     "textlessPage": "Remove Text from this Page",
     "translateButton": "Translate",
     "translatePage": "Translate this Page",
+    "polishButton": "Polish",
     "exportPdf": "Export as PDF",
     "exportPdfStarting": "Exporting...",
     "exportPdfExporting": "Exporting... ({{done}}/{{total}})"
@@ -98,6 +99,15 @@
     "confirm": "Start Translation",
     "starting": "Translating...",
     "completed": "Translation completed."
+  },
+  "polishDialog": {
+    "title": "Polish Translations",
+    "description": "Review and refine all translations for naturalness, consistency, and cultural appropriateness.",
+    "model": "Model (optional)",
+    "modelHelper": "Leave blank to use the server default",
+    "targetLanguage": "Target Language",
+    "confirm": "Start Polishing",
+    "starting": "Polishing..."
   },
   "ocrPreview": {
     "clickToSelect": "Click a highlighted region to view its text",

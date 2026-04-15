@@ -1,11 +1,12 @@
 import { getLogger } from "../logger.ts";
-import { apiHost, apiPort, apiRoutes, contextQueueFile, ocrQueueFile, textlessQueueFile, translateQueueFile, uploadRecordsFile } from "../config.ts";
+import { apiHost, apiPort, apiRoutes, contextQueueFile, ocrQueueFile, polishQueueFile, textlessQueueFile, translateQueueFile, uploadRecordsFile } from "../config.ts";
 import { jsonResponse } from "./utils";
 import { createRouter, type RouteDefinition } from "./router.ts";
-import { createFileContextJobRepository, createFileOcrJobRepository, createFileTextlessJobRepository, createFileTranslationJobRepository, createFileUploadRecordRepository } from "./repositories";
-import { buildApiConfigResponse, createContextQueueService, createOcrQueueService, createTextlessQueueService, createTranslateQueueService, createUploadService } from "./services";
+import { createFileContextJobRepository, createFileOcrJobRepository, createFilePolishJobRepository, createFileTextlessJobRepository, createFileTranslationJobRepository, createFileUploadRecordRepository } from "./repositories";
+import { buildApiConfigResponse, createContextQueueService, createOcrQueueService, createPolishQueueService, createTextlessQueueService, createTranslateQueueService, createUploadService } from "./services";
 import { createContextRoutes } from "./routes/context-routes.ts";
 import { createOcrRoutes } from "./routes/ocr-routes.ts";
+import { createPolishRoutes } from "./routes/polish-routes.ts";
 import { createTextlessRoutes } from "./routes/textless-routes.ts";
 import { createTranslateRoutes } from "./routes/translate-routes.ts";
 import { createUploadRoutes } from "./routes/upload-routes.ts";
@@ -17,17 +18,20 @@ const uploadRepository = createFileUploadRecordRepository(uploadRecordsFile);
 const ocrJobRepository = createFileOcrJobRepository(ocrQueueFile);
 const textlessJobRepository = createFileTextlessJobRepository(textlessQueueFile);
 const translateJobRepository = createFileTranslationJobRepository(translateQueueFile);
+const polishJobRepository = createFilePolishJobRepository(polishQueueFile);
 const contextJobRepository = createFileContextJobRepository(contextQueueFile);
 const uploadService = createUploadService(uploadRepository);
 const ocrQueueService = createOcrQueueService(uploadRepository, ocrJobRepository);
 const textlessQueueService = createTextlessQueueService(uploadRepository, textlessJobRepository);
 const translateQueueService = createTranslateQueueService(translateJobRepository);
+const polishQueueService = createPolishQueueService(polishJobRepository);
 const contextQueueService = createContextQueueService(contextJobRepository);
 
 const upload = createUploadRoutes(uploadService, ocrQueueService);
 const ocr = createOcrRoutes(ocrQueueService);
 const textless = createTextlessRoutes(textlessQueueService);
 const translate = createTranslateRoutes(translateQueueService);
+const polish = createPolishRoutes(polishQueueService);
 const context = createContextRoutes(contextQueueService);
 
 const p = (id: string) => parseInt(id, 10);
@@ -68,6 +72,11 @@ const routes: RouteDefinition[] = [
   { method: "GET",  pattern: new RegExp(`^${apiRoutes.translate}/${ID}/${PAGE}$`), handler: ({ params }) => translate.handleGetTranslatePage(params.uploadId, p(params.page)) },
   { method: "PUT",  pattern: new RegExp(`^${apiRoutes.translate}/${ID}/${PAGE}$`), handler: ({ params, request }) => translate.handlePutTranslatePage(params.uploadId, p(params.page), request) },
   { method: "GET",  pattern: new RegExp(`^${apiRoutes.translate}/${ID}$`), handler: ({ params }) => translate.handleGetTranslateJob(params.uploadId) },
+
+  // Polish routes
+  { method: "GET",  pattern: apiRoutes.polish, handler: () => polish.handleGetPolishQueue() },
+  { method: "POST", pattern: new RegExp(`^${apiRoutes.polish}/${ID}$`), handler: ({ params, request }) => polish.handlePostPolish(params.uploadId, request) },
+  { method: "GET",  pattern: new RegExp(`^${apiRoutes.polish}/${ID}$`), handler: ({ params }) => polish.handleGetPolishJob(params.uploadId) },
 
   // Context routes
   { method: "GET",  pattern: apiRoutes.context, handler: () => context.handleGetContextQueue() },

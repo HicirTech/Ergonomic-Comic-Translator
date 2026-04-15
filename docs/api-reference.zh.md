@@ -548,6 +548,7 @@ curl -X POST 'http://localhost:3000/api/ocr/abc-123-...?force=true' \
 - 每页调用包含完整 OCR 文本 + 最近翻译页面的滑动窗口作为上下文（默认：最近 8 页，可通过 `TRANSLATE_CONTEXT_PAGES` 配置）
 - 如果整页翻译 3 次重试后失败，自动回退到逐行翻译（每行 2 次重试）
 - 输出增量保存到 `.tmp/translated/{uploadId}/translated.json`
+- 自动提取的术语作为副产物保存到 `.tmp/translated/{uploadId}/extracted-terms.json`
 
 ```bash
 # 默认语言
@@ -749,6 +750,92 @@ curl -X POST http://localhost:3000/api/translate/abc-123-... \
 
 ---
 
+## 润色队列（Polish）
+
+### `GET /api/polish`
+
+返回完整的润色队列状态。
+
+**响应：** `200`
+
+```json
+{
+  "activeUploadId": null,
+  "queuedUploadIds": [],
+  "records": [
+    {
+      "uploadId": "abc-123-...",
+      "status": "Completed",
+      "targetLanguage": "Chinese",
+      "outputFile": ".tmp/translated/abc-123-.../translated.json",
+      "pages": [
+        {
+          "pageNumber": 1,
+          "status": "completed",
+          "lastError": null
+        }
+      ],
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:15:00.000Z",
+      "startedAt": "2025-01-01T00:10:00.000Z",
+      "completedAt": "2025-01-01T00:15:00.000Z",
+      "lastError": null
+    }
+  ]
+}
+```
+
+---
+
+### `POST /api/polish/:uploadId`
+
+将所有页面加入翻译润色队列。
+
+| 参数 | 位置 | 类型 | 说明 |
+|------|------|------|------|
+| `uploadId` | 路径 | string | 上传批次 ID |
+| `targetLanguage` | 请求体（JSON） | string | 目标语言 |
+| `model` | 请求体（JSON） | string | LLM 模型覆盖 |
+
+**前置条件：** 该上传的翻译必须已 `Completed`。
+
+**响应：** 入队或处理中时 `202`，已完成时 `200`。
+
+---
+
+### `GET /api/polish/:uploadId`
+
+返回上传的润色作业记录。
+
+| 参数 | 位置 | 类型 | 说明 |
+|------|------|------|------|
+| `uploadId` | 路径 | string | 上传批次 ID |
+
+**响应：** `200`
+
+```json
+{
+  "uploadId": "abc-123-...",
+  "status": "Completed",
+  "targetLanguage": "Chinese",
+  "outputFile": ".tmp/translated/abc-123-.../translated.json",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "status": "completed",
+      "lastError": null
+    }
+  ],
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "updatedAt": "2025-01-01T00:15:00.000Z",
+  "startedAt": "2025-01-01T00:10:00.000Z",
+  "completedAt": "2025-01-01T00:15:00.000Z",
+  "lastError": null
+}
+```
+
+---
+
 ## 接口总览
 
 | 方法 | 路径 | 说明 |
@@ -785,6 +872,9 @@ curl -X POST http://localhost:3000/api/translate/abc-123-... \
 | `GET` | `/api/context/:uploadId` | 上下文作业状态 |
 | `GET` | `/api/context/:uploadId/terms` | 获取术语表 |
 | `PUT` | `/api/context/:uploadId/terms` | 保存术语表 |
+| `GET` | `/api/polish` | 润色队列状态 |
+| `POST` | `/api/polish/:uploadId` | 润色入队 |
+| `GET` | `/api/polish/:uploadId` | 润色作业状态 |
 
 ## 全局错误处理
 

@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import OcrDialog from "../../components/OcrDialog/index.tsx";
 import TextlessDialog from "../../components/TextlessDialog/index.tsx";
 import TranslateDialog from "../../components/TranslateDialog/index.tsx";
+import PolishDialog from "../../components/PolishDialog/index.tsx";
 import type { TranslateScope } from "../../components/TranslateDialog/TranslateDialogView.tsx";
 import UploadDetailPageView from "./UploadDetailPageView.tsx";
 import {
@@ -56,6 +57,7 @@ const UploadDetailPageContainer: React.FC = () => {
   const [textlessOpen, setTextlessOpen] = useState(false);
   const [translateOpen, setTranslateOpen] = useState(false);
   const [translateScope, setTranslateScope] = useState<TranslateScope>("all");
+  const [polishOpen, setPolishOpen] = useState(false);
   const panelRef = useRef<OcrPreviewPanelRef>(null);
   const [pageLineSummaryOverrides, setPageLineSummaryOverrides] = useState<Record<number, OcrLineSummary[]>>({});
   const [allPageLineSummaries, setAllPageLineSummaries] = useState<Record<number, OcrLineSummary[]>>({});
@@ -241,6 +243,7 @@ const UploadDetailPageContainer: React.FC = () => {
         onTextlessPage={(index) => { void handleTextlessPage(index); }}
         onTranslateClick={() => { setTranslateScope("all"); setTranslateOpen(true); }}
         onTranslatePage={() => { setTranslateScope("page"); setTranslateOpen(true); }}
+        onPolishClick={() => setPolishOpen(true)}
         onPagesLoaded={setPageCount}
         onExportPdf={() => { void handleExportPdf(); }}
         exportPdfExporting={exportPdfExporting}
@@ -325,6 +328,15 @@ const UploadDetailPageContainer: React.FC = () => {
         onClose={() => setTranslateOpen(false)}
         onSuccess={() => {
           setTranslateOpen(false);
+          void refreshCurrentPreviewPage();
+        }}
+      />
+      <PolishDialog
+        open={polishOpen}
+        uploadId={uploadId}
+        onClose={() => setPolishOpen(false)}
+        onSuccess={() => {
+          setPolishOpen(false);
           void refreshCurrentPreviewPage();
         }}
       />

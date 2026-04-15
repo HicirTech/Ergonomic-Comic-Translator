@@ -8,6 +8,8 @@
 import type { PolyBounds } from "./polygonGeometry.ts";
 import { polygonSpanAtY, isCjk, measureText, CJK_CODEPOINT_MIN } from "./polygonGeometry.ts";
 
+const PAD_X_FACTOR = 0.65; // horizontal padding from polygon edge (fraction of fontSize)
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface HorizontalLayoutRow {
@@ -87,7 +89,7 @@ function layoutHorizontal(
 ): HorizontalLayoutRow[] | null {
   const lineHeight = fontSize * 1.2;
   const useCjk = isCjk(text);
-  const padY = fontSize * 0.4; // vertical padding from polygon edge
+  const padY = fontSize * 0.65; // vertical padding from polygon edge
   const minY = bounds.y + padY + fontSize; // first possible baseline
   const maxY = bounds.y + bounds.h - padY;
 
@@ -112,7 +114,7 @@ function layoutHorizontal(
       if (span.right < narrowRight) narrowRight = span.right;
     }
     if (miss) continue;
-    const padX = fontSize * 0.35; // horizontal padding from polygon edge
+    const padX = fontSize * PAD_X_FACTOR;
     const left = narrowLeft + padX;
     const right = narrowRight - padX;
     const w = right - left;
@@ -121,23 +123,36 @@ function layoutHorizontal(
   }
   if (slots.length === 0) return null;
 
-  // 2. Flatten text (collapse newlines and normalize whitespace)
-  let remaining = text.replace(/\n/g, useCjk ? "" : " ").replace(/\s+/g, useCjk ? "" : " ").trim();
-  if (remaining.length === 0) return [{ text: "", cx: bounds.cx, y: bounds.cy }];
+  // 2. Split text into paragraphs, respecting explicit newlines
+  const paragraphs = text.split(/\n/).map(p =>
+    useCjk ? p.replace(/\s+/g, "") : p.replace(/\s+/g, " ").trim()
+  );
+  const allEmpty = paragraphs.every(p => p.length === 0);
+  if (allEmpty) return [{ text: "", cx: bounds.cx, y: bounds.cy }];
 
-  // 3. Greedily fill slots
+  // 3. Greedily fill slots, paragraph by paragraph (newline = forced new row)
   const usedRows: HorizontalLayoutRow[] = [];
-  for (const slot of slots) {
-    if (remaining.length === 0) break;
-    const rowText = useCjk
-      ? consumeCharRow(remaining, fontSize, slot.width)
-      : consumeWordRow(remaining, fontSize, slot.width);
-    if (rowText === "") continue;
-    usedRows.push({ text: rowText, cx: slot.cx, y: slot.y });
-    remaining = remaining.slice(rowText.length).trim();
+  let slotIdx = 0;
+  for (const para of paragraphs) {
+    let remaining = para;
+    if (remaining.length === 0) {
+      // Empty paragraph → skip a slot for a visual line break
+      slotIdx++;
+      continue;
+    }
+    while (remaining.length > 0) {
+      if (slotIdx >= slots.length) return null; // no more room
+      const slot = slots[slotIdx];
+      const rowText = useCjk
+        ? consumeCharRow(remaining, fontSize, slot.width)
+        : consumeWordRow(remaining, fontSize, slot.width);
+      if (rowText === "") { slotIdx++; continue; }
+      usedRows.push({ text: rowText, cx: slot.cx, y: slot.y });
+      remaining = remaining.slice(rowText.length).trim();
+      slotIdx++;
+    }
   }
 
-  if (remaining.length > 0) return null; // didn't fit
   if (usedRows.length === 0) return null;
 
   // 4. Centre vertically: shift rows so they sit in the middle of the polygon
@@ -152,9 +167,9 @@ function layoutHorizontal(
   const shiftedFirst = firstY + shift;
   const shiftedLast = lastY + shift;
   if (shiftedFirst >= bounds.y && shiftedLast <= bounds.y + bounds.h) {
-    // Re-check each shifted Y is still inside the polygon and re-compute cx
+    // Verify each shifted Y is still inside the polygon and the row text still fits
     const shiftedRows: HorizontalLayoutRow[] = [];
-    let reRemaining = text.replace(/\n/g, useCjk ? "" : " ").replace(/\s+/g, useCjk ? "" : " ").trim();
+    let canShift = true;
     for (const row of usedRows) {
       const newY = row.y + shift;
       // Multi-sample the shifted position the same way we built the original slots
@@ -168,21 +183,15 @@ function layoutHorizontal(
         if (span.left > narrowLeft) narrowLeft = span.left;
         if (span.right < narrowRight) narrowRight = span.right;
       }
-      if (miss) {
-        // Shifted position is outside polygon — abort shift
-        return usedRows;
-      }
-      const padX2 = fontSize * 0.35;
-      const w = (narrowRight - narrowLeft) - padX2 * 2;
+      if (miss) { canShift = false; break; }
+      const padX2 = fontSize * PAD_X_FACTOR;
+      const availW = (narrowRight - narrowLeft) - padX2 * 2;
+      // Check that the original row text still fits at the shifted position
+      if (measureText(row.text, fontSize) > availW + 0.5) { canShift = false; break; }
       const cx = (narrowLeft + narrowRight) / 2;
-      const rowText = useCjk
-        ? consumeCharRow(reRemaining, fontSize, w)
-        : consumeWordRow(reRemaining, fontSize, w);
-      if (rowText === "") return usedRows; // abort shift
-      shiftedRows.push({ text: rowText, cx, y: newY });
-      reRemaining = reRemaining.slice(rowText.length).trim();
+      shiftedRows.push({ text: row.text, cx, y: newY });
     }
-    if (reRemaining.length === 0) return shiftedRows;
+    if (canShift) return shiftedRows;
   }
 
   return usedRows;

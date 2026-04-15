@@ -109,5 +109,6 @@ OcrPreviewPanel/
 | `OcrDialog` | Dialog to trigger page-level OCR with model selection |
 | `TextlessDialog` | Dialog to trigger page-level text removal |
 | `TranslateDialog` | Dialog to trigger translation with model/language/scope selection |
+| `PolishDialog` | Dialog to trigger translation polishing with model/language selection (rendered from UploadDetailPage) |
 | `ImageStripPanel` | Vertical thumbnail strip with four-color status dots |
 | `ContextPanel` | Context editing panel |

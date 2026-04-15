@@ -5,6 +5,7 @@ import { resolveOutputFileForScope } from "../../ocr/runtime-context.ts";
 import type { OcrOutput, OcrPage } from "../../ocr/interfaces";
 import { getLogger } from "../../logger.ts";
 import type { ContextTerm } from "../interfaces/context-job-record.ts";
+import { cleanRawResponse, computeNumCtx, sanitizeJsonControlChars } from "../utils";
 
 export const resolveContextDir = (uploadId: string) =>
   resolve(contextRootDir, uploadId);
@@ -37,34 +38,7 @@ export const loadOcrOutputForContext = (scope: string): OcrOutput | null => {
   return JSON.parse(readFileSync(file, "utf8")) as OcrOutput;
 };
 
-// ── Response sanitisation (shared with translate-processing) ──────────────────
-
-const cleanRawResponse = (raw: string): string => {
-  let s = raw.replace(/<think>[\s\S]*?<\/think>/gi, "");
-  s = s.replace(/```(?:json)?\s*([\s\S]*?)```/gi, "$1");
-  return s.replace(/\r/g, "").trim();
-};
-
-const sanitizeJsonControlChars = (fragment: string): string => {
-  let result = "";
-  let inStr = false, esc = false;
-  for (let i = 0; i < fragment.length; i++) {
-    const ch = fragment[i];
-    const code = ch.charCodeAt(0);
-    if (esc) { esc = false; result += ch; continue; }
-    if (ch === "\\" && inStr) { esc = true; result += ch; continue; }
-    if (ch === '"') { inStr = !inStr; result += ch; continue; }
-    if (inStr && code < 0x20) {
-      if (ch === "\n") { result += "\\n"; continue; }
-      if (ch === "\t") { result += "\\t"; continue; }
-      if (ch === "\r") { result += "\\r"; continue; }
-      result += `\\u${code.toString(16).padStart(4, "0")}`;
-      continue;
-    }
-    result += ch;
-  }
-  return result;
-};
+// ── Response sanitisation (shared via ../utils/llm-response-utils.ts) ────────
 
 const extractFirstObject = (raw: string): Record<string, unknown> | null => {
   const cleaned = cleanRawResponse(raw);
@@ -137,16 +111,7 @@ const extractFirstArray = (raw: string): unknown[] | null => {
 const TERMS_EXPLAIN_BATCH_SIZE = 10;
 const MAX_OCR_CONTEXT_CHARS = 8000;
 
-/**
- * Estimate prompt token count and round up to the next power of 2, clamped to [4096, 131072].
- * Same heuristic as translate-processing.ts.
- */
-const computeNumCtx = (systemPrompt: string, userMessage: string): number => {
-  const estimated = Math.ceil((systemPrompt.length + userMessage.length) / 3);
-  let ctx = 4096;
-  while (ctx < estimated * 2) ctx *= 2;
-  return Math.min(Math.max(ctx, 4096), 131072);
-};
+
 
 const buildContextSystemPrompt = (): string =>
   `You are an expert manga/comic analyst. Your task is to identify proper nouns, technical terms, and domain-specific vocabulary in the provided OCR text that a translator might find ambiguous or untranslatable without additional context.

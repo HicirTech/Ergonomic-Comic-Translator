@@ -157,6 +157,7 @@ export const apiRoutes = {
   context: "/api/context",
   files: "/api/files",
   ocr: "/api/ocr",
+  polish: "/api/polish",
   textless: "/api/textless",
   translate: "/api/translate",
   upload: "/api/upload",
@@ -173,6 +174,12 @@ export const translatedRootDir = resolveConfiguredPath(
 export const translateQueueFile = resolveConfiguredPath(
   process.env.TRANSLATE_QUEUE_FILE,
   resolve(programDir, defaultTranslateQueueFileName),
+);
+
+export const defaultPolishQueueFileName = "polishQueue.json";
+export const polishQueueFile = resolveConfiguredPath(
+  process.env.POLISH_QUEUE_FILE,
+  resolve(programDir, defaultPolishQueueFileName),
 );
 
 export const defaultContextDirectoryName = "context";
@@ -231,6 +238,22 @@ const parseContextChunkPages = (value: string | undefined, fallback: number): nu
 };
 export const defaultContextChunkPages = 10;
 export const contextChunkPages = parseContextChunkPages(process.env.CONTEXT_CHUNK_PAGES, defaultContextChunkPages);
+
+/**
+ * Number of translated pages to send per AI call during the polish stage.
+ * Smaller chunks fit within context windows; larger chunks give the model
+ * more cross-page context for consistency.
+ */
+const parsePolishChunkPages = (value: string | undefined, fallback: number): number => {
+  if (!value) return fallback;
+  const parsed = Number.parseInt(value.trim(), 10);
+  if (!Number.isFinite(parsed) || (parsed < 1 && parsed !== -1)) {
+    throw new Error(`Invalid POLISH_CHUNK_PAGES: ${value}. Expected -1 (all) or an integer >= 1.`);
+  }
+  return parsed;
+};
+export const defaultPolishChunkPages = 10;
+export const polishChunkPages = parsePolishChunkPages(process.env.POLISH_CHUNK_PAGES, defaultPolishChunkPages);
 
 // --- Text Cleaner (local textless Python pipeline) ---
 export const textCleanerVenvDir = resolve(tempRootDir, "text-cleaner-venv");
