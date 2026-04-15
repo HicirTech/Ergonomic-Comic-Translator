@@ -58,10 +58,14 @@ function layoutVerticalCjk(
 ): VerticalLayoutColumn[] | null {
   const colW = fontSize * 1.1;
   const charH = fontSize * 1.1;
-  const flat = text.replace(/\n/g, "");
-  if (flat.length === 0) return [{ chars: "", x: bounds.cx, startY: bounds.cy }];
 
-  const padX = fontSize * 0.4;
+  // Split into paragraphs, respecting explicit newlines (newline = forced new column)
+  const paragraphs = text.split(/\n/).map(p => p.replace(/\s+/g, ""));
+  const allEmpty = paragraphs.every(p => p.length === 0);
+  if (allEmpty) return [{ chars: "", x: bounds.cx, startY: bounds.cy }];
+
+  const flat = paragraphs.join("");
+  const padX = fontSize * 0.65;
   const availableW = bounds.w - padX * 2;
   const maxCols = Math.floor(availableW / colW);
   if (maxCols < 1) return null;
@@ -77,24 +81,33 @@ function layoutVerticalCjk(
   const startX = bounds.cx + totalW / 2 - colW / 2;
 
   const columns: VerticalLayoutColumn[] = [];
-  let remaining = flat;
+  let colIdx = 0;
 
-  for (let colIdx = 0; colIdx < maxCols && remaining.length > 0; colIdx++) {
-    const colX = startX - colIdx * colW;
-    const span = polygonSpanAtX(polygon, colX);
-    if (!span) continue;
+  for (const para of paragraphs) {
+    let remaining = para;
+    if (remaining.length === 0) {
+      // Empty paragraph → skip a column for a visual break
+      colIdx++;
+      continue;
+    }
+    while (remaining.length > 0) {
+      if (colIdx >= maxCols) return null; // no more room
+      const colX = startX - colIdx * colW;
+      const span = polygonSpanAtX(polygon, colX);
+      if (!span) { colIdx++; continue; }
 
-    const padY = fontSize * 0.4;
-    const colHeight = (span.bottom - span.top) - padY * 2;
-    const charsPerCol = Math.max(1, Math.floor(colHeight / charH));
-    const colStartY = span.top + padY + fontSize;
+      const padY = fontSize * 0.65;
+      const colHeight = (span.bottom - span.top) - padY * 2;
+      const charsPerCol = Math.max(1, Math.floor(colHeight / charH));
+      const colStartY = span.top + padY + fontSize;
 
-    const chunk = remaining.slice(0, charsPerCol);
-    columns.push({ chars: chunk, x: colX, startY: colStartY });
-    remaining = remaining.slice(chunk.length);
+      const chunk = remaining.slice(0, charsPerCol);
+      columns.push({ chars: chunk, x: colX, startY: colStartY });
+      remaining = remaining.slice(chunk.length);
+      colIdx++;
+    }
   }
 
-  if (remaining.length > 0) return null;
   if (columns.length === 0) return null;
   return columns;
 }
