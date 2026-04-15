@@ -239,13 +239,32 @@ export const polishAll = async (
       continue;
     }
 
-    // Merge polished pages, validating line indices against originals
+    // Merge polished pages, validating line indices against originals.
+    // For any lineIndex present in the original but missing or invalid in the
+    // polished output, keep the original translation to prevent data loss.
     for (const polishedPage of result) {
       const originalTranslation = translationMap.get(polishedPage.pageNumber);
       if (!originalTranslation) continue;
-      const validIndices = new Set(originalTranslation.lines.map((l) => l.lineIndex));
-      const validLines = polishedPage.lines.filter((l) => validIndices.has(l.lineIndex));
-      polishedMap.set(polishedPage.pageNumber, { pageNumber: polishedPage.pageNumber, lines: validLines });
+      const originalLineMap = new Map(originalTranslation.lines.map((l) => [l.lineIndex, l]));
+      const validIndices = new Set(originalLineMap.keys());
+
+      // Build a map of polished lines by lineIndex
+      const polishedLineMap = new Map<number, { lineIndex: number; translated: string }>();
+      for (const l of polishedPage.lines) {
+        if (typeof l.lineIndex === "number" && typeof l.translated === "string" && validIndices.has(l.lineIndex)) {
+          polishedLineMap.set(l.lineIndex, { lineIndex: l.lineIndex, translated: l.translated });
+        }
+      }
+
+      // Merge: use polished line if available, otherwise keep original
+      const mergedLines = [...validIndices].sort((a, b) => a - b).map((idx) => {
+        const polished = polishedLineMap.get(idx);
+        if (polished) return polished;
+        const orig = originalLineMap.get(idx)!;
+        return { lineIndex: orig.lineIndex, translated: orig.translated };
+      });
+
+      polishedMap.set(polishedPage.pageNumber, { pageNumber: polishedPage.pageNumber, lines: mergedLines });
     }
 
     onChunkDone?.(result);
