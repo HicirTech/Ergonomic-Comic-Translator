@@ -4,7 +4,7 @@ import type { TranslatedPage, TranslationOutput } from "../interfaces";
 import type { OcrOutput } from "../../ocr/interfaces";
 import { computeNumCtx, extractFirstJson } from "../utils";
 import { loadContextTerms } from "./context-processing.ts";
-import { clearExtractedTerms, loadTranslationOutput, saveTranslationOutput, resolveExtractedTermsFile } from "./translate-processing.ts";
+import { clearExtractedTerms, resolveExtractedTermsFile } from "./translate-processing.ts";
 import { existsSync, readFileSync } from "fs";
 
 const logger = getLogger("polish");
@@ -32,6 +32,7 @@ interface PolishChunkInput {
 const buildPolishSystemPrompt = (
   targetLanguage: string,
   uploadId: string | undefined,
+  extractedTermsOverride?: Record<string, string>,
 ): string => {
   const allContextTerms = uploadId ? loadContextTerms(uploadId) : [];
   const termsWithContext = allContextTerms.filter((t) => t.context.trim());
@@ -45,7 +46,7 @@ const buildPolishSystemPrompt = (
     glossarySection += `\nKNOWN TERMS — story-specific terms:\n${termsWithoutContext.map((t) => `- ${t.term}`).join("\n")}\n`;
   }
 
-  const extractedTerms = uploadId ? loadExtractedTerms(uploadId) : {};
+  const extractedTerms = extractedTermsOverride ?? (uploadId ? loadExtractedTerms(uploadId) : {});
   const glossaryTermSet = new Set(allContextTerms.map((t) => t.term));
   const filteredExtracted = Object.entries(extractedTerms)
     .filter(([src]) => !glossaryTermSet.has(src));
@@ -104,8 +105,9 @@ const callOllamaPolishChunk = async (
   targetLanguage: string,
   model: string | undefined,
   uploadId: string | undefined,
+  extractedTermsSnapshot?: Record<string, string>,
 ): Promise<TranslatedPage[]> => {
-  const systemPrompt = buildPolishSystemPrompt(targetLanguage, uploadId);
+  const systemPrompt = buildPolishSystemPrompt(targetLanguage, uploadId, extractedTermsSnapshot);
   const userMessage = JSON.stringify(chunk);
 
   const response = await fetch(`${ollamaHost}/api/chat`, {
@@ -181,7 +183,6 @@ export const polishAll = async (
   uploadId?: string,
 ): Promise<TranslationOutput> => {
   const translationMap = new Map(translationOutput.map((p) => [p.pageNumber, p]));
-  const ocrMap = new Map(ocrOutput.pages.map((p) => [p.pageNumber, p]));
 
   // Build page inputs: only pages that have both OCR and translation
   const pageInputs: PolishChunkInput["pages"] = [];
@@ -197,9 +198,9 @@ export const polishAll = async (
 
   if (pageInputs.length === 0) return translationOutput;
 
-  // Clear extracted terms before polishing to prevent unbounded growth
-  // across multiple polish runs. The terms were only needed during initial
-  // translation; after polish the translations themselves are canonical.
+  // Load extracted terms for prompt context BEFORE clearing,
+  // then clear to prevent unbounded growth across multiple polish runs.
+  const extractedTermsSnapshot = uploadId ? loadExtractedTerms(uploadId) : {};
   if (uploadId) clearExtractedTerms(uploadId);
 
   // Chunk pages
@@ -221,7 +222,7 @@ export const polishAll = async (
     let result: TranslatedPage[] | null = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        result = await callOllamaPolishChunk(chunk, targetLanguage, model, uploadId);
+        result = await callOllamaPolishChunk(chunk, targetLanguage, model, uploadId, extractedTermsSnapshot);
         break;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

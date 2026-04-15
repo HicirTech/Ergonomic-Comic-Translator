@@ -767,10 +767,10 @@ curl -X POST http://localhost:3000/api/translate/abc-123-... \
       "uploadId": "abc-123-...",
       "status": "Completed",
       "targetLanguage": "Chinese",
-      "outputFile": ".tmp/translated/abc-123-.../polished.json",
+      "outputFile": ".tmp/translated/abc-123-.../translated.json",
       "pages": [
         {
-          "pageNumber": 0,
+          "pageNumber": 1,
           "status": "completed",
           "lastError": null
         }
@@ -799,7 +799,7 @@ curl -X POST http://localhost:3000/api/translate/abc-123-... \
 
 **前置条件：** 该上传的翻译必须已 `Completed`。
 
-**响应：** 入队时 `201`，已入队/已完成时 `200`。
+**响应：** 入队或处理中时 `202`，已完成时 `200`。
 
 ---
 
@@ -818,10 +818,10 @@ curl -X POST http://localhost:3000/api/translate/abc-123-... \
   "uploadId": "abc-123-...",
   "status": "Completed",
   "targetLanguage": "Chinese",
-  "outputFile": ".tmp/translated/abc-123-.../polished.json",
+  "outputFile": ".tmp/translated/abc-123-.../translated.json",
   "pages": [
     {
-      "pageNumber": 0,
+      "pageNumber": 1,
       "status": "completed",
       "lastError": null
     }

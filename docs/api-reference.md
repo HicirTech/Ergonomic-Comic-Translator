@@ -777,10 +777,10 @@ Returns the full polish queue status.
       "uploadId": "abc-123-...",
       "status": "Completed",
       "targetLanguage": "Chinese",
-      "outputFile": ".tmp/translated/abc-123-.../polished.json",
+      "outputFile": ".tmp/translated/abc-123-.../translated.json",
       "pages": [
         {
-          "pageNumber": 0,
+          "pageNumber": 1,
           "status": "completed",
           "lastError": null
         }
@@ -809,7 +809,7 @@ Enqueues all pages for translation polishing.
 
 **Precondition:** Translation must be `Completed` for this upload.
 
-**Response:** `201` on enqueue, `200` if already queued/completed.
+**Response:** `202` on enqueue or already processing, `200` if already completed.
 
 ---
 
@@ -828,10 +828,10 @@ Returns the polish job record for an upload.
   "uploadId": "abc-123-...",
   "status": "Completed",
   "targetLanguage": "Chinese",
-  "outputFile": ".tmp/translated/abc-123-.../polished.json",
+  "outputFile": ".tmp/translated/abc-123-.../translated.json",
   "pages": [
     {
-      "pageNumber": 0,
+      "pageNumber": 1,
       "status": "completed",
       "lastError": null
     }

@@ -129,7 +129,11 @@ export const createPolishQueueService = (polishJobRepository: PolishJobRepositor
       logger.info(`Polish complete: ${polished.length} page(s) in ${elapsed}s`);
       logger.info(`Output: ${outputFile}`);
 
-      const finalPageRecords: PolishPageRecord[] = [...pageRecordMap.values()];
+      // Mark any remaining pending pages as completed (pages with no text
+      // are skipped during polish but should not stay "pending" in the record).
+      const finalPageRecords: PolishPageRecord[] = [...pageRecordMap.values()].map((p) =>
+        p.status === "pending" ? { ...p, status: "completed" as const } : p,
+      );
 
       await polishJobRepository.upsert({
         ...processingRecord,
