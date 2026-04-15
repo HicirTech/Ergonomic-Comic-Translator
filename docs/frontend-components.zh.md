@@ -109,5 +109,6 @@ OcrPreviewPanel/
 | `OcrDialog` | 触发页面级 OCR 的对话框，含模型选择 |
 | `TextlessDialog` | 触发页面级文字去除的对话框 |
 | `TranslateDialog` | 触发翻译的对话框，含模型/语言/范围选择 |
+| `PolishDialog` | 触发翻译润色的对话框，含模型/语言选择（由 UploadDetailPage 渲染） |
 | `ImageStripPanel` | 垂直缩略图条，带四色状态点 |
 | `ContextPanel` | 上下文编辑面板 |

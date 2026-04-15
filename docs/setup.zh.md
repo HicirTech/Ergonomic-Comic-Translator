@@ -99,3 +99,10 @@ bun run python:detect    # Python 环境信息
 ## 配置
 
 所有环境变量在 `src/config.ts` 中一次性解析。完整配置参考请见 [README](../README.zh.md#配置)。
+
+### 润色相关环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `POLISH_CHUNK_PAGES` | `10` | 每个润色分块的页数。设为 `-1` 表示将所有页面作为一个分块处理。 |
+| `POLISH_QUEUE_FILE` | `.tmp/program/polishQueue.json` | 润色队列状态持久化文件路径。 |

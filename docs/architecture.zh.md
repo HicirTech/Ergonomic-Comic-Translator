@@ -38,7 +38,7 @@ OcrPreviewPanel 是最复杂的组件。它使用 **4 个精细的 React Context
 
 基于队列处理的 REST API：
 
-- **路由**：upload、ocr、textless、translate、context
+- **路由**：upload、ocr、textless、translate、context、polish
 - **服务**：工厂函数 + 依赖注入（无类）
 - **存储库**：异步接口 + 文件后端实现（为将来数据库迁移预留接口）
 - **队列模式**：`Ready → Queued → Processing → Completed` 状态机，通过 `createQueueProcessor<T>()` 泛型工厂共享
@@ -92,9 +92,11 @@ OCR 流水线的高层 TypeScript 编排：
 ## 数据流
 
 ```
-上传 → OCR 准备 → OCR 执行 → 合并 → 文字去除 → 翻译
-  ↓        ↓          ↓         ↓        ↓         ↓
-upload/ ocr_prepare/ (批次)  ocr_output/ textless/ translated/
+上传 → OCR 准备 → OCR 执行 → 合并 → 文字去除 → 翻译 → 润色
+  ↓        ↓          ↓         ↓        ↓         ↓       ↓
+upload/ ocr_prepare/ (批次)  ocr_output/ textless/ translated/ translated/
 ```
+
+翻译阶段还会生成 `extracted-terms.json` 作为副产物，包含自动检测到的术语表。
 
 所有数据存储在 `.tmp/` 下（可通过环境变量配置）。每次上传获得一个 UUID 作为作用域；CLI 使用 `ocr` 作为作用域。

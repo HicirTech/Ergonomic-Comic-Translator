@@ -558,6 +558,7 @@ Enqueues all pages for translation.
 - Each page call receives the full OCR text + a sliding window of recently-translated pages as context (default: last 8 pages, configurable via `TRANSLATE_CONTEXT_PAGES`)
 - If whole-page translation fails after 3 retries, falls back to per-line translation (2 retries per line)
 - Output is saved incrementally to `.tmp/translated/{uploadId}/translated.json`
+- Auto-extracted terms are saved as a side-output to `.tmp/translated/{uploadId}/extracted-terms.json`
 
 ```bash
 # Default language
@@ -759,6 +760,92 @@ Saves user-edited glossary terms, replacing the existing term list.
 
 ---
 
+## Polish Queue
+
+### `GET /api/polish`
+
+Returns the full polish queue status.
+
+**Response:** `200`
+
+```json
+{
+  "activeUploadId": null,
+  "queuedUploadIds": [],
+  "records": [
+    {
+      "uploadId": "abc-123-...",
+      "status": "Completed",
+      "targetLanguage": "Chinese",
+      "outputFile": ".tmp/translated/abc-123-.../polished.json",
+      "pages": [
+        {
+          "pageNumber": 0,
+          "status": "completed",
+          "lastError": null
+        }
+      ],
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:15:00.000Z",
+      "startedAt": "2025-01-01T00:10:00.000Z",
+      "completedAt": "2025-01-01T00:15:00.000Z",
+      "lastError": null
+    }
+  ]
+}
+```
+
+---
+
+### `POST /api/polish/:uploadId`
+
+Enqueues all pages for translation polishing.
+
+| Parameter | Location | Type | Description |
+|-----------|----------|------|-------------|
+| `uploadId` | path | string | Upload batch ID |
+| `targetLanguage` | body (JSON) | string | Target language |
+| `model` | body (JSON) | string | LLM model override |
+
+**Precondition:** Translation must be `Completed` for this upload.
+
+**Response:** `201` on enqueue, `200` if already queued/completed.
+
+---
+
+### `GET /api/polish/:uploadId`
+
+Returns the polish job record for an upload.
+
+| Parameter | Location | Type | Description |
+|-----------|----------|------|-------------|
+| `uploadId` | path | string | Upload batch ID |
+
+**Response:** `200`
+
+```json
+{
+  "uploadId": "abc-123-...",
+  "status": "Completed",
+  "targetLanguage": "Chinese",
+  "outputFile": ".tmp/translated/abc-123-.../polished.json",
+  "pages": [
+    {
+      "pageNumber": 0,
+      "status": "completed",
+      "lastError": null
+    }
+  ],
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "updatedAt": "2025-01-01T00:15:00.000Z",
+  "startedAt": "2025-01-01T00:10:00.000Z",
+  "completedAt": "2025-01-01T00:15:00.000Z",
+  "lastError": null
+}
+```
+
+---
+
 ## Endpoint Summary
 
 | Method | Path | Description |
@@ -795,6 +882,9 @@ Saves user-edited glossary terms, replacing the existing term list.
 | `GET` | `/api/context/:uploadId` | Context job status |
 | `GET` | `/api/context/:uploadId/terms` | Get glossary terms |
 | `PUT` | `/api/context/:uploadId/terms` | Save glossary terms |
+| `GET` | `/api/polish` | Polish queue status |
+| `POST` | `/api/polish/:uploadId` | Enqueue polish |
+| `GET` | `/api/polish/:uploadId` | Polish job status |
 
 ## Global Error Handling
 

@@ -99,3 +99,10 @@ bun run python:detect    # Python environment info
 ## Configuration
 
 All environment variables are resolved once in `src/config.ts`. See the main [README](../README.md#configuration) for the full configuration reference.
+
+### Polish-related Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POLISH_CHUNK_PAGES` | `10` | Number of pages per polish chunk. Set to `-1` to process all pages in a single chunk. |
+| `POLISH_QUEUE_FILE` | `.tmp/program/polishQueue.json` | File path for the polish queue state persistence. |
