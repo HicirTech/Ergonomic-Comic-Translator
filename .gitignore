@@ -46,3 +46,6 @@ src/python/models/
 *.gguf
 *.safetensors
 eval/runs/
+
+# Agent instructions stay on each machine, outside the repository
+CLAUDE.md
