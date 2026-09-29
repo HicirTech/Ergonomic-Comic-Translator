@@ -9,6 +9,7 @@ const openKernel32 = () => dlopen("kernel32.dll", {
   GetModuleHandleW: { args: [FFIType.ptr], returns: FFIType.ptr },
   GetModuleFileNameW: { args: [FFIType.ptr, FFIType.ptr, FFIType.u32], returns: FFIType.u32 },
   GetLastError: { args: [], returns: FFIType.u32 },
+  GetDriveTypeW: { args: [FFIType.ptr], returns: FFIType.u32 },
   CreateFileW: {
     args: [FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.ptr],
     returns: FFIType.u64,
@@ -66,6 +67,16 @@ export const loadedModulePath = (moduleName: string) => {
 
 export const lastError = () => lib().GetLastError();
 
+const driveRemote = 4;
+
+/** True when the volume holding an absolute path is a network drive (DRIVE_REMOTE); UNC paths always are. */
+export const isNetworkVolume = (absolutePath: string) => {
+  if (absolutePath.startsWith("\\\\")) {
+    return true;
+  }
+  const root = `${absolutePath.slice(0, 2)}\\`;
+  return lib().GetDriveTypeW(ptr(toWideString(root))) === driveRemote;
+};
 
 export const createFile = (
   path: string,
