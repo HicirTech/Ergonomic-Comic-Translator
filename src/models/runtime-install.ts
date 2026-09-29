@@ -11,6 +11,12 @@ const markerName = ".installed.json";
 export const llamaCppDirectory = (paths: DataPaths, lock: RuntimesLock, assetName: string) =>
   join(paths.runtimes, "llama.cpp", `${lock.llamaCpp.build}-${assetName}`);
 
+/** True when the asset was unpacked from the archive with the locked sha256. */
+export const isRuntimeAssetInstalled = (paths: DataPaths, lock: RuntimesLock, assetName: string) => {
+  const marker = join(llamaCppDirectory(paths, lock, assetName), markerName);
+  return existsSync(marker) && JSON.parse(readFileSync(marker, "utf8")).sha256 === lock.llamaCpp.assets[assetName]?.sha256;
+};
+
 /** Assets for this platform: Vulkan (all vendors) plus the CPU build as fallback. */
 export const defaultRuntimeAssets = (platform: NodeJS.Platform = process.platform, arch = process.arch) => {
   const prefix = `${platform}-${arch}`;
@@ -69,8 +75,7 @@ export const installRuntimeAsset = async (
     throw new Error(`runtimes.lock.json has no asset "${assetName}"`);
   }
   const targetDir = llamaCppDirectory(paths, lock, assetName);
-  const marker = join(targetDir, markerName);
-  if (existsSync(marker) && JSON.parse(readFileSync(marker, "utf8")).sha256 === asset.sha256) {
+  if (isRuntimeAssetInstalled(paths, lock, assetName)) {
     return { outcome: "present" as const, directory: targetDir };
   }
 

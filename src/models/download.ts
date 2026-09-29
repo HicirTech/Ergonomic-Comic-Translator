@@ -7,6 +7,9 @@ const partialPath = (destination: string) => `${destination}.part`;
 
 const fileSize = (path: string) => (existsSync(path) ? statSync(path).size : 0);
 
+/** Quick check without hashing: the file exists with the locked size. Downloads still verify sha256. */
+export const isPresent = (item: DownloadItem) => fileSize(item.destination) === item.size;
+
 /** True when the file exists with the locked size and sha256. */
 export const isInstalled = async (item: DownloadItem) =>
   fileSize(item.destination) === item.size && (await sha256File(item.destination)) === item.sha256;
