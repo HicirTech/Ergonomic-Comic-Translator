@@ -4,6 +4,8 @@ export type { AdmissionDecision } from "./admission-decision.ts";
 export type { AdmissionReason } from "./admission-reason.ts";
 export type { DeviceBudget } from "./device-budget.ts";
 export type { GpuAdapter } from "./gpu-adapter.ts";
+export type { GpuLockAttempt } from "./gpu-lock-attempt.ts";
+export type { GpuLockOwner } from "./gpu-lock-owner.ts";
 export type { GpuVendor } from "./gpu-vendor.ts";
 export type { HostMemory } from "./host-memory.ts";
 export type { Light } from "./light.ts";
