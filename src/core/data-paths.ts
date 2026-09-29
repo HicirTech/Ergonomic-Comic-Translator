@@ -36,6 +36,10 @@ export const dataPaths = (root: string) => ({
   database: join(root, "db", "ct.sqlite"),
   models: join(root, "models"),
   runtimes: join(root, "runtimes"),
+  /** Content store of page images, <sha256><extension>; volumes refer to it, so it is not a cache. */
+  pages: join(root, "pages"),
+  /** Per-volume stage outputs: vision results, translations, rendered pages, exports. */
+  volumes: join(root, "volumes"),
   cache: join(root, "cache"),
   logs: join(root, "logs"),
   run: join(root, "run"),
