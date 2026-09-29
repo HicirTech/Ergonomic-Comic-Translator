@@ -43,6 +43,11 @@ export const createTaskQueue = (db: Database) => {
       started_at = NULL
     WHERE state = 'running'
   `);
+  const selectJobTasks = db.prepare(`SELECT * FROM task WHERE job_id = $jobId ORDER BY rowid`);
+  const selectQueued = db.prepare(`
+    SELECT 1 FROM task JOIN job ON job.id = task.job_id
+    WHERE task.state = 'queued' AND task.lane = $lane AND job.cancel_requested_at IS NULL LIMIT 1
+  `);
   const requestCancel = db.prepare(`UPDATE job SET cancel_requested_at = $now WHERE id = $jobId AND cancel_requested_at IS NULL`);
   const cancelQueued = db.prepare(`UPDATE task SET state = 'cancelled', finished_at = $now WHERE job_id = $jobId AND state = 'queued'`);
 
@@ -66,6 +71,11 @@ export const createTaskQueue = (db: Database) => {
         });
       }
     }),
+
+    /** Whether `claim(lane)` would return a task now. */
+    hasQueued: (lane: TaskLane) => selectQueued.get({ lane }) !== null,
+
+    tasksOf: (jobId: string) => selectJobTasks.all({ jobId }) as TaskRecord[],
 
     claim: (lane: TaskLane) => (claimTask.get({ lane, now: nowIso() }) as TaskRecord | null) ?? null,
 

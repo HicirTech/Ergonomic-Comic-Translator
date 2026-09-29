@@ -1,7 +1,12 @@
+export type { JobSummary } from "./job-summary.ts";
+export type { NewFlag } from "./new-flag.ts";
 export type { NewTask } from "./new-task.ts";
 export type { NewTextRevision } from "./new-text-revision.ts";
+export type { NewVolume } from "./new-volume.ts";
+export type { PageRecord } from "./page-record.ts";
 export type { RevisionOutcome } from "./revision-outcome.ts";
 export type { TaskLane } from "./task-lane.ts";
 export type { TaskRecord } from "./task-record.ts";
 export type { TaskState } from "./task-state.ts";
 export type { TextField } from "./text-field.ts";
+export type { VolumeRecord } from "./volume-record.ts";

@@ -285,4 +285,12 @@ export const migrations: readonly string[] = [
     verified_at TEXT NOT NULL
   );
   `,
+  `
+  -- The page image lives in the content store as <sha256><extension>; only the file name is kept so the
+  -- data directory can move. Reading direction: NULL until chosen by the user or derived from the language.
+  ALTER TABLE page ADD COLUMN image_file TEXT;
+  ALTER TABLE volume ADD COLUMN reading_direction TEXT CHECK (reading_direction IN ('rtl', 'ltr'));
+  CREATE INDEX flag_page ON flag(page_id);
+  CREATE INDEX task_job ON task(job_id);
+  `,
 ];

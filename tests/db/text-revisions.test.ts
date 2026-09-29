@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { openDatabase } from "../../src/db/database.ts";
+import { migrations } from "../../src/db/migrations.ts";
 import { createTextRevisions } from "../../src/db/text-revisions.ts";
 import { seededDatabase } from "./fixtures.ts";
 
@@ -53,6 +54,6 @@ describe("openDatabase", () => {
 
   it("migrates to the latest schema version", () => {
     const db = openDatabase(":memory:");
-    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 1 });
+    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: migrations.length });
   });
 });
