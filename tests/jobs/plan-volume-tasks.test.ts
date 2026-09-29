@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { TaskState } from "../../src/db/interfaces/index.ts";
-import { planVolumeTasks } from "../../src/jobs/plan-volume-tasks.ts";
+import { expectedVolumeTasks, planVolumeTasks } from "../../src/jobs/plan-volume-tasks.ts";
 
 const pages = [
   { id: "p1", kind: "main" as const },
@@ -46,5 +46,14 @@ describe("planVolumeTasks", () => {
     expect(planned(tasks)).toEqual(["render:p3:cpu"]);
     tasks.push(task("render", "p3", "failed"));
     expect(planned(tasks)).toEqual(["export:-:cpu"]);
+  });
+
+  it("expects exactly the tasks a fully successful run plans", () => {
+    const tasks: ReturnType<typeof task>[] = [];
+    for (let next = planVolumeTasks("j", pages, tasks); next.length > 0; next = planVolumeTasks("j", pages, tasks)) {
+      tasks.push(...next.map((planned) => task(planned.stage, planned.pageId, "done")));
+    }
+    expect(tasks).toHaveLength(expectedVolumeTasks(pages));
+    expect(expectedVolumeTasks([{ kind: "blank" }])).toBe(2);
   });
 });

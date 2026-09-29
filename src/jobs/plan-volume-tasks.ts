@@ -56,3 +56,9 @@ export const planVolumeTasks = (
   }
   return next;
 };
+
+/** Tasks a translate_volume job takes when every stage succeeds, for progress display. */
+export const expectedVolumeTasks = (pages: readonly Pick<PageRecord, "kind">[]) => {
+  const main = pages.filter((page) => page.kind === "main").length;
+  return main * 2 + (main > 0 ? 1 : 0) + pages.length + 1;
+};

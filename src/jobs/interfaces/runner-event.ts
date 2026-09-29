@@ -1,4 +1,5 @@
-import type { JobSummary, TaskState } from "../../db/interfaces/index.ts";
+import type { JobSummary } from "../../db/interfaces/job-summary.ts";
+import type { TaskState } from "../../db/interfaces/task-state.ts";
 
 /** Progress the runner reports to the UI (over SSE); ids, stages and Chinese status text only. */
 export type RunnerEvent =

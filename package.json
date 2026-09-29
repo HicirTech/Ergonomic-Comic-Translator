@@ -25,6 +25,7 @@
     "ai"
   ],
   "scripts": {
+    "start": "bun run src/server/main.ts",
     "test": "bun test",
     "typecheck": "bunx tsc -p tsconfig.json --noEmit",
     "doctor": "bun run src/cli/doctor.ts",
