@@ -12,10 +12,10 @@ const validModel = {
 };
 
 describe("models.lock.json", () => {
-  it("is valid and pins only permissively licensed models", () => {
+  it("is valid and pins only permissively licensed models and OFL fonts", () => {
     const lock = readModelsLock();
     for (const model of Object.values(lock.models)) {
-      expect(["apache-2.0", "mit"]).toContain(model.license);
+      expect(["apache-2.0", "mit", "ofl-1.1"]).toContain(model.license);
     }
   });
 
@@ -38,6 +38,13 @@ describe("models.lock.json", () => {
     expect(item!.url).toBe(`https://hf-mirror.example/org/name/resolve/${"a".repeat(40)}/onnx/model.onnx`);
     expect(item!.destination).toBe(join("/data", "models", "m", "onnx", "model.onnx"));
     expect(() => modelDownloadItems(lock, ["missing"], dataPaths("/data"))).toThrow("unknown model");
+  });
+
+  it("fetches GitHub-hosted assets from raw.githubusercontent.com", () => {
+    const lock = parseModelsLock({ version: 1, models: { f: { ...validModel, source: "github" } } });
+    const [item] = modelDownloadItems(lock, ["f"], dataPaths("/data"), "https://hf-mirror.example");
+    expect(item!.url).toBe(`https://raw.githubusercontent.com/org/name/${"a".repeat(40)}/onnx/model.onnx`);
+    expect(() => parseModelsLock({ version: 1, models: { f: { ...validModel, source: "ftp" } } })).toThrow("source");
   });
 
   it("honours HF_ENDPOINT", () => {

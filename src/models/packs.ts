@@ -12,6 +12,7 @@ export const modelPacks: Record<string, readonly string[]> = {
     "migan",
   ],
   korean: ["ppocr-rec-korean"],
+  fonts: ["font-noto-sans-sc-bold"],
   // T2 is the default tier on a large card; T1 is the fallback while another application holds VRAM.
   llm: ["qwen3.5-9b-q6k", "qwen3.5-9b-q4km"],
   "llm-small": ["qwen3.5-9b-iq3xxs", "hy-mt2-7b-q4km"],

@@ -29,6 +29,7 @@ const checkFile = (modelId: string, file: LockedFile) => {
 };
 
 const checkModel = (modelId: string, model: LockedModel) => {
+  if (model.source !== undefined && model.source !== "huggingface" && model.source !== "github") fail(`${modelId}: unknown source "${model.source}"`);
   if (!repoPattern.test(model.repo)) fail(`${modelId}: invalid repo "${model.repo}"`);
   if (!revisionPattern.test(model.revision)) fail(`${modelId}: revision must be a full commit sha`);
   if (!model.license) fail(`${modelId}: licence is required`);
@@ -80,7 +81,9 @@ export const modelDownloadItems = (
   modelIds.flatMap((modelId) => {
     const model = lock.models[modelId] ?? fail(`unknown model id "${modelId}"`);
     return model.files.map((file) => ({
-      url: `${endpoint}/${model.repo}/resolve/${model.revision}/${file.path}`,
+      url: model.source === "github"
+        ? `https://raw.githubusercontent.com/${model.repo}/${model.revision}/${file.path}`
+        : `${endpoint}/${model.repo}/resolve/${model.revision}/${file.path}`,
       destination: modelFilePath(paths.models, modelId, file.path),
       size: file.size,
       sha256: file.sha256,
