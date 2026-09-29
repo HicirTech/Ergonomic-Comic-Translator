@@ -1,3 +1,4 @@
+import { createLamaEngine, createMiganEngine } from "../stages/clean/inpaint-engine.ts";
 import { createDetectorEngine } from "../stages/detect/detector-engine.ts";
 import { createLineEngine } from "../stages/lines/line-engine.ts";
 import { createBaberuEngine } from "../stages/ocr/baberu-engine.ts";
@@ -15,4 +16,6 @@ export const visionEngineFactories: Record<string, () => VisionEngine> = {
   "text-rec": () => createTextRecEngine("ppocr-rec-server"),
   "text-rec-korean": () => createTextRecEngine("ppocr-rec-korean"),
   "textline-ori": createTextlineOriEngine,
+  lama: createLamaEngine,
+  migan: createMiganEngine,
 };
