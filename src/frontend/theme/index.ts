@@ -11,7 +11,8 @@ export const theme: Theme = createTheme({
     },
   },
   typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    // System fonts only: the app works offline and never calls a font CDN.
+    fontFamily: '"Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif',
     h5: { fontWeight: 600 },
     h6: { fontWeight: 600 },
   },
