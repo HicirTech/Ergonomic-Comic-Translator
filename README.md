@@ -1,182 +1,182 @@
 # Ergonomic Comic Translator
 
-**AI-assisted comic translation that empowers human translators — not replaces them.**
-
-An end-to-end pipeline for OCR, text removal, and translation of comic pages and PDFs. Powered by [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), local inpainting models, and LLM-driven translation — all running locally, no Docker or cloud services required.
+Drop in a comic volume and get it back in Simplified Chinese: read it in the built-in web reader or download it
+as CBZ or PDF. Everything runs on your own computer with local models; no cloud service, no account, no Python.
+You do not need to know the source language or edit any artwork: reading, cleaning, translating, lettering and
+checking are automatic.
 
 > **[中文版](README.zh.md)**
 
----
-
-## Why "Ergonomic"?
-
-Fully automated comic translation often produces results that miss context, tone, and cultural nuance. This project takes a different approach: **AI handles the tedious work (OCR, text removal, draft translations) while the human translator retains full control** over the final output.
-
-Every step is reviewable and editable in the web UI:
-- OCR polygons can be adjusted, split, merged, or redrawn
-- Translations can be edited line-by-line with the original text side-by-side
-- Text removal can be re-run per page with different settings
-- The full undo/redo history is preserved per page
-
-The goal is to make comic translation **faster without sacrificing quality**.
+> **Status: v2 is under development (branch `v2`).** The whole pipeline, the job runner, the local server and the
+> web UI are implemented and covered by unit tests, but no volume has been run end to end with the real models
+> yet. Quality and speed are unmeasured until that benchmark run. See [Not done yet](#not-done-yet).
 
 ---
 
-## Features
+## What happens to a volume
 
-### OCR — Text Extraction
+1. **Import.** Zip or CBZ archives, whole folders and loose images (JPG, PNG, WebP, AVIF, GIF) become pages in
+   natural order, chapter by chapter. Duplicate images are kept once; blank pages and textless variants are
+   recognised and kept as they are. PDF input is not supported.
+2. **Read** (ONNX Runtime, GPU or CPU). Text and bubble detection, text line geometry including slanted text,
+   orientation, splitting one bubble into several speakers' lines, OCR, text masks and cleaning (flat fill for
+   plain bubbles, LaMa inpainting on artwork).
+3. **Names and terms first.** Names and recurring terms of the whole volume are collected, translated with
+   context from across the volume, and frozen so every page uses the same Chinese names.
+4. **Translate** (llama.cpp). Page by page in reading order, with earlier pages as rolling context. Every answer
+   is checked automatically (structure, refusals, echoed source text, untranslated kana or hangul, repetition);
+   failed lines are retried, and glossary names are enforced.
+5. **Letter.** Chinese text is set horizontally or vertically in the original box at the original angle, with
+   Chinese line-breaking rules, in Noto Sans SC Bold. A line that could not be translated shows
+   "（这句没能翻译）" instead of an empty bubble.
+6. **Export.** CBZ (PNG pages with `ComicInfo.xml`) and PDF (right to left for manga).
 
-Extract text from comic pages with accurate polygon detection. Supports two models:
+The source language (Japanese, Korean, Traditional Chinese or English) is detected from the recognised text,
+and the reading direction follows from it.
 
-- **PaddleOCR-VL 1.5** (default) — vision-language model, best accuracy
-- **Standard PaddleOCR** — faster, configurable language
+## Requirements
 
-Multi-GPU parallel processing is supported. PDF files are automatically split into pages.
+| | |
+|---|---|
+| OS | Windows 10/11 x64. Linux x64 is experimental and runs on the CPU only. |
+| Runtime | [Bun](https://bun.sh) 1.4 or newer |
+| GPU | NVIDIA or AMD with DirectX 12 (reading, via DirectML) and Vulkan (translation, via llama.cpp). AMD integrated graphics (e.g. Radeon 780M) work with a UMA frame buffer of at least 2 GB. Intel GPUs are not supported; the CPU is used instead. |
+| Video memory | About 7-10 GB free for the default translation models (estimates, not yet measured); smaller tiers exist for 8 GB cards and integrated graphics. |
+| Disk | About 14 GB for the default downloads (vision 1.1 GB, translation models 12.2 GB, llama.cpp 50 MB), plus 8 GB for the small-GPU models. |
 
-→ [CLI usage](docs/cli-commands.md#ocr) · [API endpoints](docs/api-reference.md) · [Configuration](docs/setup.md#configuration)
+The app shares the GPU politely: it checks free video memory, RAM and commit before loading anything, pauses when
+memory runs low (yellow light), unloads its models when it runs out (red light) and continues later. Only one
+set of models is loaded at a time, guarded by a machine-wide lock that the command-line tools use too.
 
-### Text Removal — Clean Pages
-
-Remove detected text from pages using local inpainting (lama_large model). Each page produces a clean "textless" version using the OCR bounding polygons as masks.
-
-→ [CLI usage](docs/cli-commands.md#text-removal) · [API endpoints](docs/api-reference.md)
-
-### Translation — LLM-Powered Drafts
-
-Translate extracted text page-by-page using a local [Ollama](https://ollama.com) model. Each page call receives full OCR context and a sliding window of recently translated pages for cross-page consistency.
-
-If whole-page translation fails after retries, the engine falls back to per-line translation automatically.
-
-→ [CLI usage](docs/cli-commands.md#translation) · [API endpoints](docs/api-reference.md)
-
-### Web UI — Visual Editor
-
-A React + Material UI interface for the full workflow:
-
-| Feature | Description |
-|---------|-------------|
-| **Gallery** | Upload cards with cover thumbnails and page counts |
-| **Upload** | Drag-and-drop images, PDFs, or ZIPs with reorderable file lists |
-| **OCR Editor** | Interactive SVG polygon editor — drag vertices, add/remove points, move polygons |
-| **Text Editing** | Per-line text editor with vertical/horizontal orientation toggle |
-| **Translation Editor** | Side-by-side original and translated text editing |
-| **Translation Overlay** | Rendered translated text inside polygons, orientation-aware with auto-fitted font size |
-| **Polygon Text Layout** | Scanline-based text wrapping that conforms to irregular polygon shapes — CJK characters stack in right-to-left columns for vertical orientation, non-CJK text uses word-boundary wrapping with rotated rendering |
-| **Polygon Merging** | Select multiple polygons (Ctrl+click) and merge them into one — preview dialog with drag-and-drop to reorder text before confirming |
-| **Snap to Bubble** | Right-click a polygon to auto-detect the surrounding speech bubble boundary using flood-fill edge detection, then snap the polygon to fit the bubble interior (requires textless page) |
-| **Rectify to Rectangle** | Right-click a polygon to convert any irregular shape to its axis-aligned bounding rectangle |
-| **Text/Textless Toggle** | Switch between original and text-removed image |
-| **Polygon Styling** | ARGB color picker for polygon overlay background |
-| **Line Summary** | Status-colored indicators (normal / long / short / critical-short) |
-| **Cross-page Problems** | Navigate OCR issues across all pages |
-| **Context Menu** | Right-click to add/delete lines, snap to bubble, rectify to rectangle, merge selected, trigger OCR/textless/translation per page |
-| **Undo / Redo** | Per-page history with snapshot persistence |
-| **PDF Export** | WYSIWYG export of all pages with current overlay settings |
-| **Keyboard Shortcuts** | Ctrl+S, Ctrl+Z, PageUp/PageDown, Delete |
-
-→ [Component architecture](docs/frontend-components.md)
-
-### CLI Tools
-
-All pipeline operations are available as CLI commands:
+## Getting started
 
 ```bash
-bun run ocr              # run OCR
-bun run textless <scope>  # remove text
-bun run translate <scope> # translate
-bun run delete <uploadId> # delete all data for an upload
-bun run doctor            # system diagnostics
+bun install
+bun run models:fetch vision fonts llm   # add llm-small on 8 GB cards and integrated graphics
+bun run runtimes:fetch                  # llama.cpp b11146 (Vulkan and CPU builds)
+bun run build:frontend
+bun run doctor                          # read-only report: GPUs, memory, recommended tier
+bun run start                           # then open http://127.0.0.1:3000
 ```
 
-→ [Full CLI reference](docs/cli-commands.md)
+Downloads are pinned by revision, size and sha256 in `models.lock.json` and `runtimes.lock.json` and verified
+after download. Set `HF_ENDPOINT` to use a Hugging Face mirror.
 
-### REST API
+In the web UI:
 
-Upload-based workflow via HTTP endpoints. Supports image, PDF, and ZIP uploads with queue-based processing for OCR, text removal, and translation.
+- Drop files or a folder (or use the buttons), check the one-line summary (pages, blank pages, textless pages),
+  and start.
+- The volume page shows progress, the current step and resource messages. The reader switches between the
+  translated and the original page; in a right-to-left book the left arrow key turns to the next page.
+- Download CBZ or PDF when the volume is done; stop or delete a volume at any time.
 
-```bash
-bun run api  # start API server on http://0.0.0.0:3000
-```
+`bun run start` resumes unfinished jobs, which loads models. Options: `--port <n>` (default 3000) and `--cpu`
+(vision on the CPU).
 
-→ [Full API reference](docs/api-reference.md)
+### Data directory
 
----
+Everything the app downloads or produces lives in `%LOCALAPPDATA%\ComicTranslator` (Linux:
+`$XDG_DATA_HOME/comic-translator`); set `COMIC_TRANSLATOR_HOME` to an absolute path to move it. It must be on a
+local disk.
 
-## Quick Start
+| Folder | Contents |
+|---|---|
+| `db/` | `ct.sqlite`: volumes, pages, jobs, tasks, QA flags |
+| `pages/` | imported page images, named by their sha256 |
+| `volumes/<id>/` | vision results, text, glossary, translations, rendered pages, exports |
+| `models/`, `runtimes/` | locked model files and llama.cpp builds |
+| `run/` | `gpu.lock` and its owner |
+| `logs/` | llama-server logs |
+| `cache/` | uploads while they are imported |
+| `runs/` | output folders of `bun run vision` |
 
-### Requirements
+## Command-line tools
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| GPU | NVIDIA GPU with CUDA | NVIDIA GPU, 8+ GB VRAM |
-| RAM | 8 GB | 16 GB |
-| Software | [Bun](https://bun.sh), Python 3.12, [Poetry](https://python-poetry.org) | — |
+| Command | What it does |
+|---|---|
+| `bun run start [--port 3000] [--cpu]` | Local server with the web UI and the job runner |
+| `bun run doctor [--seconds N] [--json]` | Read-only resource report; never loads a model |
+| `bun run models:fetch [pack or model id ...]` | Download and verify models (packs: `vision`, `fonts`, `llm`, `llm-small`, `korean`; `--list` shows all) |
+| `bun run runtimes:fetch [asset ...]` | Download and unpack llama.cpp (default: this platform's Vulkan and CPU builds) |
+| `bun run vision <zip, cbz, folder or images> [--out dir] [--cpu] [--prior v\|h]` | Reading and cleaning only, into a run folder |
+| `bun run translate <run folder> [--lang ja\|ko\|zh-Hant\|en] [--ltr] [--history 2000]` | Names, terms and translation of a vision run |
+| `bun run render <run folder> [--ltr] [--title name]` | Lettering, CBZ and PDF for a translated run (CPU only) |
+| `bun run gt:d1 <zip or folder> [--out dir]` | Evaluation: text-area ground truth from pages and their textless variants (CPU only) |
 
-AMD GPUs are experimentally supported via [ZLUDA](https://github.com/vosen/ZLUDA). WSL2 users get CUDA passthrough from Windows automatically.
-
-### Setup
-
-```bash
-bun install                    # 1. Install Bun dependencies
-bun run system:bootstrap       # 2. Install Poetry + pyenv via Homebrew
-bun run python:bootstrap       # 3. Install Python 3.12 + PaddleOCR
-bun run text-cleaner:bootstrap # 4. (Optional) Install text removal models
-bun run doctor                 # 5. Verify everything
-```
-
-→ [Detailed setup guide](docs/setup.md)
-
----
+`vision`, `translate` and `start` (while a job runs) load models and take the GPU lock; the others do not.
 
 ## Architecture
 
-Four layers working together:
+| Process | Role |
+|---|---|
+| Main Bun process | HTTP server on 127.0.0.1, SQLite (single writer), job runner, resource governor, lettering and export |
+| Two vision workers | ONNX Runtime in child processes: one on the GPU (DirectML), one on the CPU; a hung run is killed |
+| `llama-server` | The one translation model, on a random local port with a random API key |
 
-| Layer | Technology | Role |
-|-------|-----------|------|
-| **System** | WSL2/Linux, Homebrew, NVIDIA/AMD GPU | Hardware and OS foundation |
-| **Python** | Poetry + pyenv, PaddleOCR, PyTorch | OCR engine, text removal, PDF rendering |
-| **Bun** | TypeScript, Bun runtime | API server, queue management, orchestration |
-| **Frontend** | React 18, Material UI, Vite | Web UI for review and editing |
+The GPU is time-shared: the reading models run first, then they are unloaded and the translation model is loaded.
+Lettering and export run on the CPU alongside.
 
-→ [Architecture overview](docs/architecture.md) · [Architecture diagram](docs/architecture.drawio) · [Python layer details](docs/python-layer.md)
+| Folder | Contents |
+|---|---|
+| `src/core` | paths, hashing, canonical JSON, cache keys, ids, small utilities |
+| `src/gov`, `src/platform` | resource governor: DXGI, PDH and memory probes via `bun:ffi`, admission, lights, GPU lock |
+| `src/models`, `src/ort`, `src/workers` | locked downloads, ONNX Runtime setup, worker processes |
+| `src/stages` | ingest, page profile, detection, lines, regions, utterances, OCR, masks, cleaning, reading order, language |
+| `src/pipeline` | page and volume pipelines built from the stages |
+| `src/llm`, `src/translate`, `src/qa`, `src/terms` | llama-server client, translation contract, automatic checks, names and terms |
+| `src/typeset`, `src/export` | lettering and CBZ/PDF export |
+| `src/db`, `src/jobs`, `src/sessions`, `src/server` | storage, task planning and running, model sessions, HTTP API |
+| `src/frontend` | React + MUI web UI ([components](docs/frontend-components.md)) |
+| `eval`, `tests` | evaluation tools and unit tests |
 
----
+## Not done yet
 
-## Documentation
+- A first end-to-end run on the benchmark volume, with speed and quality measurements.
+- Korean: the Korean line recogniser is downloadable (`korean` pack) but the pipeline does not use it yet, so
+  Korean pages are read by the Japanese-oriented readers.
+- Fallback translation with other models when the main model keeps refusing or failing (only retries with the
+  same model exist today).
+- Re-running a volume recomputes every step; finished steps are not reused yet.
+- The small-GPU translation tiers (8 GB cards, integrated graphics) are untested, and MI-GAN inpainting is
+  downloaded but not used yet.
+- A portable installer, a GPU self-check of the ONNX execution providers, and GPU support on Linux.
 
-| Document | Description |
-|----------|-------------|
-| [Architecture Overview](docs/architecture.md) | System layers, data flow, and React context design |
-| [Setup Guide](docs/setup.md) | Installation, bootstrap, and configuration reference |
-| [Python Layer](docs/python-layer.md) | Python packages and Bun–Python communication protocol |
-| [Frontend Components](docs/frontend-components.md) | Component architecture and context mapping |
-| [API Reference](docs/api-reference.md) | REST API endpoints, parameters, and responses |
-| [CLI Commands](docs/cli-commands.md) | All CLI commands and usage examples |
-| [Architecture Diagram](docs/architecture.drawio) | Visual diagram (open with draw.io) |
+## Development
 
-> All documentation is also available in Chinese — see [中文文档](README.zh.md#文档).
+```bash
+bun test
+bun run typecheck
+bun run typecheck:frontend
+bun run dev:frontend   # Vite on port 5173, proxying /api to bun run start on port 3000
+```
 
----
+Rules for contributions:
 
-## Configuration
+- Bun and TypeScript only in the product: no Python, Docker, WSL or CUDA toolkit.
+- Logs and terminal output carry ids and metrics, never source or target text.
+- Benchmark volumes and anything derived from them (OCR text, translations, crops, masks) never enter the
+  repository.
+- Check resources (`bun run doctor`) before loading models, and load models only while holding the GPU lock.
+- GPL and AGPL projects are design references only; the default model pack uses Apache-2.0, MIT or OFL
+  licensed files only.
 
-All environment variables are resolved in `src/config.ts` with sensible defaults. Key variables:
+## Models
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `COMIC_TRANSLATOR_TEMP_DIR` | `.tmp` | Root temp directory |
-| `COMIC_TRANSLATOR_FILES_DIR` | `.tmp/ocr` | CLI OCR input directory |
-| `OCR_MODEL` | `paddleocr-vl-1.5` | OCR model (`paddleocr` or `paddleocr-vl-1.5`) |
-| `OCR_CONCURRENCY` | `1` | Parallel GPU batches (requires multiple GPUs) |
-| `OLLAMA_HOST` | `http://localhost:11434` | Ollama API URL |
-| `OLLAMA_TRANSLATE_MODEL` | `translategemma:12b` | Translation model |
-| `TRANSLATE_TARGET_LANGUAGE` | `Chinese` | Default target language |
-
-→ [Full configuration reference](docs/setup.md#configuration)
-
----
+| Model | Licence | Role |
+|---|---|---|
+| [ogkalu/comic-text-and-bubble-detector](https://huggingface.co/ogkalu/comic-text-and-bubble-detector) | Apache-2.0 | text and bubble detection (RT-DETR-v2) |
+| [PP-OCRv5 mobile det](https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det_onnx) | Apache-2.0 | text line geometry |
+| [PP-OCRv5 server rec](https://huggingface.co/PaddlePaddle/PP-OCRv5_server_rec_onnx) | Apache-2.0 | line recognition used to split bubbles |
+| [PP-LCNet textline orientation](https://huggingface.co/PaddlePaddle/PP-LCNet_x1_0_textline_ori_onnx) | Apache-2.0 | 0/180 degree line orientation |
+| [Baberu OCR](https://huggingface.co/genshiai-daichi/baberu-ocr) | Apache-2.0 | main OCR (Japanese, Chinese, English) |
+| [manga-ocr](https://huggingface.co/onnx-community/manga-ocr-base-ONNX) | Apache-2.0 | short Japanese text |
+| [LaMa manga](https://huggingface.co/mayocream/lama-manga-onnx) | Apache-2.0 | inpainting |
+| [MI-GAN](https://huggingface.co/andraniksargsyan/migan) | MIT | light inpainting for small GPUs (not used yet) |
+| [Qwen3.5-9B GGUF](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF) | Apache-2.0 | translation (Q6_K, Q4_K_M, IQ3_XXS tiers) |
+| [Hy-MT2-7B GGUF](https://huggingface.co/tencent/Hy-MT2-7B-GGUF) | Apache-2.0 | translation tier for integrated graphics |
+| [Noto Sans SC Bold](https://github.com/notofonts/noto-cjk) | OFL-1.1 | Chinese lettering font |
+| [korean PP-OCRv5 mobile rec](https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx) | Apache-2.0 | Korean line recognition (not used yet) |
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). Model files keep their own licences listed above.
