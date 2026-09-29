@@ -1,6 +1,6 @@
 {
   "name": "ergonomic-comic-translator",
-  "description": "AI-assisted comic/manga OCR, text removal, and translation toolkit — AI assists, human controls",
+  "description": "Fully automatic local comic translator: drop in a volume, get a readable Simplified Chinese volume back",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -18,13 +18,14 @@
     "manga",
     "ocr",
     "translation",
-    "paddleocr",
+    "onnxruntime",
+    "llama.cpp",
     "text-removal",
     "inpainting",
-    "ai",
-    "ollama"
+    "ai"
   ],
   "scripts": {
+    "test": "bun test",
     "typecheck": "bunx tsc -p tsconfig.json --noEmit",
     "typecheck:frontend": "bunx tsc -p tsconfig.frontend.json --noEmit",
     "dev:frontend": "vite",
@@ -55,9 +56,11 @@
     "i18next": "^26.0.4",
     "i18next-browser-languagedetector": "^8.2.1",
     "log4js": "^6.9.1",
+    "onnxruntime-node": "1.30.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-i18next": "^17.0.2",
-    "react-router-dom": "^7.14.0"
+    "react-router-dom": "^7.14.0",
+    "sharp": "0.35.5"
   }
 }

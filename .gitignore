@@ -40,3 +40,9 @@ pdf.pdf
 
 # model weights (downloaded at bootstrap time)
 src/python/models/
+
+# v2: models, runtimes and user data live in the data directory; never commit weights or eval output
+*.onnx
+*.gguf
+*.safetensors
+eval/runs/
