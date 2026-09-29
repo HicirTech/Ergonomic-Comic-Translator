@@ -5,7 +5,7 @@ export interface ExtractedZipEntry {
   data: Uint8Array;
 }
 
-export const extractZipEntries = async (file: File): Promise<ExtractedZipEntry[]> => {
+export const extractZipEntries = async (file: Blob): Promise<ExtractedZipEntry[]> => {
   const archiveBytes = new Uint8Array(await file.arrayBuffer());
   const entries = unzipSync(archiveBytes);
 

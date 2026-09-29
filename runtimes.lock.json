@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "llamaCpp": {
+    "release": "v0.5.0",
+    "build": "b11146",
+    "commit": "7fe450e19305b828c199d602c23a8337aaa1f03b",
+    "license": "mit",
+    "assets": {
+      "win32-x64-vulkan": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-bin-win-vulkan-x64.zip",
+        "size": 32127004,
+        "sha256": "55a378aa095b466979d85075234f66d7655c7a7483222af0c006c0e55b4d7bd6"
+      },
+      "win32-x64-cpu": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-bin-win-cpu-x64.zip",
+        "size": 18560055,
+        "sha256": "14cf1303ca9ac3abd94816850532f9f9a69ac66fbaca3776fc6f9061c2fac1d1"
+      },
+      "win32-x64-cuda": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-bin-win-cuda-13.4-x64.zip",
+        "size": 149758833,
+        "sha256": "b1866c0ce76bc7bfb0c24b33e9a37e9669f1be18539b12c74ce361f81c41f047",
+        "requires": ["win32-x64-cudart"]
+      },
+      "win32-x64-cudart": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/cudart-llama-bin-win-cuda-13.4-x64.zip",
+        "size": 423535356,
+        "sha256": "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668"
+      },
+      "linux-x64-vulkan": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-bin-ubuntu-vulkan-x64.tar.gz",
+        "size": 30598492,
+        "sha256": "d3ce40fce7403cc93bcf5718fc46c6efb61ed9709f8e5d9f10c86bf0e30e8fb3"
+      },
+      "linux-x64-cpu": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-bin-ubuntu-x64.tar.gz",
+        "size": 16998357,
+        "sha256": "c150306eb16b5ab696f76a8bdf810c35fd98a24e82158742e6fa28f420ff8410"
+      }
+    }
+  }
+}

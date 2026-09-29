@@ -27,6 +27,8 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "bunx tsc -p tsconfig.json --noEmit",
+    "models:fetch": "bun run src/cli/models-fetch.ts",
+    "runtimes:fetch": "bun run src/cli/runtimes-fetch.ts",
     "typecheck:frontend": "bunx tsc -p tsconfig.frontend.json --noEmit",
     "dev:frontend": "vite",
     "build:frontend": "vite build",
