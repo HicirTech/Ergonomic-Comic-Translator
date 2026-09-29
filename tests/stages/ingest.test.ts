@@ -54,6 +54,15 @@ describe("ingest", () => {
     expect(entries.map((entry) => entry.name)).toEqual(["ch1/p1.png"]);
   });
 
+  it("keeps chapters apart when several archives hold the same page names", async () => {
+    const first = join(root, "ch1.zip");
+    const second = join(root, "ch2.zip");
+    writeFileSync(first, zipSync({ "001.png": await png(101), "002.png": await png(102) }));
+    writeFileSync(second, zipSync({ "001.png": await png(201), "002.png": await png(202) }));
+    const { pages } = await ingestEntries(await readSources([second, first]), join(root, "pages"));
+    expect(pages.map((page) => page.displayName)).toEqual(["ch1.zip/001.png", "ch1.zip/002.png", "ch2.zip/001.png", "ch2.zip/002.png"]);
+  });
+
   it("rejects archives beyond the entry or size limits before inflating", async () => {
     const archive = join(root, "bomb.zip");
     writeFileSync(archive, zipSync({ "a.png": new Uint8Array(10), "b.png": new Uint8Array(10) }));

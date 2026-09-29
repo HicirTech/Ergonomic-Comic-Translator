@@ -60,14 +60,20 @@ const readFolder = (root: string, limits: IngestLimits): SourceEntry[] => {
   });
 };
 
-/** Reads zip/cbz archives, folders (recursively) and single image files into raw entries. */
+/**
+ * Reads zip/cbz archives, folders (recursively) and single image files into raw entries. With several
+ * sources, entries of an archive or folder are named under its own name, so pages sort chapter by chapter
+ * instead of interleaving equal names such as 001.jpg.
+ */
 export const readSources = async (paths: readonly string[], limits: IngestLimits = defaultIngestLimits): Promise<SourceEntry[]> => {
   const entries: SourceEntry[] = [];
   for (const path of paths) {
+    const prefix = paths.length > 1 ? `${basename(path)}/` : "";
+    const named = (items: SourceEntry[]) => items.map((entry) => ({ name: `${prefix}${entry.name}`, data: entry.data }));
     if (statSync(path).isDirectory()) {
-      entries.push(...readFolder(path, limits));
+      entries.push(...named(readFolder(path, limits)));
     } else if (hasSupportedExtension(path, archiveExtensions)) {
-      entries.push(...(await readArchive(path, limits)));
+      entries.push(...named(await readArchive(path, limits)));
     } else {
       entries.push({ name: basename(path), data: readFileSync(path) });
     }
