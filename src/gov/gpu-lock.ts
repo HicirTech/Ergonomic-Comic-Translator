@@ -1,5 +1,6 @@
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync } from "fs";
 import { dirname } from "path";
+import { writeFileAtomically } from "../core/atomic-write.ts";
 import type { DataPaths } from "../core/data-paths.ts";
 import { nowIso } from "../core/time-utils.ts";
 import { tryFlockExclusive } from "../platform/linux/libc.ts";
@@ -61,9 +62,7 @@ export const tryAcquireGpuLock = (paths: DataPaths, purpose: string): GpuLockAtt
   }
 
   const owner: GpuLockOwner = { pid: process.pid, purpose, acquiredAt: nowIso() };
-  const temporary = `${paths.gpuLockOwner}.${process.pid}.tmp`;
-  writeFileSync(temporary, JSON.stringify(owner));
-  renameSync(temporary, paths.gpuLockOwner);
+  writeFileAtomically(paths.gpuLockOwner, JSON.stringify(owner));
 
   let released = false;
   return {

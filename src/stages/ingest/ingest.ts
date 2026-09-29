@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, renameSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import sharp from "sharp";
+import { writeFileAtomically } from "../../core/atomic-write.ts";
 import { sha256Hex } from "../../core/hash.ts";
 import { compareNatural } from "../../core/natural-sort.ts";
 import { sanitizeArchiveEntryPath } from "../../core/path-utils.ts";
@@ -11,9 +12,7 @@ import { isPageFile, pageExtension } from "./read-sources.ts";
 const storeContent = (directory: string, sha256: string, extension: string, data: Uint8Array) => {
   const path = join(directory, `${sha256}${extension}`);
   if (!existsSync(path)) {
-    const temporary = `${path}.${process.pid}.tmp`;
-    writeFileSync(temporary, data);
-    renameSync(temporary, path);
+    writeFileAtomically(path, data);
   }
   return path;
 };
