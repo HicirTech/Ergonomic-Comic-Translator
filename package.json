@@ -29,6 +29,7 @@
     "typecheck": "bunx tsc -p tsconfig.json --noEmit",
     "doctor": "bun run src/cli/doctor.ts",
     "vision": "bun run src/cli/vision.ts",
+    "translate": "bun run src/cli/translate.ts",
     "models:fetch": "bun run src/cli/models-fetch.ts",
     "runtimes:fetch": "bun run src/cli/runtimes-fetch.ts",
     "gt:d1": "bun run eval/cli/gt-d1.ts",

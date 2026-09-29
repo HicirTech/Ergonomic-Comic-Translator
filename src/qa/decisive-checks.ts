@@ -67,9 +67,14 @@ export const hasResidue = (target: string) => kanaOrHangul.test(target.replace(k
 
 /**
  * Checks one completion against the units it was asked to translate. Structure failures concern the
- * whole response; unit failures name the ids to request again.
+ * whole response; unit failures name the ids to request again. `postDict` (the target-side dictionary,
+ * e.g. names the model left untranslated) is applied to each value before the content checks.
  */
-export const checkCompletion = (units: readonly TranslationUnit[], result: ChatResult): PageCheck => {
+export const checkCompletion = (
+  units: readonly TranslationUnit[],
+  result: ChatResult,
+  postDict: (unit: TranslationUnit, target: string) => string = (_, target) => target,
+): PageCheck => {
   const pageFailures: CheckCode[] = [];
   if (result.reasoningContent.trim() !== "" || /<think>/iu.test(result.content)) pageFailures.push("G0_REASONING");
   if (result.finishReason === "length") pageFailures.push("G0_TRUNCATED");
@@ -89,7 +94,8 @@ export const checkCompletion = (units: readonly TranslationUnit[], result: ChatR
   if (record) {
     if (Object.keys(record).some((key) => !ids.has(key))) pageFailures.push("G0_KEYS");
     for (const unit of units) {
-      const value = record[unit.id];
+      const raw = record[unit.id];
+      const value = typeof raw === "string" && raw.trim() !== "" ? postDict(unit, raw) : raw;
       const failures: CheckCode[] = [];
       if (typeof value !== "string") {
         failures.push("G0_KEYS");

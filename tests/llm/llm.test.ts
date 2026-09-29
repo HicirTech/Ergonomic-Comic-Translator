@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { createChatClient } from "../../src/llm/chat-client.ts";
 import { ChatHttpError } from "../../src/llm/chat-http-error.ts";
 import { buildLlamaServerArgs } from "../../src/llm/llama-server-args.ts";
+import { deviceForAdapter, parseListDevices } from "../../src/llm/list-devices.ts";
 import { readSseData } from "../../src/llm/sse.ts";
 import { createTokenRateMeter } from "../../src/llm/token-rate.ts";
 
@@ -109,5 +110,21 @@ describe("createChatClient", () => {
   it("raises ChatHttpError on a non-2xx answer", async () => {
     const wrongKey = createChatClient(`http://127.0.0.1:${server.port}`, "wrong");
     await expect(wrongKey.complete({ messages: [], schema: {}, maxTokens: 1, seed: 0 }, { timeoutMs: 5000 })).rejects.toBeInstanceOf(ChatHttpError);
+  });
+});
+
+describe("llama.cpp device listing", () => {
+  const output = [
+    "load_backend: loaded Vulkan backend",
+    "Available devices:",
+    "  Vulkan0: AMD Radeon(TM) Graphics (512 MiB, 400 MiB free)",
+    "  Vulkan1: NVIDIA GeForce RTX 5090 (32607 MiB, 30120 MiB free)",
+  ].join("\n");
+
+  it("parses devices and matches a DXGI adapter by name, not by index", () => {
+    const devices = parseListDevices(output);
+    expect(devices.map((device) => device.name)).toEqual(["Vulkan0", "Vulkan1"]);
+    expect(deviceForAdapter(devices, "NVIDIA GeForce RTX 5090", 32187)?.name).toBe("Vulkan1");
+    expect(deviceForAdapter(devices, "Intel Arc", 8000)).toBeNull();
   });
 });

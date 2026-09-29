@@ -1,4 +1,5 @@
 import type { ChatMessage } from "../llm/interfaces/index.ts";
+import { isRetryableLlmError } from "../llm/retryable.ts";
 import { checkCompletion } from "../qa/decisive-checks.ts";
 import type { CheckCode } from "../qa/interfaces/index.ts";
 import { buildMessages, maxTokensFor, outputSchema } from "./contract.ts";
@@ -8,13 +9,19 @@ import type { CompleteFn, PageRequest, PageTranslation, TranslationUnit } from "
  * L1 and L1r for one page: translate all units, then retry only what failed. Round 1 asks again for the
  * failed ids with the same seed (often just missing keys), round 2 changes the seed, round 3 asks for each
  * unit alone. Accepted translations are never requested again, so retries cost only the failing part.
+ * `buildMessages` picks the contract (tr-contract@2 or the single-turn @2s); `postDict` repairs targets
+ * (e.g. untranslated names) before the decisive checks.
  */
 export const translatePage = async (
   request: PageRequest,
   complete: CompleteFn,
   seed: number,
-  buildRequestMessages: (request: PageRequest) => ChatMessage[] = buildMessages,
+  options: {
+    buildMessages?: (request: PageRequest) => ChatMessage[];
+    postDict?: (unit: TranslationUnit, target: string) => string;
+  } = {},
 ): Promise<PageTranslation> => {
+  const buildRequestMessages = options.buildMessages ?? buildMessages;
   const targets: Record<string, string> = {};
   const failures: Record<string, CheckCode[]> = {};
   let requests = 0;
@@ -22,8 +29,15 @@ export const translatePage = async (
   const attempt = async (units: TranslationUnit[], attemptSeed: number) => {
     const ids = units.map((unit) => unit.id);
     requests += 1;
-    const result = await complete(buildRequestMessages({ ...request, units }), outputSchema(ids), maxTokensFor(units.length), attemptSeed);
-    const check = checkCompletion(units, result);
+    let result;
+    try {
+      result = await complete(buildRequestMessages({ ...request, units }), outputSchema(ids), maxTokensFor(units.length), attemptSeed);
+    } catch (error) {
+      if (!isRetryableLlmError(error)) throw error;
+      for (const id of ids) failures[id] = ["G0_TRANSPORT"];
+      return;
+    }
+    const check = checkCompletion(units, result, options.postDict);
     for (const id of ids) {
       if (check.retryIds.includes(id)) {
         failures[id] = check.unitFailures[id] ?? check.pageFailures;
