@@ -15,6 +15,8 @@ const maxFontSize = 72;
 /** Unclipped DB rectangles are about this much thicker than the glyphs they hold. */
 const glyphShareOfLine = 0.9;
 const fallbackFontSize = 20;
+/** Shown where a translation failed every retry, so a cleaned bubble is never left empty. */
+export const untranslatedPlaceholderZh = "（这句没能翻译）";
 
 const median = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
@@ -24,15 +26,16 @@ const median = (values: number[]) => {
 /**
  * S10 for one page: every translated utterance is laid out in its box (the region frame, or its own
  * slot when a bubble was split), rotated back to the original angle, outlined when it sits on art.
- * Returns the overlay SVG and the ids that overflowed at the minimum size.
+ * Units without a translation get a Chinese placeholder. Returns the overlay SVG and the ids that
+ * overflowed at the minimum size.
  */
 export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: VolumePageText, translation: PageTranslationResult) => {
   const blocks: string[] = [];
   const overflow: string[] = [];
   for (const unit of text.units) {
-    const target = translation.targets[unit.id];
     const ref = text.refs[unit.id];
-    if (target === undefined || !ref) continue;
+    if (!ref) continue;
+    const target = translation.targets[unit.id] ?? untranslatedPlaceholderZh;
     const region = vision.regions[ref.regionIndex]!;
     const { frame } = region.orientation;
     const translated = region.utterances.filter((utterance) => utterance.text.trim() !== "").length;

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { unzipSync } from "fflate";
 import { buildCbz, comicInfoXml } from "../../src/export/cbz.ts";
+import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
+import { typesetPage, untranslatedPlaceholderZh } from "../../src/pipeline/typeset-page.ts";
+import { pageText } from "../../src/pipeline/volume-text.ts";
 import type { Shaper } from "../../src/typeset/interfaces/index.ts";
 import { breakLines } from "../../src/typeset/kinsoku.ts";
 import { layoutText } from "../../src/typeset/layout.ts";
@@ -93,5 +96,49 @@ describe("CBZ export", () => {
     expect(Object.keys(entries)).toEqual(["ComicInfo.xml", "001.png", "002.png"]);
     expect(new TextDecoder().decode(entries["ComicInfo.xml"]!)).toContain("<Title>测试&lt;卷&gt;</Title>");
     expect(comicInfoXml("t", 3, false)).toContain("<Manga>No</Manga>");
+  });
+});
+
+describe("typesetPage", () => {
+  const vision: PageVisionResult = {
+    width: 400,
+    height: 600,
+    regions: [{
+      box: { x0: 100, y0: 100, x1: 300, y1: 300 },
+      cls: "text_bubble",
+      bubble: { x0: 90, y0: 90, x1: 310, y1: 310 },
+      lines: [],
+      orientation: { tilt: 0, consistency: 1, writingMode: "h", ambiguous: false, frame: { cx: 200, cy: 200, w: 200, h: 200, angle: 0 } },
+      classification: { layout: "bubble", kind: "dialogue", policy: "translate" },
+      utterances: [{
+        box: { x0: 0, y0: 0, x1: 200, y1: 200 },
+        lineIndexes: [],
+        startReasons: [],
+        nameTag: false,
+        thought: false,
+        text: "こんにちは",
+        meanProb: 0.9,
+        minProb: 0.9,
+        engine: "baberu",
+        quarterTurns: 0,
+        flags: [],
+      }],
+      clean: "flat",
+    }],
+    uncovered: [],
+    cleanedPath: "cleaned.png",
+    timingsMs: {},
+  };
+  const text = pageText(1, vision.regions, "rtl");
+
+  it("letters the translation into the bubble", () => {
+    const { svg, overflow } = typesetPage(fakeShaper, vision, text, { page: 1, units: text.units, targets: { "1": "你好" }, flags: {}, requests: 1 });
+    expect(svg.match(/<path /gu)).toHaveLength(2);
+    expect(overflow).toEqual([]);
+  });
+
+  it("never leaves a cleaned bubble empty when the translation failed", () => {
+    const { svg } = typesetPage(fakeShaper, vision, text, { page: 1, units: text.units, targets: {}, flags: { "1": ["G1_REFUSAL"] }, requests: 4 });
+    expect(svg.match(/<path /gu)).toHaveLength([...untranslatedPlaceholderZh].length);
   });
 });
