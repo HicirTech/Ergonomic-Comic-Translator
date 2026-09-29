@@ -4,9 +4,10 @@ import type { ChatMessage, ChatResult } from "../../src/llm/interfaces/index.ts"
 import { isRetryableLlmError } from "../../src/llm/retryable.ts";
 import { buildGlossary } from "../../src/pipeline/build-glossary.ts";
 import type { RegionResult } from "../../src/pipeline/interfaces/index.ts";
-import { translateVolume } from "../../src/pipeline/translate-volume.ts";
+import { translateVolume, translateVolumePage } from "../../src/pipeline/translate-volume.ts";
 import { pageText } from "../../src/pipeline/volume-text.ts";
 import type { FixedTerm } from "../../src/terms/interfaces/index.ts";
+import type { CompleteFn } from "../../src/translate/interfaces/index.ts";
 import { translatePage } from "../../src/translate/translate-page.ts";
 
 const completion = (content: string): ChatResult => ({
@@ -139,18 +140,45 @@ describe("translateVolume", () => {
     refs: {},
   }));
 
+  const context = (complete: CompleteFn) => ({
+    terms: [rin],
+    roleTable: [{ source: "リン", target: "琳" }],
+    glossarySha: "sha",
+    language: "ja" as const,
+    complete,
+    modelSha: "m",
+    historyBudget: 2000,
+  });
+  const echo: CompleteFn = async (messages) => completion(JSON.stringify({ "1": `琳，第${userJson(messages).page}页` }));
+
   it("feeds earlier pages as history, injects page terms and repairs names", async () => {
     const seen: ChatMessage[][] = [];
-    const results = await translateVolume(pages, [rin], [{ source: "リン", target: "琳" }], "sha", "ja", async (messages) => {
+    const results = await translateVolume(pages, context(async (messages) => {
       seen.push(messages);
       const page = userJson(messages).page;
       const answer = page === 1 ? "琳，第1页" : page === 2 ? "リン，第2页" : "小林，第3页";
       return completion(JSON.stringify({ "1": answer }));
-    }, "m", 2000);
+    }));
     expect(results.map((result) => result.targets["1"])).toEqual(["琳，第1页", "琳，第2页", "小林，第3页"]);
     expect(results[2]!.flags["1"]).toEqual(["TR_TERM_MISS"]);
     expect(userJson(seen[0]!).terms).toEqual([{ source: "リン", target: "琳" }]);
     const pageTwo = seen.find((messages) => userJson(messages).page === 2)!;
     expect(pageTwo.filter((message) => message.role === "assistant")).toHaveLength(1);
+  });
+
+  it("re-translates one page with the same history the volume run used, skipping pages without a result", async () => {
+    const volume = await translateVolume(pages, context(echo));
+    const requests: ChatMessage[][] = [];
+    const record: CompleteFn = async (messages, ...rest) => {
+      requests.push(messages);
+      return echo(messages, ...rest);
+    };
+    const again = await translateVolumePage(pages, 2, volume.slice(0, 2), context(record));
+    expect(again).toEqual(volume[2]!);
+    expect(requests[0]!.filter((message) => message.role === "assistant")).toHaveLength(2);
+
+    requests.length = 0;
+    await translateVolumePage(pages, 2, [volume[0]!, null], context(record));
+    expect(requests[0]!.filter((message) => message.role === "assistant")).toHaveLength(1);
   });
 });

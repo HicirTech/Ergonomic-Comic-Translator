@@ -55,7 +55,15 @@ try {
   mkdirSync(join(run, "translations"), { recursive: true });
   writeFileSync(join(run, "translations", "glossary.json"), JSON.stringify(glossary, null, 1));
 
-  const results = await translateVolume(pages, glossary.terms, glossary.glossary.roleTable, glossary.glossary.sha256, language, complete, modelSha, historyBudget);
+  const results = await translateVolume(pages, {
+    terms: glossary.terms,
+    roleTable: glossary.glossary.roleTable,
+    glossarySha: glossary.glossary.sha256,
+    language,
+    complete,
+    modelSha,
+    historyBudget,
+  });
   for (const result of results) {
     writeFileSync(join(run, "translations", `${String(result.page).padStart(4, "0")}.json`), JSON.stringify(result));
   }
