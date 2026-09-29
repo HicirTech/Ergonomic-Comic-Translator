@@ -31,6 +31,7 @@
     "vision": "bun run src/cli/vision.ts",
     "models:fetch": "bun run src/cli/models-fetch.ts",
     "runtimes:fetch": "bun run src/cli/runtimes-fetch.ts",
+    "gt:d1": "bun run eval/cli/gt-d1.ts",
     "typecheck:frontend": "bunx tsc -p tsconfig.frontend.json --noEmit",
     "dev:frontend": "vite",
     "build:frontend": "vite build",
