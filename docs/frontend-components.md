@@ -2,112 +2,55 @@
 
 > [中文版](frontend-components.zh.md)
 
-The web UI is a React 18 + Material UI SPA served by Vite. All components follow the **Container / View** pattern.
+The web UI is a React 19 + Material UI 9 single-page app built by Vite and served by `bun run start`. It has two
+pages: the library and the volume page with its reader. All text is Chinese (`src/frontend/i18n/zh.json`).
 
-## Component Pattern
+## Component pattern
 
 ```
 ComponentName/
-  index.tsx                 ← thin re-export
-  ComponentNameContainer.tsx ← hooks, state, business logic — no visual JSX
-  ComponentNameView.tsx      ← pure render — receives data from context or props
+  index.tsx                  ← thin re-export
+  ComponentNameContainer.tsx ← state, data loading, event handlers; no visual JSX of its own
+  ComponentNameView.tsx      ← pure render from props
 ```
 
-Complex components add:
-- `hooks/` — extracted custom hooks
-- `components/` — focused sub-components
-- `utils/` — pure utility functions
+Components without state have only `index.tsx` and a View.
 
-## Page Components
+## Pages
 
-### HomePage
-- `HomePageContainer.tsx` — batch loading, dialog open state
-- `HomePageView.tsx` — AppBar + responsive card grid
+### LibraryPage (`/`)
 
-### UploadDetailPage
-- `UploadDetailPageContainer.tsx` — page-level state, global keyboard shortcuts (Ctrl+Z/Shift+Z/S, PageUp/PageDown), dialog management, PDF export
-- `UploadDetailPageView.tsx` — AppBar + ImageStripPanel + OcrPreviewPanel + dialogs
+- `LibraryPageContainer.tsx`: loads the volume list and the resource status, listens to server events
+  (refreshes the list after job events, shows model loading and waiting messages), starts a volume after the
+  import confirmation and opens it.
+- `LibraryPageView.tsx`: app bar, drop zone and status card side by side, messages, and the grid of volume cards.
 
-## OcrPreviewPanel Architecture
+### VolumePage (`/volumes/:id`)
 
-The most complex component. Uses **4 focused React Contexts** instead of a monolithic context to minimize re-renders.
+- `VolumePageContainer.tsx`: loads the volume, follows task and job events of this volume (current step text,
+  refresh of translated pages with a per-page version so re-rendered images reload), start and stop, and the
+  keyboard: arrow keys, Space, PageUp and PageDown turn pages in the book's reading direction.
+- `VolumePageView.tsx`: app bar with state, start/stop and CBZ/PDF downloads; progress and messages; a
+  translated/original toggle; the page with previous and next buttons placed for the reading direction; and a
+  strip of page thumbnails in reading order, marked by translation state and open review flags.
 
-### Context Design
+## Components
 
-| Context | Contents | Update Frequency |
-|---------|----------|-----------------|
-| **OcrLinesContext** | `lines`, `selectedLineIndex`, `selectedLineIndices`, `selectedLine`, `lineSummaries`, line callbacks | Every click/edit |
-| **OcrViewContext** | `imageMode`, `showBoxes`, `showTranslation`, `polygonBgColor`, `isTextlessAvailable`, `naturalSize`, `imgUrl`, refs, view callbacks | Toolbar toggles (rare) |
-| **OcrTranslationContext** | `translatedLines`, `onUpdateTranslation` | Translation edit |
-| **OcrActionsContext** | `isDirty`, `saving`, save/error messages, `contextMenu`, polygon drag/click, page action callbacks | Save / right-click / drag |
-| **OcrSummaryContext** | `allPageLineSummaries`, `onSelectPage` | Cross-page summary changes |
+| Component | Role |
+|---|---|
+| `DropZone` | Drag and drop of files or folders, plus file and folder pickers; uploads and reports the import result |
+| `ImportConfirmDialog` | The one-line confirmation after import: pages, blank pages, textless pages, skipped files; start or later |
+| `StatusCard` | Governor light and reasons, loaded models, room left on each usable GPU, and missing downloads |
+| `VolumeCard` | Cover, title, page count, job state and progress; open, and delete with confirmation |
 
-### Sub-component → Context Mapping
+## API and helpers
 
-| Component | Contexts Used |
-|-----------|--------------|
-| `OcrPreviewPanelView` | View |
-| `ImageToolbar` | View |
-| `PolygonBgColorPicker` | View |
-| `SvgOverlay` | Lines + View + Translation + Actions |
-| `LineEditor` | Lines + Actions |
-| `TranslationEditor` | Lines + Translation |
-| `CurrentPageLines` | Lines |
-| `ProblemNavigator` | Lines + Summary |
-| `LineSummaryPanel` | (wrapper — composes CurrentPageLines + ProblemNavigator) |
-| `EditorContextMenu` | Lines + Actions |
+| File | Role |
+|---|---|
+| `api/client.ts` | Typed calls to the local server; writes carry the `x-comic-translator` header; errors become `ApiError` with the server's Chinese message |
+| `api/use-server-events.ts` | `useServerEvents(handler)`: one `EventSource` on `/api/events` for status, task, job and model events |
+| `reader/page-step.ts` | Which way a key turns the page for right-to-left and left-to-right books |
+| `reader/collect-dropped-files.ts` | Files of a drop, descending into dropped folders, with their relative paths |
 
-### File Structure
-
-```
-OcrPreviewPanel/
-├── index.tsx                          ← re-export
-├── OcrPreviewPanelContainer.tsx       ← state + hooks → 4 context providers
-├── OcrPreviewPanelView.tsx            ← memo'd compositor, assembles sub-components
-├── OcrEditorContext.tsx               ← 5 context definitions + typed hooks
-├── types.ts                           ← DragState, ContextMenuState, EditorSnapshot, etc.
-├── helpers.ts                         ← pure functions + uploadHistoryStore
-├── components/
-│   ├── SvgOverlay.tsx                 ← SVG polygon rendering + translation text overlay
-│   ├── ImageToolbar.tsx               ← image mode + overlay toggle buttons
-│   ├── PolygonBgColorPicker.tsx       ← ARGB color swatch with popover picker
-│   ├── LineEditor.tsx                 ← text field + orientation toggle + save button
-│   ├── TranslationEditor.tsx          ← translated text input (blur-commit pattern)
-│   ├── LineSummaryPanel.tsx           ← wrapper composing CurrentPageLines + ProblemNavigator
-│   ├── CurrentPageLines.tsx           ← scrollable line cards with status indicators
-│   ├── ProblemNavigator.tsx           ← cross-page problem pagination
-│   └── EditorContextMenu.tsx          ← right-click menu for polygon/line/page actions
-├── hooks/
-│   ├── useEditorHistory.ts            ← undo/redo state machine (5 max history)
-│   ├── usePolygonDrag.ts              ← RAF-throttled polygon drag handler
-│   ├── useLineOperations.ts           ← line delete/update operations
-│   ├── useContextMenuActions.ts       ← context menu polygon/line actions
-│   ├── usePanelKeyboard.ts            ← centralized keyboard shortcuts
-│   └── useTextlessPolling.ts          ← 2s polling for textless availability
-└── utils/
-    ├── polygonTextLayout.ts           ← binary-search text fitting (CJK-aware)
-    ├── exportPng.ts                   ← canvas-based WYSIWYG PNG export
-    └── exportPdf.ts                   ← multi-page PDF generation
-```
-
-### Performance Optimizations
-
-- **Context splitting** — changing translation doesn't re-render the toolbar; changing selection doesn't re-render save state
-- **OcrPreviewPanelView is memoized** — prevents parent re-renders from cascading
-- **TranslationEditor uses local state + blur commit** — avoids context updates on every keystroke
-- **usePolygonDrag uses RAF throttling** — prevents jank during drag operations
-- **SvgOverlay defers layout computation** via `useEffect` — `fitTextInPolygon` binary search never blocks paint
-- **Refs for keyboard handlers** — callbacks remain identity-stable regardless of selection changes
-
-## Other Components
-
-| Component | Description |
-|-----------|-------------|
-| `UploadCard` | Portrait card with cover image, metadata, delete button |
-| `UploadDialog` | Drag-and-drop upload with reorderable file list (DndContext) |
-| `DeleteConfirmDialog` | Confirmation dialog for permanent upload deletion |
-| `OcrDialog` | Dialog to trigger page-level OCR with model selection |
-| `TextlessDialog` | Dialog to trigger page-level text removal |
-| `TranslateDialog` | Dialog to trigger translation with model/language/scope selection |
-| `ImageStripPanel` | Vertical thumbnail strip with four-color status dots |
-| `ContextPanel` | Context editing panel |
+Response and event types come from the server (`src/server/interfaces`, `src/jobs/interfaces/runner-event.ts`);
+those files import only plain type files so the UI type-checks without Bun types.

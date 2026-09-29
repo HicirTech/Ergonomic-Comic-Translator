@@ -1,113 +1,53 @@
 # 前端组件
 
-Web UI 是基于 React 18 + Material UI 的单页应用，由 Vite 提供服务。所有组件遵循 **Container / View** 模式。
+> [English](frontend-components.md)
 
-> [English Version](frontend-components.md)
+网页界面是 React 19 + Material UI 9 的单页应用，由 Vite 构建、`bun run start` 提供。只有两个页面：书库，以及带阅读器的
+书页面。所有文字都是中文（`src/frontend/i18n/zh.json`）。
 
-## 组件模式
+## 组件结构
 
 ```
 ComponentName/
-  index.tsx                 ← 薄导出层
-  ComponentNameContainer.tsx ← hooks、状态、业务逻辑 — 无视觉 JSX
-  ComponentNameView.tsx      ← 纯渲染 — 从 context 或 props 接收数据
+  index.tsx                  ← 简单的重新导出
+  ComponentNameContainer.tsx ← 状态、数据加载、事件处理；自身不含界面 JSX
+  ComponentNameView.tsx      ← 只根据 props 渲染
 ```
 
-复杂组件还包含：
-- `hooks/` — 提取的自定义 hooks
-- `components/` — 专注的子组件
-- `utils/` — 纯工具函数
+没有状态的组件只有 `index.tsx` 和 View。
 
-## 页面组件
+## 页面
 
-### 首页（HomePage）
-- `HomePageContainer.tsx` — 批量加载、对话框打开状态
-- `HomePageView.tsx` — AppBar + 响应式卡片网格
+### LibraryPage（`/`）
 
-### 上传详情页（UploadDetailPage）
-- `UploadDetailPageContainer.tsx` — 页面级状态、全局键盘快捷键（Ctrl+Z/Shift+Z/S、PageUp/PageDown）、对话框管理、PDF 导出
-- `UploadDetailPageView.tsx` — AppBar + ImageStripPanel + OcrPreviewPanel + 对话框
+- `LibraryPageContainer.tsx`：加载书列表和资源状态，监听服务端事件（收到作业事件后刷新列表，显示模型加载和等待提示），
+  在读入确认后开始翻译并打开这本书。
+- `LibraryPageView.tsx`：顶栏、并排的拖入区和状态卡、提示信息，以及书卡网格。
 
-## OcrPreviewPanel 架构
+### VolumePage（`/volumes/:id`）
 
-最复杂的组件。使用 **4 个精细的 React Context** 代替单一整体 Context，以最小化重渲染。
+- `VolumePageContainer.tsx`：加载这本书，跟踪这本书的任务和作业事件（当前步骤文字；译好的页面带版本号刷新，重新嵌字后
+  图片会重新加载），开始和停止，以及键盘：方向键、空格、PageUp 和 PageDown 按这本书的翻页方向翻页。
+- `VolumePageView.tsx`：带状态、开始/停止和 CBZ/PDF 下载的顶栏；进度和提示；译图/原图切换；按翻页方向摆放上一页和下一页
+  按钮的页面；以及按阅读顺序排列、标出翻译状态和待看标记的缩略图条。
 
-### Context 设计
+## 组件
 
-| Context | 内容 | 更新频率 |
-|---------|------|---------|
-| **OcrLinesContext** | `lines`、`selectedLineIndex`、`selectedLineIndices`、`selectedLine`、`lineSummaries`、行回调 | 每次点击/编辑 |
-| **OcrViewContext** | `imageMode`、`showBoxes`、`showTranslation`、`polygonBgColor`、`isTextlessAvailable`、`naturalSize`、`imgUrl`、ref、视图回调 | 工具栏切换（稀少） |
-| **OcrTranslationContext** | `translatedLines`、`onUpdateTranslation` | 翻译编辑 |
-| **OcrActionsContext** | `isDirty`、`saving`、保存/错误消息、`contextMenu`、多边形拖拽/点击、页面操作回调 | 保存/右键/拖拽 |
-| **OcrSummaryContext** | `allPageLineSummaries`、`onSelectPage` | 跨页摘要变化 |
+| 组件 | 作用 |
+|---|---|
+| `DropZone` | 拖入文件或文件夹，以及选择文件和文件夹的按钮；上传并返回读入结果 |
+| `ImportConfirmDialog` | 读入后的一句话确认：页数、空白页、无字版、跳过的文件；开始或稍后 |
+| `StatusCard` | 资源守护的状态灯和原因、已加载的模型、每块可用显卡剩余的空间，以及还没下载的文件 |
+| `VolumeCard` | 封面、书名、页数、作业状态和进度；打开，以及确认后删除 |
 
-### 子组件 → Context 映射
+## 接口与辅助模块
 
-| 组件 | 使用的 Context |
-|------|---------------|
-| `OcrPreviewPanelView` | View |
-| `ImageToolbar` | View |
-| `PolygonBgColorPicker` | View |
-| `SvgOverlay` | Lines + View + Translation + Actions |
-| `LineEditor` | Lines + Actions |
-| `TranslationEditor` | Lines + Translation |
-| `CurrentPageLines` | Lines |
-| `ProblemNavigator` | Lines + Summary |
-| `LineSummaryPanel` | （包装层 — 组合 CurrentPageLines + ProblemNavigator） |
-| `EditorContextMenu` | Lines + Actions |
+| 文件 | 作用 |
+|---|---|
+| `api/client.ts` | 调用本地服务的类型化接口；写操作带 `x-comic-translator` 请求头；错误转成带服务端中文说明的 `ApiError` |
+| `api/use-server-events.ts` | `useServerEvents(handler)`：在 `/api/events` 上建一个 `EventSource`，接收状态、任务、作业和模型事件 |
+| `reader/page-step.ts` | 某个按键在从右往左和从左往右的书里往哪边翻页 |
+| `reader/collect-dropped-files.ts` | 拖入的文件，包括拖入文件夹里的文件及其相对路径 |
 
-### 文件结构
-
-```
-OcrPreviewPanel/
-├── index.tsx                          ← 导出
-├── OcrPreviewPanelContainer.tsx       ← 状态 + hooks → 4 个 Context Provider
-├── OcrPreviewPanelView.tsx            ← memo 化的合成器，组装子组件
-├── OcrEditorContext.tsx               ← 5 个 Context 定义 + 类型化 hooks
-├── types.ts                           ← DragState、ContextMenuState、EditorSnapshot 等
-├── helpers.ts                         ← 纯函数 + uploadHistoryStore
-├── components/
-│   ├── SvgOverlay.tsx                 ← SVG 多边形渲染 + 翻译文字叠加层
-│   ├── ImageToolbar.tsx               ← 图片模式 + 叠加层切换按钮
-│   ├── PolygonBgColorPicker.tsx       ← ARGB 颜色选择器（MUI Popover + 原生 RGB 输入 + 透明度滑块）
-│   ├── LineEditor.tsx                 ← 文本框 + 排版方向切换 + 保存按钮
-│   ├── TranslationEditor.tsx          ← 译文输入（失焦提交模式）
-│   ├── LineSummaryPanel.tsx           ← 包装层，组合 CurrentPageLines + ProblemNavigator
-│   ├── CurrentPageLines.tsx           ← 可滚动的行卡片，带状态着色指示器
-│   ├── ProblemNavigator.tsx           ← 跨页问题分页导航
-│   └── EditorContextMenu.tsx          ← 右键菜单 — 多边形/行/页面操作
-├── hooks/
-│   ├── useEditorHistory.ts            ← 撤销/重做状态机（最多 5 条历史）
-│   ├── usePolygonDrag.ts              ← RAF 节流的多边形拖拽处理
-│   ├── useLineOperations.ts           ← 行删除/更新操作
-│   ├── useContextMenuActions.ts       ← 右键菜单多边形/行操作
-│   ├── usePanelKeyboard.ts            ← 集中式键盘快捷键
-│   └── useTextlessPolling.ts          ← 2 秒轮询无文字可用性
-└── utils/
-    ├── polygonTextLayout.ts           ← 二分搜索文字拟合（CJK 感知）
-    ├── exportPng.ts                   ← 基于 canvas 的所见即所得 PNG 导出
-    └── exportPdf.ts                   ← 多页 PDF 生成
-```
-
-### 性能优化
-
-- **Context 拆分** — 修改翻译不会重渲染工具栏；修改选中不会重渲染保存状态
-- **OcrPreviewPanelView 使用 memo** — 防止父级重渲染级联传播
-- **TranslationEditor 使用本地状态 + 失焦提交** — 避免每次按键都更新 Context
-- **usePolygonDrag 使用 RAF 节流** — 防止拖拽操作卡顿
-- **SvgOverlay 延迟布局计算** — `fitTextInPolygon` 二分搜索不会阻塞绘制
-- **键盘处理使用 ref** — 回调函数保持标识稳定，不受选中变化影响
-
-## 其他组件
-
-| 组件 | 说明 |
-|------|------|
-| `UploadCard` | 肖像卡片，含封面图、元数据、删除按钮 |
-| `UploadDialog` | 拖拽上传，可重排文件列表（DndContext） |
-| `DeleteConfirmDialog` | 永久删除上传的确认对话框 |
-| `OcrDialog` | 触发页面级 OCR 的对话框，含模型选择 |
-| `TextlessDialog` | 触发页面级文字去除的对话框 |
-| `TranslateDialog` | 触发翻译的对话框，含模型/语言/范围选择 |
-| `ImageStripPanel` | 垂直缩略图条，带四色状态点 |
-| `ContextPanel` | 上下文编辑面板 |
+响应和事件类型来自服务端（`src/server/interfaces`、`src/jobs/interfaces/runner-event.ts`）；这些文件只引用纯类型文件，
+所以界面不依赖 Bun 类型也能通过类型检查。
