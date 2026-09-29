@@ -1,18 +1,16 @@
-// Typesets translated pages onto the cleaned images and packs a CBZ. CPU only, no models.
+// Typesets translated pages onto the cleaned images and exports CBZ and PDF. CPU only, no models.
 // usage: bun run render <run-dir> [--ltr] [--title <name>]
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { basename, join, resolve } from "path";
+import sharp from "sharp";
 import { dataPaths, resolveDataRoot } from "../core/data-paths.ts";
-import { buildCbz } from "../export/cbz.ts";
-import { modelFilePath, readModelsLock } from "../models/lock.ts";
+import { exportVolume } from "../export/export-volume.ts";
 import type { PageTranslationResult, PageVisionResult } from "../pipeline/interfaces/index.ts";
 import { typesetPage } from "../pipeline/typeset-page.ts";
 import { pageText } from "../pipeline/volume-text.ts";
 import type { IngestedPage } from "../stages/ingest/interfaces/index.ts";
 import { composePage } from "../typeset/compose-page.ts";
-import { loadHarfbuzzShaper } from "../typeset/harfbuzz-shaper.ts";
-
-const fontModel = "font-noto-sans-sc-bold";
+import { loadLetteringShaper } from "../typeset/lettering-font.ts";
 
 const args = process.argv.slice(2);
 const titleIndex = args.indexOf("--title");
@@ -24,27 +22,26 @@ if (!runDirectory) {
 const run = resolve(runDirectory);
 const direction = args.includes("--ltr") ? "ltr" : "rtl";
 const paths = dataPaths(resolveDataRoot());
-const font = readModelsLock().models[fontModel]!;
-const shaper = await loadHarfbuzzShaper(modelFilePath(paths.models, fontModel, font.files[0]!.path));
+const shaper = await loadLetteringShaper(paths);
 
 mkdirSync(join(run, "output"), { recursive: true });
-const rendered: { extension: string; data: Uint8Array }[] = [];
+const rendered: string[] = [];
 let overflowCount = 0;
 for (const name of readdirSync(join(run, "results")).filter((file) => file.endsWith(".json")).sort()) {
   const { page, result } = JSON.parse(readFileSync(join(run, "results", name), "utf8")) as { page: IngestedPage; result: PageVisionResult };
   const translationPath = join(run, "translations", `${String(page.ordinal).padStart(4, "0")}.json`);
   const outputPath = join(run, "output", `${String(page.ordinal).padStart(4, "0")}.png`);
   if (!existsSync(translationPath)) {
-    // Untranslated pages keep their original image.
-    writeFileSync(outputPath, readFileSync(page.storedPath));
+    // Untranslated pages keep their original image (as PNG, like every page of the export).
+    writeFileSync(outputPath, await sharp(page.storedPath).png().toBuffer());
   } else {
     const translation = JSON.parse(readFileSync(translationPath, "utf8")) as PageTranslationResult;
     const { svg, overflow } = typesetPage(shaper, result, pageText(page.ordinal, result.regions, direction), translation);
     overflowCount += overflow.length;
-    await composePage(result.cleanedPath, svg, outputPath);
+    writeFileSync(outputPath, await composePage(result.cleanedPath, svg));
   }
-  rendered.push({ extension: ".png", data: new Uint8Array(readFileSync(outputPath)) });
+  rendered.push(outputPath);
 }
 const title = titleIndex >= 0 ? args[titleIndex + 1]! : basename(run);
-writeFileSync(join(run, "output", `${title}.cbz`), buildCbz(title, rendered, direction === "rtl"));
-console.log(`已排版 ${rendered.length} 页（${overflowCount} 句用最小字号仍放不下）；CBZ：${join(run, "output", `${title}.cbz`)}`);
+await exportVolume(title, rendered, direction === "rtl", join(run, "output", `${title}.cbz`), join(run, "output", `${title}.pdf`));
+console.log(`已排版 ${rendered.length} 页（${overflowCount} 句用最小字号仍放不下）；CBZ 和 PDF 在 ${join(run, "output")}`);
