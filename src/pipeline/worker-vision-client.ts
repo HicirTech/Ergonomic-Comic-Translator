@@ -9,12 +9,13 @@ import type { VisionClient } from "./interfaces/index.ts";
 
 /**
  * Which worker hosts which engine. G (GPU EP) runs the heavy convolutional models; C (CPU) runs the
- * small line models and manga-ocr, so both lanes overlap. Baberu's decoders run on the CPU inside G.
+ * small line models and manga-ocr. Inpainting is MI-GAN on G: LaMa's FFC MatMul is rejected by
+ * DirectML (HRESULT 0x80070057) on this adapter. Baberu's decoders run on the CPU inside G.
  */
 export const engineLanes = {
   detector: "gpu",
   baberu: "gpu",
-  lama: "gpu",
+  migan: "gpu",
   lines: "cpu",
   "text-rec": "cpu",
   "textline-ori": "cpu",
@@ -44,7 +45,7 @@ export const createWorkerVisionClient = (gpu: WorkerSupervisor, cpu: WorkerSuper
     readUtterances: (imagePath, crops, engine) => task<OcrCandidate[][]>(engine, { imagePath, crops }, runsIn(crops)),
     orientation: (imagePath, crops) => task<OrientationReading[][]>("textline-ori", { imagePath, crops }, runsIn(crops)),
     inpaint: async (inpaint: InpaintTask) => {
-      await task("lama", inpaint, inpaint.tiles.length);
+      await task("migan", inpaint, inpaint.tiles.length);
     },
   };
 
