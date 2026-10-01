@@ -1,4 +1,4 @@
-import { writeFileSync } from "fs";
+import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import sharp from "sharp";
 import { rgbToGray } from "../imaging/gray.ts";
@@ -59,6 +59,8 @@ export const cleanPage = async (
       return { box: region.box, cls: region.cls, bubble: region.bubble, lines: region.lines, orientation, classification, utterances, clean };
     }));
 
+  // sharp does not create the parent. The web job never mkdir'd volumes/<id>/work, so every page died here.
+  mkdirSync(workDirectory, { recursive: true });
   const flatPath = join(workDirectory, `${pageKey}.flat.png`);
   await sharp(rgb.data, { raw: { width, height, channels: 3 } }).png().toFile(flatPath);
   if (residualPixels === 0) {
