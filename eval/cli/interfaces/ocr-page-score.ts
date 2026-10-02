@@ -1,6 +1,7 @@
 import type { Box } from "../../../src/geometry/interfaces/index.ts";
 import type { RegionClass } from "../../../src/stages/regions/interfaces/index.ts";
 import type { LayoutKind } from "../../synthetic/interfaces/index.ts";
+import type { SearchCandidate } from "./search-candidate.ts";
 
 /** One ground-truth block after the vision page, including the text that would be translated. */
 export interface OcrBlockScore {
@@ -26,6 +27,11 @@ export interface OcrBlockScore {
    * as `quarterTurns` two past the search winner.
    */
   pipelineUtterances: { quarterTurns: number; flags: string[] }[];
+  /**
+   * Null when the block was missed or every matched region was planned at turn 0 only.
+   * Otherwise one entry per turn of each utterance whose planQuarterTurns had more than one entry.
+   */
+  searchCandidates: SearchCandidate[] | null;
   reference: string;
   predicted: string;
   cer: number;

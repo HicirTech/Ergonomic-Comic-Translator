@@ -20,10 +20,8 @@ import {
 } from "../metrics/ocr-metrics.ts";
 import { chosenLineQuarterTurns } from "../synthetic/line-geometry.ts";
 import type { SyntheticPage } from "../synthetic/interfaces/index.ts";
-import type { OcrBlockScore, OcrLineRotation, OcrRemovalScore } from "./interfaces/index.ts";
-
-/** Manga volumes are vertical and right-to-left unless the language says otherwise (volume-stages). */
-const evalReadingDirection = "rtl" as const;
+import type { OcrBlockScore, OcrLineRotation, OcrRemovalScore, SearchCandidate } from "./interfaces/index.ts";
+import { evalReadingDirection, plannedSearchReads } from "./search-reads.ts";
 
 const minOrderLines = 2;
 const maxOrderLines = 4;
@@ -91,6 +89,7 @@ export const scoreSyntheticPage = (
   lineReads: readonly (readonly OcrCandidate[])[],
   baberuReads: readonly (readonly OcrCandidate[])[],
   mangaReads: readonly (readonly OcrCandidate[])[],
+  searchReads: readonly (readonly OcrCandidate[])[],
 ) => {
   if (baberuReads.length !== page.blocks.length || mangaReads.length !== page.blocks.length) {
     throw new Error(`${page.id}: reader results do not match the ${page.blocks.length} blocks`);
@@ -99,6 +98,24 @@ export const scoreSyntheticPage = (
   const gtBoxes = page.blocks.map((block) => boundingBoxOfPoints(block.polygon));
   const matches = matchByCoverage(gtBoxes, predictedBoxes);
   const matchAt = new Map(matches.map((match) => [match.referenceIndex, match]));
+  const searchPlan = plannedSearchReads(gtBoxes, vision.regions);
+  if (searchReads.length !== searchPlan.length) {
+    throw new Error(`${page.id}: ${searchReads.length} search reads for ${searchPlan.length} multi-turn utterances`);
+  }
+  const references = page.blocks.map((block) => [...block.lines].sort((a, b) => a.order - b.order).map((line) => line.text).join(""));
+  const searchByBlock = new Map<number, SearchCandidate[]>();
+  searchPlan.forEach((item, index) => {
+    const found = searchByBlock.get(item.blockIndex) ?? [];
+    for (const candidate of searchReads[index] ?? []) {
+      found.push({
+        utteranceIndex: item.utteranceIndex,
+        quarterTurns: candidate.quarterTurns,
+        meanProb: candidate.meanProb,
+        cer: characterErrorRate(references[item.blockIndex]!, candidate.text),
+      });
+    }
+    searchByBlock.set(item.blockIndex, found);
+  });
   let lineCursor = 0;
   const blocks: OcrBlockScore[] = page.blocks.map((block, index) => {
     const match = matchAt.get(index)!;
@@ -113,7 +130,7 @@ export const scoreSyntheticPage = (
     const classes = ordered.map((region) => region.classification);
     const sameClass = classes.length > 0 && classes.every((item) =>
       item.layout === classes[0]!.layout && item.kind === classes[0]!.kind && item.policy === classes[0]!.policy);
-    const reference = [...block.lines].sort((a, b) => a.order - b.order).map((line) => line.text).join("");
+    const reference = references[index]!;
     const predicted = missed ? "" : pageText(page.index + 1, ordered, evalReadingDirection).units.map((unit) => unit.source).join("");
     const lineTexts = [...block.lines].sort((a, b) => a.order - b.order).map((line) => line.text);
     const baberu = turnsOf(reference, baberuReads[index]);
@@ -136,6 +153,7 @@ export const scoreSyntheticPage = (
         quarterTurns: utterance.quarterTurns,
         flags: [...utterance.flags],
       })),
+      searchCandidates: searchByBlock.get(index) ?? null,
       reference,
       predicted,
       cer: missed ? 1 : characterErrorRate(reference, predicted),

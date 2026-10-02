@@ -1,8 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import type { Box } from "../../src/geometry/interfaces/index.ts";
 import type { RgbImage } from "../../src/imaging/interfaces/index.ts";
-import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
+import type { PageVisionResult, VisionClient } from "../../src/pipeline/interfaces/index.ts";
+import type { TextLine } from "../../src/stages/lines/interfaces/index.ts";
+import { utteranceCrop } from "../../src/stages/ocr/ocr-plan.ts";
 import { scoreSyntheticPage } from "../../eval/cli/score-page.ts";
+import { plannedSearchReads, readPlannedSearches } from "../../eval/cli/search-reads.ts";
 import { defaultPageCount, defaultSeed, parseOcrEvalArgs } from "../../eval/cli/parse-ocr-eval-options.ts";
 import { formatSummaryZh } from "../../eval/cli/format-summary-zh.ts";
 import { buildOcrReport } from "../../eval/cli/summarize-ocr.ts";
@@ -131,6 +134,7 @@ describe("ocr eval summary", () => {
     lineOrderMatch: null,
     classification: null,
     pipelineUtterances: [],
+    searchCandidates: null,
     baberuHypotheses: hypotheses,
     baberuCerByTurn: [0, 1, 1, 1],
     baberuBestTurn: 0,
@@ -400,13 +404,24 @@ describe("ocr page score", () => {
         }],
       }],
     };
-    const scored = scoreSyntheticPage(page, vision, image, image, new Uint8Array(4), [[]], [[]], [[]]);
+    const scored = scoreSyntheticPage(page, vision, image, image, new Uint8Array(4), [[]], [[]], [[]], [[
+      { quarterTurns: 0, text: "猫", meanProb: 0.4, minProb: 0.4, tokens: 1 },
+      { quarterTurns: 1, text: "暗语只在报告", meanProb: 0.95, minProb: 0.9, tokens: 1 },
+      { quarterTurns: 3, text: "猫狗", meanProb: 0.5, minProb: 0.5, tokens: 2 },
+    ]]);
     expect(scored.blocks[0]?.matchType).toBe("single");
     expect(scored.blocks[0]?.classification).toEqual({ layout: "text_free", kind: "sfx", policy: "keep" });
     expect(scored.blocks[0]?.pipelineUtterances).toEqual([{ quarterTurns: 2, flags: ["ORIENT_UNSURE"] }]);
+    // No lines: planQuarterTurns searches [0, 1, 3]. CER is against the block reference.
+    expect(scored.blocks[0]?.searchCandidates).toEqual([
+      { utteranceIndex: 0, quarterTurns: 0, meanProb: 0.4, cer: 0 },
+      { utteranceIndex: 0, quarterTurns: 1, meanProb: 0.95, cer: 6 },
+      { utteranceIndex: 0, quarterTurns: 3, meanProb: 0.5, cer: 1 },
+    ]);
     const report = buildOcrReport(1, false, [scored]);
     expect(formatSummaryZh(report)).not.toContain("ORIENT_UNSURE");
     expect(formatSummaryZh(report)).not.toContain("猫");
+    expect(formatSummaryZh(report)).not.toContain("暗语只在报告");
   });
 
   it("joins a split block in the product reading order and scores a miss as CER 1", () => {
@@ -483,6 +498,7 @@ describe("ocr page score", () => {
       [[]],
       [[]],
       [[]],
+      [[], []],
     );
     expect(split.blocks[0]?.matchType).toBe("split");
     expect(split.blocks[0]?.predicted).toBe("上下");
@@ -498,8 +514,76 @@ describe("ocr page score", () => {
       [[]],
       [[]],
       [[]],
+      [],
     );
-    expect(missed.blocks[0]).toMatchObject({ matchType: "missed", cer: 1, predicted: "", writingModeMatch: false, sentenceRotationMatch: false });
+    expect(missed.blocks[0]).toMatchObject({ matchType: "missed", cer: 1, predicted: "", writingModeMatch: false, sentenceRotationMatch: false, searchCandidates: null });
     expect(missed.detectionRecall).toBe(0);
+  });
+});
+
+const oneLine = [{ } as TextLine];
+
+describe("planned search reads", () => {
+  const region = (tilt: number, lines: TextLine[]): PageVisionResult["regions"][number] => ({
+    box: { x0: 0, y0: 0, x1: 40, y1: 16 },
+    cls: null,
+    bubble: null,
+    lines,
+    orientation: {
+      tilt,
+      consistency: 1,
+      writingMode: "h",
+      ambiguous: false,
+      frame: { cx: 20, cy: 8, w: 40, h: 16, angle: tilt },
+    },
+    classification: { layout: "text_free", kind: "free_text", policy: "translate" },
+    clean: "flat",
+    utterances: [{
+      box: { x0: 2, y0: 2, x1: 38, y1: 14 },
+      lineIndexes: [0],
+      startReasons: [],
+      nameTag: false,
+      thought: false,
+      text: "plain",
+      meanProb: 0.9,
+      minProb: 0.8,
+      engine: "baberu",
+      quarterTurns: 0,
+      flags: [],
+    }],
+  });
+
+  it("rebuilds the pipeline crop only when planQuarterTurns searches more than one turn", () => {
+    const clear = region(3, oneLine);
+    const slanted = region(30, oneLine);
+    const gt = [{ x0: 0, y0: 0, x1: 40, y1: 16 }];
+    expect(plannedSearchReads(gt, [clear])).toEqual([]);
+    const [planned] = plannedSearchReads(gt, [slanted]);
+    const turns = [0, 1, 3];
+    expect(planned).toMatchObject({ blockIndex: 0, utteranceIndex: 0, engine: "baberu" });
+    expect(planned!.crop).toEqual(utteranceCrop(slanted.orientation.frame, slanted.utterances[0]!.box, turns));
+  });
+
+  it("reads each planned crop with the engine the pipeline used", async () => {
+    const gt = [{ x0: 0, y0: 0, x1: 40, y1: 16 }];
+    const baberu = region(30, oneLine);
+    const manga = region(30, oneLine);
+    manga.utterances[0]!.engine = "manga-ocr";
+    const plan = plannedSearchReads(gt, [baberu, manga]);
+    const client = {
+      readUtterances: async (_path: string, crops: { quarterTurns: number[] }[], engine: string) =>
+        crops.map((crop) => crop.quarterTurns.map((quarterTurns) => ({
+          quarterTurns,
+          text: engine,
+          meanProb: engine === "baberu" ? 0.7 : 0.3,
+          minProb: 0.2,
+          tokens: 1,
+        }))),
+    } as unknown as VisionClient;
+    const reads = await readPlannedSearches(client, "page.png", plan);
+    expect(reads.map((candidates) => candidates.map((candidate) => candidate.text))).toEqual([
+      ["baberu", "baberu", "baberu"],
+      ["manga-ocr", "manga-ocr", "manga-ocr"],
+    ]);
   });
 });

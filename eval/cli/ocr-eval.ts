@@ -3,6 +3,7 @@
 import { isAbsolute, join, relative, resolve } from "path";
 import { writeFileAtomically } from "../../src/core/atomic-write.ts";
 import { dataPaths, resolveDataRoot } from "../../src/core/data-paths.ts";
+import { boundingBoxOfPoints } from "../../src/geometry/box.ts";
 import { openResourceProbe } from "../../src/gov/probe.ts";
 import { ResourceMonitor } from "../../src/gov/resource-monitor.ts";
 import { decodeRgb } from "../../src/imaging/page-image.ts";
@@ -13,6 +14,7 @@ import { formatSummaryZh } from "./format-summary-zh.ts";
 import { ocrEvalUsage, parseOcrEvalArgs } from "./parse-ocr-eval-options.ts";
 import { buildOcrReport } from "./summarize-ocr.ts";
 import { scoreSyntheticPage } from "./score-page.ts";
+import { plannedSearchReads, readPlannedSearches } from "./search-reads.ts";
 import { blockCropOf, fourTurnLineCrop } from "../synthetic/line-geometry.ts";
 import { isMissingGlyphError } from "../synthetic/missing-glyph.ts";
 import { paintSyntheticPage } from "../synthetic/paint-page.ts";
@@ -99,7 +101,9 @@ try {
     const mangaReads = blockCrops.length === 0 ? [] : await session.client.readUtterances(pagePath, blockCrops, "manga-ocr");
     const background = await decodeRgb(join(out, "pages", `${page.id}-background.png`));
     const cleaned = await decodeRgb(vision.cleanedPath);
-    scores.push(scoreSyntheticPage(page, vision, background, cleaned, mask, lineReads, baberuReads, mangaReads));
+    const searchPlan = plannedSearchReads(page.blocks.map((block) => boundingBoxOfPoints(block.polygon)), vision.regions);
+    const searchReads = await readPlannedSearches(session.client, pagePath, searchPlan);
+    scores.push(scoreSyntheticPage(page, vision, background, cleaned, mask, lineReads, baberuReads, mangaReads, searchReads));
     console.log(`第 ${page.index + 1}/${pages.length} 页：${vision.regions.length} 个区域`);
   }
 } catch (error) {
