@@ -57,6 +57,17 @@ describe("assignLines", () => {
     expect(uncovered).toHaveLength(1);
   });
 
+  it("keeps three slanted parallel lines, collapses a second copy, and still dedupes axis-aligned lines", () => {
+    const candidate = { box: { x0: 0, y0: 0, x1: 400, y1: 400 }, cls: "text_free" as const, score: 0.9, bubbles: [] };
+    const slanted = [line(200, 80, 200, 20, 20, 0.9), line(200, 105, 200, 20, 20, 0.8), line(200, 130, 200, 20, 20, 0.7)];
+    const slantedCopy = line(200, 81, 200, 20, 20, 0.5);
+    const separated = [line(80, 300, 100, 20, 0, 0.9), line(80, 340, 100, 20, 0, 0.6)];
+    const alignedCopy = line(80, 301, 100, 20, 0, 0.4);
+    const { regions } = assignLines([candidate], [], [[...slanted, slantedCopy, ...separated, alignedCopy]], []);
+    expect(regions[0]!.lines).toHaveLength(5);
+    expect(regions[0]!.lines).toEqual(expect.arrayContaining([...slanted, ...separated]));
+  });
+
   it("splits a text box spanning two bubbles by the bubble each line sits in", () => {
     const bubbles = [{ x0: 0, y0: 0, x1: 200, y1: 200 }, { x0: 210, y0: 0, x1: 400, y1: 200 }];
     const candidate = { box: { x0: 50, y0: 20, x1: 350, y1: 180 }, cls: "text_bubble" as const, score: 0.9, bubbles: [0, 1] };

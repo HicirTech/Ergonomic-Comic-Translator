@@ -1,20 +1,31 @@
 import { boundingBoxOfPoints, boxArea, containsPoint, coverage, iou, unionBox } from "../../geometry/box.ts";
+import { rectCorners, rotatePoint } from "../../geometry/rotated-rect.ts";
 import type { Box } from "../../geometry/interfaces/index.ts";
 import type { TextLine } from "../lines/interfaces/index.ts";
 import type { CandidateRegion, PageRegion } from "./interfaces/index.ts";
 
 /** A line belongs to the region holding at least this share of its box. */
 const lineOwnershipShare = 0.4;
-/** Two detections of one line (from overlapping crops) overlap at least this much. */
+/**
+ * Two detections of one line overlap at least this much. Measured after turning both rectangles
+ * upright with the kept line, so parallel slanted lines (whose page boxes overlap) stay.
+ */
 const duplicateLineIou = 0.5;
 
 export const lineBox = (line: TextLine) => boundingBoxOfPoints(line.quad);
 
+/** IoU of the two rotated rectangles in the kept line's frame. Equal angles make the boxes axis-aligned. */
+const uprightIou = (kept: TextLine, line: TextLine) => {
+  const center = kept.rect.center;
+  const angle = -kept.rect.angle;
+  const boxOf = (item: TextLine) => boundingBoxOfPoints(rectCorners(item.rect).map((point) => rotatePoint(point, center, angle)));
+  return iou(boxOf(kept), boxOf(line));
+};
+
 const dedupeLines = (lines: readonly TextLine[]) => {
   const kept: TextLine[] = [];
   for (const line of [...lines].sort((a, b) => b.score - a.score)) {
-    const box = lineBox(line);
-    if (!kept.some((other) => iou(lineBox(other), box) > duplicateLineIou)) kept.push(line);
+    if (!kept.some((other) => uprightIou(other, line) > duplicateLineIou)) kept.push(line);
   }
   return kept;
 };
