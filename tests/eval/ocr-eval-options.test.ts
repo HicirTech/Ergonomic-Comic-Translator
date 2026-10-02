@@ -58,8 +58,12 @@ describe("ocr eval summary", () => {
   const emptyKind: OcrKindSummary = {
     blocks: 0,
     recall: 0,
+    single: 0,
+    merged: 0,
+    split: 0,
+    missed: 0,
     cer: 0,
-    writingModeAccuracy: 0,
+    writingModeAccuracy: null,
     lineOrderAccuracy: null,
     lineBestCer: null,
     baberuProductCer: null,
@@ -114,7 +118,7 @@ describe("ocr eval summary", () => {
 
   const block = (over: Partial<OcrBlockScore> & Pick<OcrBlockScore, "blockId" | "kind" | "direction" | "box">): OcrBlockScore => ({
     sentenceKey: "same",
-    matched: true,
+    matchType: "single",
     iou: 1,
     predictedDirection: over.direction,
     productEngine: "baberu",
@@ -222,6 +226,10 @@ describe("ocr eval summary", () => {
     expect(scored.summary.byKind["h-line"]).toEqual({
       blocks: 1,
       recall: 1,
+      single: 1,
+      merged: 0,
+      split: 0,
+      missed: 0,
       cer: 0.2,
       writingModeAccuracy: 1,
       lineOrderAccuracy: null,
@@ -234,6 +242,10 @@ describe("ocr eval summary", () => {
     expect(scored.summary.byKind["v-column"]).toMatchObject({
       blocks: 1,
       recall: 1,
+      single: 1,
+      merged: 0,
+      split: 0,
+      missed: 0,
       cer: 0.5,
       writingModeAccuracy: 0,
       lineOrderAccuracy: 1,
@@ -283,6 +295,38 @@ describe("ocr eval summary", () => {
     expect(clear.passed).toBe(true);
     expect(clear.summary.byKind["h-line"].baberuProductCer).toBe(0);
     expect(clear.summary.byKind["h-line"].baberuBestCer).toBe(0);
+  });
+
+  it("leaves missed blocks out of writing mode and sentence rotation", () => {
+    const found = box(0);
+    const lost = box(40);
+    const report = buildOcrReport(1, false, [{
+      id: "p",
+      predictedBoxes: [found],
+      detectionRecall: 0,
+      detectionPrecision: 0,
+      removal: { maskedMae: 0, changesOutsideDilatedMask: 0, strongResidualShare: 0 },
+      blocks: [
+        block({ blockId: "ok", kind: "v-column", direction: "v", box: found }),
+        block({
+          blockId: "miss",
+          kind: "v-column",
+          direction: "v",
+          box: lost,
+          matchType: "missed",
+          writingModeMatch: false,
+          sentenceRotationMatch: false,
+          cer: 1,
+          predicted: "",
+        }),
+      ],
+      rotations: [line("ok", [0, 1, 1, 1], 0, true)],
+    }]);
+    expect(report.summary.detectionRecall).toBe(0.5);
+    expect(report.summary.writingModeAccuracy).toBe(1);
+    expect(report.summary.sentenceRotationBestShare).toBe(1);
+    expect(report.summary.byKind["v-column"]).toMatchObject({ blocks: 2, recall: 0.5, single: 1, missed: 1, writingModeAccuracy: 1 });
+    expect(formatSummaryZh(report)).toContain("未中");
   });
 });
 
@@ -357,10 +401,105 @@ describe("ocr page score", () => {
       }],
     };
     const scored = scoreSyntheticPage(page, vision, image, image, new Uint8Array(4), [[]], [[]], [[]]);
+    expect(scored.blocks[0]?.matchType).toBe("single");
     expect(scored.blocks[0]?.classification).toEqual({ layout: "text_free", kind: "sfx", policy: "keep" });
     expect(scored.blocks[0]?.pipelineUtterances).toEqual([{ quarterTurns: 2, flags: ["ORIENT_UNSURE"] }]);
     const report = buildOcrReport(1, false, [scored]);
     expect(formatSummaryZh(report)).not.toContain("ORIENT_UNSURE");
     expect(formatSummaryZh(report)).not.toContain("猫");
+  });
+
+  it("joins a split block in the product reading order and scores a miss as CER 1", () => {
+    const polygon = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 30 },
+      { x: 0, y: 30 },
+    ] as GroundTruthBlock["polygon"];
+    const textBlock = (id: string, text: string): GroundTruthBlock => ({
+      id,
+      kind: "v-column",
+      direction: "v",
+      angle: 0,
+      readingOrder: 0,
+      sentenceKey: text,
+      bubble: false,
+      fontSize: 18,
+      cx: 5,
+      cy: 15,
+      width: 10,
+      height: 30,
+      polygon,
+      lines: [{ text, order: 0, polygon, cx: 5, cy: 15, width: 10, height: 30 }],
+    });
+    const region = (box: Box, text: string, writingMode: "h" | "v"): PageVisionResult["regions"][number] => ({
+      box,
+      cls: null,
+      bubble: null,
+      lines: [],
+      orientation: { tilt: 0, consistency: 1, writingMode, ambiguous: false, frame: { cx: 0, cy: 0, w: 1, h: 1, angle: 0 } },
+      classification: { layout: "text_free", kind: "free_text", policy: "translate" },
+      clean: "flat",
+      utterances: [{
+        box,
+        lineIndexes: [],
+        startReasons: [],
+        nameTag: false,
+        thought: false,
+        text,
+        meanProb: 1,
+        minProb: 1,
+        engine: "baberu",
+        quarterTurns: 0,
+        flags: [],
+      }],
+    });
+    const image: RgbImage = { data: new Uint8Array(3), width: 1, height: 1 };
+    const pageOf = (blocks: GroundTruthBlock[]): SyntheticPage => ({
+      id: "p",
+      seed: 1,
+      index: 0,
+      width: 10,
+      height: 30,
+      background: "paper",
+      blocks,
+    });
+    const split = scoreSyntheticPage(
+      pageOf([textBlock("split", "上下")]),
+      {
+        width: 10,
+        height: 30,
+        uncovered: [],
+        cleanedPath: "",
+        timingsMs: {},
+        regions: [
+          region({ x0: 0, y0: 14, x1: 10, y1: 30 }, "下", "v"),
+          region({ x0: 0, y0: 0, x1: 10, y1: 16 }, "上", "v"),
+        ],
+      },
+      image,
+      image,
+      new Uint8Array(1),
+      [[]],
+      [[]],
+      [[]],
+    );
+    expect(split.blocks[0]?.matchType).toBe("split");
+    expect(split.blocks[0]?.predicted).toBe("上下");
+    expect(split.blocks[0]?.pipelineUtterances.map((utterance) => utterance.quarterTurns)).toEqual([0, 0]);
+    expect(split.detectionRecall).toBe(1);
+
+    const missed = scoreSyntheticPage(
+      pageOf([textBlock("miss", "猫")]),
+      { width: 10, height: 30, uncovered: [], cleanedPath: "", timingsMs: {}, regions: [] },
+      image,
+      image,
+      new Uint8Array(1),
+      [[]],
+      [[]],
+      [[]],
+    );
+    expect(missed.blocks[0]).toMatchObject({ matchType: "missed", cer: 1, predicted: "", writingModeMatch: false, sentenceRotationMatch: false });
+    expect(missed.detectionRecall).toBe(0);
   });
 });

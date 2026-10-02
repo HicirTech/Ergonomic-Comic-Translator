@@ -8,6 +8,7 @@ import {
   productReaderChoice,
   sentenceChoiceIsBest,
   writingModeMatches,
+  matchByCoverage,
   matchByIou,
   referenceOrderIsClosest,
   strongResidualShare,
@@ -64,6 +65,27 @@ describe("ocr metrics", () => {
       { engine: "manga-ocr", quarterTurns: 2 },
       { engine: "manga-ocr", quarterTurns: 2 },
     ])).toEqual({ engine: "manga-ocr", quarterTurns: 2 });
+  });
+
+  it("claims a block by coverage and uses IoU only to order claimants", () => {
+    const column = { x0: 10, y0: 0, x1: 12, y1: 100 };
+    const bubble = { x0: 0, y0: 0, x1: 40, y1: 100 };
+    expect(matchByIou([column], [bubble])).toEqual([]);
+    expect(matchByCoverage([column], [bubble])).toEqual([
+      { referenceIndex: 0, predictedIndexes: [0], matchType: "single", iou: 0.05 },
+    ]);
+    const left = { x0: 0, y0: 0, x1: 10, y1: 10 };
+    const right = { x0: 20, y0: 0, x1: 30, y1: 10 };
+    const both = { x0: 0, y0: 0, x1: 30, y1: 10 };
+    expect(matchByCoverage([left, right], [both]).map((match) => match.matchType)).toEqual(["merged", "merged"]);
+    const whole = { x0: 0, y0: 0, x1: 100, y1: 10 };
+    const upper = { x0: 0, y0: 0, x1: 60, y1: 10 };
+    const lower = { x0: 40, y0: 0, x1: 100, y1: 10 };
+    expect(matchByCoverage([whole], [upper, lower])[0]?.matchType).toBe("split");
+    expect(matchByCoverage([left], [right])[0]).toMatchObject({ matchType: "missed", predictedIndexes: [], iou: 0 });
+    const wide = { x0: 0, y0: 0, x1: 10, y1: 20 };
+    const tight = { x0: 0, y0: 0, x1: 10, y1: 10 };
+    expect(matchByCoverage([tight], [wide, tight])[0]?.predictedIndexes).toEqual([1, 0]);
   });
 
   it("matches boxes and the lowest quarter turn", () => {

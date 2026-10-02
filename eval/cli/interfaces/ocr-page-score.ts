@@ -9,7 +9,8 @@ export interface OcrBlockScore {
   direction: "h" | "v";
   sentenceKey: string;
   box: Box;
-  matched: boolean;
+  /** `missed` is not a writing-mode or rotation decision; CER is still 1. */
+  matchType: "single" | "merged" | "split" | "missed";
   iou: number;
   predictedDirection: "h" | "v" | null;
   /** Null when the region was missed or its utterances do not share one engine and turn. */

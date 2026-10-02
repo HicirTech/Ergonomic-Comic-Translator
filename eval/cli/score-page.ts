@@ -4,12 +4,13 @@ import { dilateSquare } from "../../src/imaging/morphology.ts";
 import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
 import { pageText } from "../../src/pipeline/volume-text.ts";
 import type { OcrCandidate } from "../../src/stages/ocr/interfaces/index.ts";
-import { changesOutsideMask, maskedMae, regionPrecision, regionRecall } from "../metrics/vision-metrics.ts";
+import { readingOrder } from "../../src/stages/order/reading-order.ts";
+import { changesOutsideMask, maskedMae, regionPrecision } from "../metrics/vision-metrics.ts";
 import {
   bestQuarterTurn,
   characterErrorRate,
   chosenTurnIsBest,
-  matchByIou,
+  matchByCoverage,
   productReaderChoice,
   referenceOrderIsClosest,
   removalHaloRadiusPx,
@@ -96,17 +97,24 @@ export const scoreSyntheticPage = (
   }
   const predictedBoxes = vision.regions.map((region) => region.box);
   const gtBoxes = page.blocks.map((block) => boundingBoxOfPoints(block.polygon));
-  const matches = matchByIou(gtBoxes, predictedBoxes);
+  const matches = matchByCoverage(gtBoxes, predictedBoxes);
   const matchAt = new Map(matches.map((match) => [match.referenceIndex, match]));
   let lineCursor = 0;
   const blocks: OcrBlockScore[] = page.blocks.map((block, index) => {
-    const match = matchAt.get(index);
-    const region = match ? vision.regions[match.predictedIndex] : undefined;
-    const choice = productReaderChoice(region?.utterances ?? []);
+    const match = matchAt.get(index)!;
+    const covering = match.predictedIndexes.map((predictedIndex) => vision.regions[predictedIndex]!);
+    const ordered = readingOrder(covering.map((region) => region.box), evalReadingDirection).map((regionIndex) => covering[regionIndex]!);
+    const missed = match.matchType === "missed";
+    const utterances = ordered.flatMap((region) => region.utterances);
+    const choice = missed ? null : productReaderChoice(utterances);
     const productTurn = choice?.quarterTurns ?? null;
-    const predictedDirection = region?.orientation.writingMode ?? null;
+    const modes = ordered.map((region) => region.orientation.writingMode);
+    const predictedDirection = modes.length > 0 && modes.every((mode) => mode === modes[0]) ? modes[0]! : null;
+    const classes = ordered.map((region) => region.classification);
+    const sameClass = classes.length > 0 && classes.every((item) =>
+      item.layout === classes[0]!.layout && item.kind === classes[0]!.kind && item.policy === classes[0]!.policy);
     const reference = [...block.lines].sort((a, b) => a.order - b.order).map((line) => line.text).join("");
-    const predicted = region ? pageText(page.index + 1, [region], evalReadingDirection).units.map((unit) => unit.source).join("") : "";
+    const predicted = missed ? "" : pageText(page.index + 1, ordered, evalReadingDirection).units.map((unit) => unit.source).join("");
     const lineTexts = [...block.lines].sort((a, b) => a.order - b.order).map((line) => line.text);
     const baberu = turnsOf(reference, baberuReads[index]);
     const manga = turnsOf(reference, mangaReads[index]);
@@ -116,21 +124,21 @@ export const scoreSyntheticPage = (
       direction: block.direction,
       sentenceKey: block.sentenceKey,
       box: gtBoxes[index]!,
-      matched: match !== undefined,
-      iou: match?.iou ?? 0,
+      matchType: match.matchType,
+      iou: match.iou,
       predictedDirection,
       productEngine: choice?.engine ?? null,
       productQuarterTurns: productTurn,
-      writingModeMatch: writingModeMatches(block.direction, predictedDirection),
-      sentenceRotationMatch: sentenceChoiceIsBest(choice, baberu.cerByTurn, manga.cerByTurn),
-      classification: region?.classification ?? null,
-      pipelineUtterances: (region?.utterances ?? []).map((utterance) => ({
+      writingModeMatch: !missed && writingModeMatches(block.direction, predictedDirection),
+      sentenceRotationMatch: !missed && sentenceChoiceIsBest(choice, baberu.cerByTurn, manga.cerByTurn),
+      classification: sameClass ? classes[0]! : null,
+      pipelineUtterances: utterances.map((utterance) => ({
         quarterTurns: utterance.quarterTurns,
         flags: [...utterance.flags],
       })),
       reference,
       predicted,
-      cer: characterErrorRate(reference, predicted),
+      cer: missed ? 1 : characterErrorRate(reference, predicted),
       lineOrderMatch: lineTexts.length >= minOrderLines && lineTexts.length <= maxOrderLines
         ? referenceOrderIsClosest(lineTexts, predicted)
         : null,
@@ -153,7 +161,7 @@ export const scoreSyntheticPage = (
   return {
     id: page.id,
     predictedBoxes,
-    detectionRecall: regionRecall(gtBoxes, predictedBoxes),
+    detectionRecall: gtBoxes.length === 0 ? 1 : matches.filter((match) => match.matchType !== "missed").length / gtBoxes.length,
     detectionPrecision: regionPrecision(gtBoxes, predictedBoxes),
     removal: removalOf(background, cleaned, mask),
     blocks,

@@ -1,5 +1,5 @@
 import type { Box } from "../../src/geometry/interfaces/index.ts";
-import { regionPrecision, regionRecall } from "../metrics/vision-metrics.ts";
+import { regionPrecision } from "../metrics/vision-metrics.ts";
 import {
   cerGaps,
   lineOrderAccuracyMin,
@@ -28,22 +28,20 @@ const share = (hits: number, total: number) => (total === 0 ? 0 : hits / total);
 
 const kindSummary = (pages: readonly PageScore[], kind: LayoutKind): OcrKindSummary => {
   const blocks = pages.flatMap((page) => page.blocks.filter((block) => block.kind === kind));
-  let references = 0;
-  let referenceHits = 0;
-  for (const page of pages) {
-    const boxes = page.blocks.filter((block) => block.kind === kind).map((block) => block.box);
-    if (boxes.length === 0) continue;
-    references += boxes.length;
-    referenceHits += regionRecall(boxes, page.predictedBoxes) * boxes.length;
-  }
+  const decided = blocks.filter((block) => block.matchType !== "missed");
   const ids = new Set(blocks.map((block) => block.blockId));
   const lines = pages.flatMap((page) => page.rotations.filter((line) => ids.has(line.blockId)));
   const ordered = blocks.filter((block) => block.lineOrderMatch !== null);
+  const count = (matchType: (typeof blocks)[number]["matchType"]) => blocks.filter((block) => block.matchType === matchType).length;
   return {
     blocks: blocks.length,
-    recall: share(referenceHits, references),
+    recall: share(decided.length, blocks.length),
+    single: count("single"),
+    merged: count("merged"),
+    split: count("split"),
+    missed: count("missed"),
     cer: mean(blocks.map((block) => block.cer)),
-    writingModeAccuracy: share(blocks.filter((block) => block.writingModeMatch).length, blocks.length),
+    writingModeAccuracy: decided.length === 0 ? null : share(decided.filter((block) => block.writingModeMatch).length, decided.length),
     lineOrderAccuracy: ordered.length === 0 ? null : share(ordered.filter((block) => block.lineOrderMatch).length, ordered.length),
     lineBestCer: lines.length === 0 ? null : mean(lines.map((line) => line.cerByTurn[line.bestTurn]!)),
     baberuProductCer: meanPresent(blocks.map((block) => block.baberuProductCer)),
@@ -54,19 +52,16 @@ const kindSummary = (pages: readonly PageScore[], kind: LayoutKind): OcrKindSumm
 };
 
 const allBoxes = (pages: readonly PageScore[]) => {
-  let references = 0;
-  let referenceHits = 0;
+  const blocks = pages.flatMap((page) => page.blocks);
   let predictions = 0;
   let predictionHits = 0;
   for (const page of pages) {
     const boxes: Box[] = page.blocks.map((block) => block.box);
-    references += boxes.length;
-    referenceHits += boxes.length === 0 ? 0 : regionRecall(boxes, page.predictedBoxes) * boxes.length;
     predictions += page.predictedBoxes.length;
     predictionHits += page.predictedBoxes.length === 0 ? 0 : regionPrecision(boxes, page.predictedBoxes) * page.predictedBoxes.length;
   }
   return {
-    recall: share(referenceHits, references),
+    recall: share(blocks.filter((block) => block.matchType !== "missed").length, blocks.length),
     precision: predictions === 0 ? 1 : predictionHits / predictions,
   };
 };
@@ -80,14 +75,15 @@ export const buildOcrReport = (seed: number, gpu: boolean, pages: readonly PageS
     return max === null || difference > max ? difference : max;
   }, null);
   const ordered = blocks.filter((block) => block.lineOrderMatch !== null);
-  // Missed blocks and disagreeing utterances count against both shares. No blocks is not a pass.
-  const writingModeAccuracy = share(blocks.filter((block) => block.writingModeMatch).length, blocks.length);
-  const sentenceRotationBestShare = share(blocks.filter((block) => block.sentenceRotationMatch).length, blocks.length);
+  // A miss is not a writing-mode or rotation decision. No claimed block is not a pass.
+  const decided = blocks.filter((block) => block.matchType !== "missed");
+  const writingModeAccuracy = share(decided.filter((block) => block.writingModeMatch).length, decided.length);
+  const sentenceRotationBestShare = share(decided.filter((block) => block.sentenceRotationMatch).length, decided.length);
   const checks = {
     verticalCer: verticalCerWithinLimit(gaps),
     lineRotation: rotations.length > 0 && share(rotations.filter((line) => line.chosenIsBest).length, rotations.length) >= rotationBestShareMin,
-    sentenceRotation: blocks.length > 0 && sentenceRotationBestShare >= sentenceRotationBestShareMin,
-    writingMode: blocks.length > 0 && writingModeAccuracy >= writingModeAccuracyMin,
+    sentenceRotation: decided.length > 0 && sentenceRotationBestShare >= sentenceRotationBestShareMin,
+    writingMode: decided.length > 0 && writingModeAccuracy >= writingModeAccuracyMin,
     lineOrder: ordered.length > 0 && share(ordered.filter((block) => block.lineOrderMatch).length, ordered.length) >= lineOrderAccuracyMin,
   };
   const detection = allBoxes(pages);

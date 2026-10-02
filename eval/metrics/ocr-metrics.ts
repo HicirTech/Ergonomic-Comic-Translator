@@ -1,6 +1,6 @@
-import { iou } from "../../src/geometry/box.ts";
+import { coverage, iou } from "../../src/geometry/box.ts";
 import type { Box } from "../../src/geometry/interfaces/index.ts";
-import type { CerGap, IouMatch } from "./interfaces/index.ts";
+import type { CerGap, CoverageMatch, IouMatch } from "./interfaces/index.ts";
 
 /** Vertical CER may exceed the horizontal CER of the same sentence by at most this much. */
 export const verticalCerGapLimit = 0.05;
@@ -8,12 +8,17 @@ export const verticalCerGapLimit = 0.05;
 export const rotationBestShareMin = 0.95;
 /** Share of blocks whose pipeline sentence reader picked a turn with that engine's lowest CER. */
 export const sentenceRotationBestShareMin = 0.95;
-/** Share of ground-truth blocks whose matched region has the labelled writing mode. */
+/** Share of claimed blocks whose region writing mode matches the label. A miss is not a decision. */
 export const writingModeAccuracyMin = 0.95;
 export const lineOrderAccuracyMin = 0.95;
 
 /** Greedy IoU match ignores pairs below this. Detector boxes are loose, so half-overlap counts. */
 export const iouMatchMin = 0.5;
+/**
+ * A region claims a block when it covers at least this share of the block area.
+ * IoU is not a gate: a bubble around a thin column is far below 0.5 IoU and still a claim.
+ */
+export const coverageMatchMin = 0.5;
 /** A cleaned text pixel still "holds ink" when any channel differs from the background by this much. */
 export const strongResidualDelta = 32;
 /** Inpaint kernels bleed a couple of pixels; changes inside this dilation are not counted as spill. */
@@ -106,6 +111,37 @@ export const bestQuarterTurn = (cerByTurn: readonly number[]) =>
 /** True when the chosen turn's CER equals the best, including a tie. */
 export const chosenTurnIsBest = (cerByTurn: readonly number[], chosen: number) =>
   cerByTurn[chosen] === Math.min(...cerByTurn);
+
+/**
+ * Every region that covers at least half the block claims it, so one bubble may take several
+ * blocks and several regions may take one block. IoU only orders the claimants.
+ */
+export const matchByCoverage = (reference: readonly Box[], predicted: readonly Box[], minCoverage = coverageMatchMin): CoverageMatch[] => {
+  const claims = reference.map((refBox) => {
+    const areaClaims = predicted.flatMap((predBox, predictedIndex) => {
+      const covered = coverage(refBox, predBox);
+      return covered >= minCoverage ? [{ predictedIndex, covered, iou: iou(refBox, predBox) }] : [];
+    });
+    areaClaims.sort((a, b) => b.iou - a.iou || b.covered - a.covered || a.predictedIndex - b.predictedIndex);
+    return areaClaims;
+  });
+  const claimCount = new Map<number, number>();
+  for (const list of claims) {
+    for (const claim of list) claimCount.set(claim.predictedIndex, (claimCount.get(claim.predictedIndex) ?? 0) + 1);
+  }
+  return claims.map((list, referenceIndex) => {
+    const predictedIndexes = list.map((claim) => claim.predictedIndex);
+    const only = predictedIndexes[0];
+    const matchType = predictedIndexes.length === 0
+      ? "missed"
+      : predictedIndexes.length > 1
+        ? "split"
+        : (claimCount.get(only!) ?? 0) > 1
+          ? "merged"
+          : "single";
+    return { referenceIndex, predictedIndexes, matchType, iou: list[0]?.iou ?? 0 };
+  });
+};
 
 export const matchByIou = (reference: readonly Box[], predicted: readonly Box[], minIou = iouMatchMin): IouMatch[] => {
   const pairs = reference.flatMap((refBox, referenceIndex) =>

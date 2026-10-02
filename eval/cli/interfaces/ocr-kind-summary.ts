@@ -4,10 +4,16 @@
  */
 export interface OcrKindSummary {
   blocks: number;
+  /** Share of blocks a region covers by at least half. Same rule as block matching. */
   recall: number;
+  single: number;
+  merged: number;
+  split: number;
+  missed: number;
   /** Mean CER of the text pageText would send to translation. */
   cer: number;
-  writingModeAccuracy: number;
+  /** Null when every block of this kind was missed. */
+  writingModeAccuracy: number | null;
   lineOrderAccuracy: number | null;
   /** Mean of the line recognizer's best-turn CER. Null when the kind has no lines. */
   lineBestCer: number | null;
