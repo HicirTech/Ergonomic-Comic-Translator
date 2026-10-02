@@ -123,6 +123,11 @@ export const scoreSyntheticPage = (
       productQuarterTurns: productTurn,
       writingModeMatch: writingModeMatches(block.direction, predictedDirection),
       sentenceRotationMatch: sentenceChoiceIsBest(choice, baberu.cerByTurn, manga.cerByTurn),
+      classification: region?.classification ?? null,
+      pipelineUtterances: (region?.utterances ?? []).map((utterance) => ({
+        quarterTurns: utterance.quarterTurns,
+        flags: [...utterance.flags],
+      })),
       reference,
       predicted,
       cer: characterErrorRate(reference, predicted),

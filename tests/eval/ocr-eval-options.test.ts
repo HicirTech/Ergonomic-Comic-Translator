@@ -1,9 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import type { Box } from "../../src/geometry/interfaces/index.ts";
+import type { RgbImage } from "../../src/imaging/interfaces/index.ts";
+import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
+import { scoreSyntheticPage } from "../../eval/cli/score-page.ts";
 import { defaultPageCount, defaultSeed, parseOcrEvalArgs } from "../../eval/cli/parse-ocr-eval-options.ts";
 import { formatSummaryZh } from "../../eval/cli/format-summary-zh.ts";
 import { buildOcrReport } from "../../eval/cli/summarize-ocr.ts";
 import type { OcrBlockScore, OcrEvalReport, OcrKindSummary, OcrLineRotation } from "../../eval/cli/interfaces/index.ts";
+import type { GroundTruthBlock, SyntheticPage } from "../../eval/synthetic/interfaces/index.ts";
 import {
   lineOrderAccuracyMin,
   rotationBestShareMin,
@@ -121,6 +125,8 @@ describe("ocr eval summary", () => {
     predicted: "same",
     cer: 0,
     lineOrderMatch: null,
+    classification: null,
+    pipelineUtterances: [],
     baberuHypotheses: hypotheses,
     baberuCerByTurn: [0, 1, 1, 1],
     baberuBestTurn: 0,
@@ -277,5 +283,84 @@ describe("ocr eval summary", () => {
     expect(clear.passed).toBe(true);
     expect(clear.summary.byKind["h-line"].baberuProductCer).toBe(0);
     expect(clear.summary.byKind["h-line"].baberuBestCer).toBe(0);
+  });
+});
+
+describe("ocr page score", () => {
+  it("keeps utterance flags and the region class on the block, and out of the summary", () => {
+    const polygon = [
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+      { x: 2, y: 2 },
+      { x: 0, y: 2 },
+    ] as GroundTruthBlock["polygon"];
+    const block: GroundTruthBlock = {
+      id: "p-b0",
+      kind: "art-h",
+      direction: "h",
+      angle: 0,
+      readingOrder: 0,
+      sentenceKey: "猫",
+      bubble: false,
+      fontSize: 18,
+      cx: 1,
+      cy: 1,
+      width: 2,
+      height: 2,
+      polygon,
+      lines: [{ text: "猫", order: 0, polygon, cx: 1, cy: 1, width: 2, height: 2 }],
+    };
+    const page: SyntheticPage = {
+      id: "p",
+      seed: 1,
+      index: 0,
+      width: 2,
+      height: 2,
+      background: "dark",
+      blocks: [block],
+    };
+    const image: RgbImage = { data: new Uint8Array(12), width: 2, height: 2 };
+    const regionBox = { x0: 0, y0: 0, x1: 2, y1: 2 };
+    const vision: PageVisionResult = {
+      width: 2,
+      height: 2,
+      uncovered: [],
+      cleanedPath: "",
+      timingsMs: {},
+      regions: [{
+        box: regionBox,
+        cls: null,
+        bubble: null,
+        lines: [],
+        orientation: {
+          tilt: 0,
+          consistency: 1,
+          writingMode: "h",
+          ambiguous: false,
+          frame: { cx: 1, cy: 1, w: 2, h: 2, angle: 0 },
+        },
+        classification: { layout: "text_free", kind: "sfx", policy: "keep" },
+        clean: "kept",
+        utterances: [{
+          box: regionBox,
+          lineIndexes: [],
+          startReasons: [],
+          nameTag: false,
+          thought: false,
+          text: "猫",
+          meanProb: 1,
+          minProb: 1,
+          engine: "baberu",
+          quarterTurns: 2,
+          flags: ["ORIENT_UNSURE"],
+        }],
+      }],
+    };
+    const scored = scoreSyntheticPage(page, vision, image, image, new Uint8Array(4), [[]], [[]], [[]]);
+    expect(scored.blocks[0]?.classification).toEqual({ layout: "text_free", kind: "sfx", policy: "keep" });
+    expect(scored.blocks[0]?.pipelineUtterances).toEqual([{ quarterTurns: 2, flags: ["ORIENT_UNSURE"] }]);
+    const report = buildOcrReport(1, false, [scored]);
+    expect(formatSummaryZh(report)).not.toContain("ORIENT_UNSURE");
+    expect(formatSummaryZh(report)).not.toContain("猫");
   });
 });

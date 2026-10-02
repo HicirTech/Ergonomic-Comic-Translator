@@ -124,7 +124,7 @@ interface PaintedPage {
   backgroundPng: Uint8Array;
   pagePng: Uint8Array;
   maskPng: Uint8Array;
-  /** 0/1 mask of glyph and outline pixels, one byte per page pixel. */
+  /** Glyph and outline pixels, 0 or 255, one byte per page pixel. */
   mask: Uint8Array;
 }
 
@@ -141,11 +141,30 @@ export const paintSyntheticPage = async (shaper: Shaper, page: SyntheticPage): P
   for (let index = 0; index < mask.length; index += 1) {
     if (decoded.data[index * 4 + 3]! > 0) mask[index] = 255;
   }
-  const backgroundPng = new Uint8Array(await sharp(background.data, { raw: { width: page.width, height: page.height, channels: 3 } }).png().toBuffer());
-  const pagePng = new Uint8Array(await sharp(background.data, { raw: { width: page.width, height: page.height, channels: 3 } })
+  const rawRgb = { width: page.width, height: page.height, channels: 3 as const };
+  const backgroundPng = new Uint8Array(await sharp(background.data, { raw: rawRgb }).png().toBuffer());
+  // sharp keeps the overlay alpha, so the page would be RGBA while the background is RGB.
+  // The stored page is the composited colour only, same size and channel count as the background.
+  const composited = await sharp(background.data, { raw: rawRgb })
     .composite([{ input: overlay }])
-    .png()
-    .toBuffer());
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  if (composited.info.width !== page.width || composited.info.height !== page.height) {
+    throw new Error(`Composited page is ${composited.info.width}x${composited.info.height}, expected ${page.width}x${page.height}`);
+  }
+  const rgb = new Uint8Array(page.width * page.height * 3);
+  if (composited.info.channels === 3) {
+    rgb.set(composited.data);
+  } else if (composited.info.channels === 4) {
+    for (let index = 0; index < rgb.length / 3; index += 1) {
+      rgb[index * 3] = composited.data[index * 4]!;
+      rgb[index * 3 + 1] = composited.data[index * 4 + 1]!;
+      rgb[index * 3 + 2] = composited.data[index * 4 + 2]!;
+    }
+  } else {
+    throw new Error(`Composited page has ${composited.info.channels} channels, expected 3 or 4`);
+  }
+  const pagePng = new Uint8Array(await sharp(rgb, { raw: rawRgb }).png().toBuffer());
   const maskPng = new Uint8Array(await sharp(mask, { raw: { width: page.width, height: page.height, channels: 1 } }).png().toBuffer());
   return { backgroundPng, pagePng, maskPng, mask };
 };

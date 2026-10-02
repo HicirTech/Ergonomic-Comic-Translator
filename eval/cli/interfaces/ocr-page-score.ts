@@ -1,4 +1,5 @@
 import type { Box } from "../../../src/geometry/interfaces/index.ts";
+import type { RegionClass } from "../../../src/stages/regions/interfaces/index.ts";
 import type { LayoutKind } from "../../synthetic/interfaces/index.ts";
 
 /** One ground-truth block after the vision page, including the text that would be translated. */
@@ -16,6 +17,14 @@ export interface OcrBlockScore {
   productQuarterTurns: number | null;
   writingModeMatch: boolean;
   sentenceRotationMatch: boolean;
+  /** Null when the block matched no region. */
+  classification: RegionClass | null;
+  /**
+   * Pipeline utterances of the matched region, in order. `flags` is what the pipeline stored
+   * (ORIENT_UNSURE, OCR_EMPTY). textline-ori does not add its own code: a 180-degree flip shows up
+   * as `quarterTurns` two past the search winner.
+   */
+  pipelineUtterances: { quarterTurns: number; flags: string[] }[];
   reference: string;
   predicted: string;
   cer: number;

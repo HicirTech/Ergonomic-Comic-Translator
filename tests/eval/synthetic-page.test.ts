@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { describe, expect, it } from "bun:test";
 import { canonicalJson } from "../../src/core/canonical-json.ts";
 import { sha256Hex } from "../../src/core/hash.ts";
@@ -122,6 +123,35 @@ describe("synthetic pages", () => {
     expect(sha256Hex(first.maskPng)).toBe(sha256Hex(second.maskPng));
     expect(sha256Hex(first.pagePng)).not.toBe(sha256Hex(first.backgroundPng));
     expect(first.mask.some((value) => value === 255)).toBe(true);
+    const pageMeta = await sharp(first.pagePng).metadata();
+    const backgroundMeta = await sharp(first.backgroundPng).metadata();
+    expect(pageMeta.width).toBe(backgroundMeta.width);
+    expect(pageMeta.height).toBe(backgroundMeta.height);
+    expect(pageMeta.channels).toBe(3);
+    expect(backgroundMeta.channels).toBe(3);
+    const decode = async (png: Uint8Array) => {
+      const decoded = await sharp(png).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      expect(decoded.info.width).toBe(page.width);
+      expect(decoded.info.height).toBe(page.height);
+      expect(decoded.info.channels).toBe(3);
+      return decoded.data;
+    };
+    const pageRgb = await decode(first.pagePng);
+    const backgroundRgb = await decode(first.backgroundPng);
+    expect(pageRgb.length).toBe(page.width * page.height * 3);
+    expect(pageRgb.length).toBe(backgroundRgb.length);
+    let inkDiffers = 0;
+    let outsideDiffers = 0;
+    for (let index = 0; index < first.mask.length; index += 1) {
+      const offset = index * 3;
+      const differs = pageRgb[offset] !== backgroundRgb[offset]
+        || pageRgb[offset + 1] !== backgroundRgb[offset + 1]
+        || pageRgb[offset + 2] !== backgroundRgb[offset + 2];
+      if (first.mask[index]) inkDiffers += differs ? 1 : 0;
+      else outsideDiffers += differs ? 1 : 0;
+    }
+    expect(inkDiffers).toBeGreaterThan(0);
+    expect(outsideDiffers).toBe(0);
     const outlined = planSyntheticPages(fakeShaper, 1, 5)[4]!;
     expect(outlined.background).toBe("dark");
     const plain = await paintSyntheticPage(fakeShaper, { ...page, blocks: page.blocks.map((block) => ({ ...block, kind: "h-line" })) });
