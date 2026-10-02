@@ -36,6 +36,7 @@
     "runtimes:fetch": "bun run src/cli/runtimes-fetch.ts",
     "gt:d1": "bun run eval/cli/gt-d1.ts",
     "eval:ocr": "bun run eval/cli/ocr-eval.ts",
+    "eval:real": "bun run eval/cli/real-eval.ts",
     "typecheck:frontend": "bunx tsc -p tsconfig.frontend.json --noEmit",
     "dev:frontend": "vite",
     "build:frontend": "vite build",

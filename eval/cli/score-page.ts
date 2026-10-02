@@ -5,7 +5,7 @@ import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
 import { pageText } from "../../src/pipeline/volume-text.ts";
 import type { OcrCandidate } from "../../src/stages/ocr/interfaces/index.ts";
 import { readingOrder } from "../../src/stages/order/reading-order.ts";
-import { changesOutsideMask, maskedMae, regionPrecision } from "../metrics/vision-metrics.ts";
+import { maskedMae, regionPrecision } from "../metrics/vision-metrics.ts";
 import {
   bestQuarterTurn,
   characterErrorRate,
@@ -21,6 +21,7 @@ import {
 import { chosenLineQuarterTurns } from "../synthetic/line-geometry.ts";
 import type { SyntheticPage } from "../synthetic/interfaces/index.ts";
 import type { OcrBlockScore, OcrLineRotation, OcrRemovalScore, SearchCandidate } from "./interfaces/index.ts";
+import { attributeOutsideChanges, falsePositivesOf } from "./page-diagnostics.ts";
 import { evalReadingDirection, plannedSearchReads } from "./search-reads.ts";
 
 const minOrderLines = 2;
@@ -45,15 +46,22 @@ const turnsOf = (reference: string, candidates: readonly OcrCandidate[] | undefi
 const cerAtProductTurn = (cerByTurn: readonly number[], turn: number | null) =>
   turn !== null && turn >= 0 && turn < cerByTurn.length ? cerByTurn[turn]! : null;
 
-const removalOf = (background: RgbImage, cleaned: RgbImage, mask: Uint8Array): OcrRemovalScore => {
+const removalOf = (
+  background: RgbImage,
+  cleaned: RgbImage,
+  mask: Uint8Array,
+  regions: readonly { box: PageVisionResult["regions"][number]["box"]; clean: PageVisionResult["regions"][number]["clean"]; matched: boolean }[],
+): OcrRemovalScore => {
   if (background.width !== cleaned.width || background.height !== cleaned.height || mask.length !== background.width * background.height) {
     throw new Error(`Cleaned page is ${cleaned.width}x${cleaned.height}, background is ${background.width}x${background.height}`);
   }
   const dilated = dilateSquare(mask, background.width, background.height, removalHaloRadiusPx);
+  const damage = attributeOutsideChanges(background.data, cleaned.data, background.width, background.height, dilated, regions);
   return {
     maskedMae: maskedMae(cleaned.data, background.data, mask),
-    changesOutsideDilatedMask: changesOutsideMask(cleaned.data, background.data, dilated),
+    changesOutsideDilatedMask: damage.changed,
     strongResidualShare: strongResidualShare(cleaned.data, background.data, mask),
+    damage,
   };
 };
 
@@ -176,12 +184,18 @@ export const scoreSyntheticPage = (
     return rotation;
   }));
   if (lineCursor !== lineReads.length) throw new Error(`${page.id}: ${lineReads.length} line reads for ${lineCursor} lines`);
+  const claimed = new Set(matches.flatMap((match) => match.predictedIndexes));
   return {
     id: page.id,
     predictedBoxes,
     detectionRecall: gtBoxes.length === 0 ? 1 : matches.filter((match) => match.matchType !== "missed").length / gtBoxes.length,
     detectionPrecision: regionPrecision(gtBoxes, predictedBoxes),
-    removal: removalOf(background, cleaned, mask),
+    removal: removalOf(background, cleaned, mask, vision.regions.map((region, index) => ({
+      box: region.box,
+      clean: region.clean,
+      matched: claimed.has(index),
+    }))),
+    falsePositives: falsePositivesOf(page, vision.regions, claimed),
     blocks,
     rotations,
   };

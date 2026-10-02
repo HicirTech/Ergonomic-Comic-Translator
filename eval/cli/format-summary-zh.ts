@@ -76,6 +76,8 @@ export const formatSummaryZh = (report: OcrEvalReport) => {
     `句子所选旋转为该引擎四向最佳 ${ratio(summary.sentenceRotationBestShare)}`,
     `书写方向准确率 ${ratio(summary.writingModeAccuracy)}  行序准确率 ${ratio(summary.lineOrderAccuracy)}`,
     `扣字掩膜内MAE ${summary.meanMaskedMae.toFixed(2)}  膨胀掩膜外变化像素 ${summary.meanChangesOutside.toFixed(1)}  文字残留 ${ratio(summary.meanStrongResidual)}`,
+    `误检 ${summary.falsePositiveCount}（气泡 ${summary.falsePositivesOnBubble}，纹理或噪声 ${summary.falsePositivesOnTextureOrNoise}，白纸 ${summary.falsePositivesOnPlainPaper}）`,
+    `掩膜外变化归属：命中区域 ${summary.meanDamageInsideMatched.toFixed(1)}，误检区域 ${summary.meanDamageInsideFalsePositive.toFixed(1)}，区域外 ${summary.meanDamageOutsideRegions.toFixed(1)}；平涂 ${summary.meanDamageFlat.toFixed(1)}，修补 ${summary.meanDamageInpaint.toFixed(1)}`,
     `纵向字错率不超过横向 ${thresholds.verticalCerGapLimit}：${mark(checks.verticalCer)}`,
     `逐行所选旋转至少 ${thresholds.rotationBestShareMin}：${mark(checks.lineRotation)}`,
     `句子所选旋转至少 ${thresholds.sentenceRotationBestShareMin}：${mark(checks.sentenceRotation)}`,

@@ -4,6 +4,7 @@ import type { LayoutKind } from "../../synthetic/interfaces/index.ts";
 import type { OcrBlockScore } from "./ocr-page-score.ts";
 import type { OcrKindSummary } from "./ocr-kind-summary.ts";
 import type { OcrLineRotation } from "./ocr-line-rotation.ts";
+import type { FalsePositiveRegion } from "./false-positive-region.ts";
 import type { OcrRemovalScore } from "./ocr-removal-score.ts";
 
 /** Full per-item eval. The stdout table is a projection of `summary` and `checks` only. */
@@ -37,6 +38,15 @@ export interface OcrEvalReport {
     lineOrderAccuracy: number;
     detectionRecall: number;
     detectionPrecision: number;
+    falsePositiveCount: number;
+    falsePositivesOnBubble: number;
+    falsePositivesOnTextureOrNoise: number;
+    falsePositivesOnPlainPaper: number;
+    meanDamageInsideMatched: number;
+    meanDamageInsideFalsePositive: number;
+    meanDamageOutsideRegions: number;
+    meanDamageFlat: number;
+    meanDamageInpaint: number;
     meanMaskedMae: number;
     meanChangesOutside: number;
     meanStrongResidual: number;
@@ -48,6 +58,8 @@ export interface OcrEvalReport {
     detectionRecall: number;
     detectionPrecision: number;
     removal: OcrRemovalScore;
+    /** Predicted regions that cover no ground-truth block. */
+    falsePositives: FalsePositiveRegion[];
     blocks: OcrBlockScore[];
     rotations: OcrLineRotation[];
   }[];
