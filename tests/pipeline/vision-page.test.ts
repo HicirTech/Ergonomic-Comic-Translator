@@ -3,7 +3,8 @@ import { copyFileSync, existsSync, mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import sharp from "sharp";
-import type { VisionClient } from "../../src/pipeline/interfaces/index.ts";
+import type { PlannedUtterance, StageTimer, VisionClient } from "../../src/pipeline/interfaces/index.ts";
+import { readPlannedUtterances, utteranceResults } from "../../src/pipeline/read-utterances.ts";
 import { runVisionPage } from "../../src/pipeline/vision-page.ts";
 import type { InpaintTask } from "../../src/stages/clean/interfaces/index.ts";
 import type { OcrCrop } from "../../src/stages/ocr/interfaces/index.ts";
@@ -103,5 +104,101 @@ describe("runVisionPage", () => {
     expect(inpaintCalls[0]!.tiles.length).toBeGreaterThan(0);
     expect(existsSync(result.cleanedPath)).toBe(true);
     expect(Object.keys(result.timingsMs)).toEqual(expect.arrayContaining(["detect", "lines", "ocr", "inpaint"]));
+  });
+});
+
+const cornersOf = (width: number, height: number): OcrCrop["corners"] => [
+  { x: 0, y: 0 },
+  { x: width, y: 0 },
+  { x: width, y: height },
+  { x: 0, y: height },
+];
+
+const cropOf = (width: number, height: number, quarterTurns: number[]): OcrCrop => ({
+  corners: cornersOf(width, height),
+  width,
+  height,
+  quarterTurns,
+});
+
+const lineProbe = cropOf(80, 8, [0]);
+
+const plannedUtterance = (writingMode: "h" | "v", lineCount: number): PlannedUtterance => ({
+  regionIndex: 0,
+  split: {
+    lines: Array.from({ length: lineCount }, (_, index) => index),
+    startReasons: [],
+    styleBreaks: [],
+    nameTag: false,
+    thought: false,
+  },
+  box: { x0: 0, y0: 0, x1: 40, y1: 30 },
+  crop: cropOf(40, 30, [0, 1, 3]),
+  engine: "baberu",
+  writingMode,
+  // Present even when the utterance must not be probed, so the guard is not just a null crop.
+  lineCrop: lineProbe,
+});
+
+const timed: StageTimer = async (_name, work) => work();
+
+/** Turn 0 is 0.9, the sideways turns 0.86 (so the choice is ORIENT_UNSURE), and turn 2 is `flipMean`. */
+const orientationClient = (upsideDown: number, flipMean: number, orientationCrops: OcrCrop[][]): VisionClient => ({
+  detect: async () => { throw new Error("unused"); },
+  lines: async () => { throw new Error("unused"); },
+  recognizeLines: async () => { throw new Error("unused"); },
+  inpaint: async () => { throw new Error("unused"); },
+  readUtterances: async (_path, crops) => crops.map((crop) => crop.quarterTurns.map((quarterTurns) => ({
+    quarterTurns,
+    text: quarterTurns === 2 ? "flipped" : "plain",
+    meanProb: quarterTurns === 2 ? flipMean : quarterTurns === 0 ? 0.9 : 0.86,
+    minProb: 0.2,
+    tokens: 3,
+  }))),
+  orientation: async (_path, crops) => {
+    orientationCrops.push(crops);
+    return crops.map((crop) => crop.quarterTurns.map((quarterTurns) => ({ quarterTurns, upsideDown })));
+  },
+});
+
+const readOne = async (item: PlannedUtterance, upsideDown: number, flipMean: number) => {
+  const orientationCrops: OcrCrop[][] = [];
+  const chosen = await readPlannedUtterances(orientationClient(upsideDown, flipMean, orientationCrops), "page.png", [item], timed);
+  return { result: utteranceResults([item], chosen, 0)[0]!, orientationCrops };
+};
+
+describe("readPlannedUtterances", () => {
+  it("never flips a vertical block, even when textline-ori would call the line upside down", async () => {
+    const { result, orientationCrops } = await readOne(plannedUtterance("v", 1), 0.99, 0.99);
+
+    expect(orientationCrops).toEqual([]);
+    expect(result.quarterTurns).toBe(0);
+    expect(result.text).toBe("plain");
+    expect(result.flags).toEqual(["ORIENT_UNSURE"]);
+  });
+
+  it("flips a single horizontal line only when the flipped reading is more confident", async () => {
+    const item = plannedUtterance("h", 1);
+    const flipped = await readOne(item, 0.99, 0.95);
+    const tie = await readOne(item, 0.99, 0.9);
+    const lower = await readOne(item, 0.2, 0.99);
+
+    expect(flipped.orientationCrops).toEqual([[lineProbe]]);
+    expect(flipped.result.quarterTurns).toBe(2);
+    expect(flipped.result.text).toBe("flipped");
+    expect(flipped.result.flags).toEqual(["ORIENT_UNSURE"]);
+    expect(tie.result.quarterTurns).toBe(0);
+    expect(tie.result.text).toBe("plain");
+    expect(lower.orientationCrops).toEqual([[lineProbe]]);
+    expect(lower.result.quarterTurns).toBe(0);
+    expect(lower.result.text).toBe("plain");
+  });
+
+  it("does not flip a multi-line horizontal utterance", async () => {
+    const { result, orientationCrops } = await readOne(plannedUtterance("h", 3), 0.99, 0.99);
+
+    expect(orientationCrops).toEqual([]);
+    expect(result.quarterTurns).toBe(0);
+    expect(result.text).toBe("plain");
   });
 });

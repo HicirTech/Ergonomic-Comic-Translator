@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { chooseReading, isUpsideDown, planQuarterTurns, preferAxisAligned, utteranceCrop } from "../../src/stages/ocr/ocr-plan.ts";
+import { canProbeUpsideDown, chooseReading, isUpsideDown, planQuarterTurns, preferAxisAligned, preferFlippedReading, utteranceCrop } from "../../src/stages/ocr/ocr-plan.ts";
 
 const reading = (quarterTurns: number, meanProb: number) => ({ quarterTurns, meanProb, minProb: meanProb, tokens: 5, text: `r${quarterTurns}` });
 const orientation = (tilt: number, ambiguous = false) => ({
@@ -54,5 +54,20 @@ describe("orientation fallbacks", () => {
     expect(isUpsideDown(0.5)).toBe(false);
     expect(preferAxisAligned(reading(0, 0.6), reading(0, 0.8))).toBe(true);
     expect(preferAxisAligned(reading(0, 0.7), reading(0, 0.8))).toBe(false);
+  });
+
+  it("probes textline-ori only for a single horizontal line", () => {
+    expect(canProbeUpsideDown("h", 1)).toBe(true);
+    expect(canProbeUpsideDown("v", 1)).toBe(false);
+    expect(canProbeUpsideDown("h", 2)).toBe(false);
+    expect(canProbeUpsideDown("h", 0)).toBe(false);
+    expect(canProbeUpsideDown(null, 1)).toBe(false);
+  });
+
+  it("keeps the unflipped reading unless the flipped one is strictly more confident", () => {
+    const plain = reading(0, 0.8);
+    expect(preferFlippedReading(plain, reading(2, 0.81))).toBe(true);
+    expect(preferFlippedReading(plain, reading(2, 0.8))).toBe(false);
+    expect(preferFlippedReading(plain, reading(2, 0.79))).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { unionBox } from "../geometry/box.ts";
 import { readingCorners } from "../geometry/rotated-rect.ts";
 import type { TextLine } from "../stages/lines/interfaces/index.ts";
 import type { OcrCandidate, OcrCrop } from "../stages/ocr/interfaces/index.ts";
-import { planQuarterTurns, utteranceCrop } from "../stages/ocr/ocr-plan.ts";
+import { canProbeUpsideDown, planQuarterTurns, utteranceCrop } from "../stages/ocr/ocr-plan.ts";
 import { lineBox } from "../stages/regions/assign-lines.ts";
 import type { PageRegion } from "../stages/regions/interfaces/index.ts";
 import { estimateOrientation, groupByDirection } from "../stages/regions/orientation.ts";
@@ -21,6 +21,17 @@ export const lineCrop = (line: TextLine): OcrCrop => ({
   height: Math.max(1, Math.round(line.rect.short)),
   quarterTurns: [0],
 });
+
+/** Probe crop for textline-ori. Only one horizontal line qualifies; the crop is already left to right. */
+const upsideDownCrop = (
+  mode: "h" | "v",
+  upright: readonly { line: TextLine }[],
+  indexes: readonly number[],
+): OcrCrop | null => {
+  if (!canProbeUpsideDown(mode, indexes.length)) return null;
+  const source = upright[indexes[0]!];
+  return source ? lineCrop(source.line) : null;
+};
 
 /** Splits regions whose lines run in different directions, then estimates each part's orientation. */
 export const orientRegions = (regions: readonly PageRegion[]): OrientedRegion[] =>
@@ -52,7 +63,7 @@ export const planUtterances = (
       const { frame } = orientation;
       const box = { x0: frame.cx - frame.w / 2, y0: frame.cy - frame.h / 2, x1: frame.cx + frame.w / 2, y1: frame.cy + frame.h / 2 };
       const split = { lines: [], startReasons: [], styleBreaks: [], nameTag: false, thought: false };
-      return [{ regionIndex, split, box, crop: utteranceCrop(frame, box, turns), engine: "baberu" }];
+      return [{ regionIndex, split, box, crop: utteranceCrop(frame, box, turns), engine: "baberu", writingMode: mode, lineCrop: null }];
     }
     const text = (line: TextLine) => structureOf.get(line)?.text ?? "";
     const splits = splitUtterances(upright.map(({ line, box }) => ({ box, text: text(line), conf: structureOf.get(line)?.meanProb ?? 0 })), mode);
@@ -66,6 +77,8 @@ export const planUtterances = (
         box,
         crop: utteranceCrop(orientation.frame, box, short ? allTurns : turns),
         engine: short ? "manga-ocr" : "baberu",
+        writingMode: mode,
+        lineCrop: upsideDownCrop(mode, upright, split.lines),
       };
     });
   });

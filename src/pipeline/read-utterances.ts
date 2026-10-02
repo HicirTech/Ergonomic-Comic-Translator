@@ -1,13 +1,13 @@
-import type { OcrCandidate } from "../stages/ocr/interfaces/index.ts";
-import { chooseReading, isUpsideDown } from "../stages/ocr/ocr-plan.ts";
+import type { OcrCandidate, OcrCrop } from "../stages/ocr/interfaces/index.ts";
+import { canProbeUpsideDown, chooseReading, isUpsideDown, preferFlippedReading } from "../stages/ocr/ocr-plan.ts";
 import type { PlannedUtterance, StageTimer, UtteranceResult, VisionClient } from "./interfaces/index.ts";
 
 const engines = ["baberu", "manga-ocr"] as const;
 
 /**
- * Reads every planned utterance with its engine, keeps the most confident orientation, then asks
- * textline-ori about each winner and re-reads the ones it finds upside down (180 degrees is never part
- * of the blind search). Returns the chosen reading per utterance.
+ * Reads every planned utterance with its engine and keeps the most confident orientation.
+ * textline-ori then sees only a single horizontal line. A 180-degree re-read replaces that
+ * choice only when its mean probability is strictly higher.
  */
 export const readPlannedUtterances = async (
   client: VisionClient,
@@ -29,12 +29,20 @@ export const readPlannedUtterances = async (
   });
 
   const withText = planned.filter((item) => (chosen.get(item)?.reading.text ?? "") !== "");
-  if (withText.length === 0) {
+  const probes = withText.filter((item): item is PlannedUtterance & { lineCrop: OcrCrop } =>
+    item.lineCrop !== null && canProbeUpsideDown(item.writingMode, item.split.lines.length));
+  if (probes.length === 0) {
     return chosen;
   }
-  const orientationCrops = withText.map((item) => ({ ...item.crop, quarterTurns: [chosen.get(item)!.reading.quarterTurns] }));
-  const upsideDown = await timed("orientation", () => client.orientation(imagePath, orientationCrops));
-  const flipped = withText.filter((_, index) => isUpsideDown(upsideDown[index]![0]!.upsideDown));
+  // The line crop is already left to right. Applying the utterance turn would rotate it twice.
+  const upsideDown = await timed("orientation", () => client.orientation(imagePath, probes.map((item) => item.lineCrop)));
+  const flipped = probes.filter((_, index) => {
+    const reading = upsideDown[index]?.[0];
+    return reading !== undefined && isUpsideDown(reading.upsideDown);
+  });
+  if (flipped.length === 0) {
+    return chosen;
+  }
 
   await timed("ocr", async () => {
     for (const engine of engines) {
@@ -44,7 +52,10 @@ export const readPlannedUtterances = async (
       const readings = await client.readUtterances(imagePath, crops, engine);
       readings.forEach((candidates, index) => {
         const item = items[index]!;
-        chosen.set(item, { reading: candidates[0]!, unsure: chosen.get(item)!.unsure });
+        const previous = chosen.get(item)!;
+        const next = candidates[0];
+        if (!next || !preferFlippedReading(previous.reading, next)) return;
+        chosen.set(item, { reading: next, unsure: previous.unsure });
       });
     }
   });

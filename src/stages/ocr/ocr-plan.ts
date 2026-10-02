@@ -7,7 +7,7 @@ import type { OcrCandidate, OcrCrop } from "./interfaces/index.ts";
 const searchFromTilt = 25;
 /** A winner this close to the runner-up is decided by the language prior and flagged ORIENT_UNSURE. */
 const unsureMargin = 0.05;
-/** Upside-down probability above which the chosen reading is turned 180 degrees. */
+/** textline-ori probability above which one horizontal line is a 180-degree candidate. */
 const upsideDownThreshold = 0.5;
 /** Rectified reading worse than the axis-aligned one by this much mean probability: keep the plain crop. */
 const rectifyFallbackMargin = 0.15;
@@ -61,8 +61,19 @@ export const chooseReading = (candidates: readonly OcrCandidate[], preferredQuar
   return { reading: preferred ?? best, unsure: true };
 };
 
-/** The winner is read upside down when textline-ori says so; 180 degrees is never part of the blind search. */
+/** textline-ori calls this line upside down. 180 degrees stays out of the blind search. */
 export const isUpsideDown = (upsideDownProbability: number) => upsideDownProbability > upsideDownThreshold;
+
+/**
+ * textline-ori is trained on a single horizontal text line. A vertical region or a multi-line
+ * utterance is outside that training, so it is never a 180-degree candidate.
+ */
+export const canProbeUpsideDown = (writingMode: "h" | "v" | null, lineCount: number) =>
+  writingMode === "h" && lineCount === 1;
+
+/** The flipped reading wins only when it is strictly more confident. A tie keeps the unflipped one. */
+export const preferFlippedReading = (unflipped: OcrCandidate, flipped: OcrCandidate) =>
+  flipped.meanProb > unflipped.meanProb;
 
 /** Rectification made the reading clearly worse: fall back to the axis-aligned crop (RECTIFY_FALLBACK). */
 export const preferAxisAligned = (rectified: OcrCandidate, axisAligned: OcrCandidate) =>
