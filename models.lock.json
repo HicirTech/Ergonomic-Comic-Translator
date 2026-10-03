@@ -42,6 +42,24 @@
         }
       ]
     },
+    "ppocr-det-server": {
+      "role": "text line geometry (DB, PP-OCRv5 server); candidate for page-wide text detection",
+      "repo": "PaddlePaddle/PP-OCRv5_server_det_onnx",
+      "revision": "dcf248c4dcc064c6d030db241255f9e8fbc6733a",
+      "license": "apache-2.0",
+      "files": [
+        {
+          "path": "inference.onnx",
+          "size": 88116791,
+          "sha256": "10803475a591f7dc623e24670fb5752ec94d39a1f8cf069aac1b6f0ce19cfc85"
+        },
+        {
+          "path": "inference.yml",
+          "size": 903,
+          "sha256": "28fb721efc3634fc8aa677e474b9602cb815a91cf569ef357a7a553d7b3ce685"
+        }
+      ]
+    },
     "ppocr-rec-server": {
       "role": "line recognition for horizontal zh/en/ja lines and structure OCR (CTC)",
       "repo": "PaddlePaddle/PP-OCRv5_server_rec_onnx",
