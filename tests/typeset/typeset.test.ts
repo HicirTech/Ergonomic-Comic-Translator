@@ -40,9 +40,18 @@ describe("breakLines (kinsoku)", () => {
     expect(breakLines(chars("一二三四五六"), ones("一二三四五六"), 4)).toEqual([0, 4]);
   });
 
-  it("hangs closing punctuation instead of starting a line with it", () => {
-    expect(breakLines(chars("一二三四。五"), ones("一二三四。五"), 4)).toEqual([0, 5]);
-    expect(breakLines(chars("一二三四……五"), ones("一二三四……五"), 4)).toEqual([0, 6]);
+  it("moves a character down instead of starting a line with closing punctuation, and never passes the limit", () => {
+    expect(breakLines(chars("一二三四。五"), ones("一二三四。五"), 4)).toEqual([0, 3]);
+    expect(breakLines(chars("一二三四……五"), ones("一二三四……五"), 4)).toEqual([0, 3]);
+    expect(breakLines(chars("一二三！？五六"), ones("一二三！？五六"), 4)).toEqual([0, 2, 6]);
+  });
+
+  it("breaks a long run of marks where it must rather than emptying the line", () => {
+    expect(breakLines(chars("啊………………"), ones("啊………………"), 4)).toEqual([0, 4]);
+    for (const text of ["一二三四。五", "啊………………", "一二三！？五六", "「一二」「三四」五"]) {
+      const starts = breakLines(chars(text), ones(text), 4);
+      starts.forEach((start, line) => expect((starts[line + 1] ?? chars(text).length) - start).toBeLessThanOrEqual(4));
+    }
   });
 
   it("never ends a line on an opening bracket", () => {

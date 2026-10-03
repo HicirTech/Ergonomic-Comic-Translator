@@ -1,13 +1,13 @@
 import type { Shaper } from "../../src/typeset/interfaces/index.ts";
 import { layoutText } from "../../src/typeset/layout.ts";
-import { artOutlineWidthPx, hangingSlackChars, minFontSizePx } from "./constants.ts";
+import { artOutlineWidthPx, minFontSizePx } from "./constants.ts";
 
 /**
  * Smallest box in which layoutText keeps the sentence on one line at exactly `fontSize`.
  * Art text grows by the outline width so the polygon covers the white stroke.
  */
 export const fitLine = (shaper: Shaper, text: string, direction: "h" | "v", fontSize: number, outline: boolean) => {
-  const limit = Math.max(minFontSizePx, fontSize * ([...text].length + hangingSlackChars + 1));
+  const limit = Math.max(minFontSizePx, fontSize * ([...text].length + 1));
   let low = 1;
   let high = limit;
   let best: number | null = null;

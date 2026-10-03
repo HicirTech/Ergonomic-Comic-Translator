@@ -2,13 +2,14 @@
 export const noLineStart = new Set([..."，。、．！？；：）」』》〉】〕］｝”’…‥～〜ー—・,.!?;:)]}"]);
 /** Characters that must not end a line (避尾: opening brackets and quotes). */
 export const noLineEnd = new Set([..."（「『《〈【〔［｛“‘([{"]);
-/** Punctuation allowed to hang past the line end. */
-const maxHanging = 2;
+/** At most this many characters move down to the next line to keep a forbidden starter off its start. */
+const maxPulledDown = 2;
 
 /**
- * Greedy line breaking over per-character advances with kinsoku: a line may take up to two more forbidden
- * starters (hanging punctuation, e.g. "……" or "！？") instead of pushing them to the next line, and never
- * ends on an opening mark.
+ * Greedy line breaking over per-character advances with kinsoku. No line is longer than `limit` (unless one
+ * character alone is): the box is the bubble, so nothing hangs past it. A forbidden line starter is kept
+ * off the line start by moving up to two characters down with it; a longer run of marks (e.g. "………")
+ * breaks where it must. A line never ends on an opening mark.
  * Returns the index where each line starts; `limit` is the line length in the same unit as `advances`.
  */
 export const breakLines = (chars: readonly string[], advances: readonly number[], limit: number) => {
@@ -22,10 +23,12 @@ export const breakLines = (chars: readonly string[], advances: readonly number[]
       used += advances[end]!;
       end += 1;
     }
-    // Hang forbidden line starters on this line.
-    for (let hung = 0; hung < maxHanging && end < chars.length && noLineStart.has(chars[end]!); hung += 1) {
-      end += 1;
+    // Move characters down so that the next line does not start with a forbidden starter.
+    let pulled = end;
+    while (pulled - index > 1 && pulled < chars.length && noLineStart.has(chars[pulled]!) && end - pulled < maxPulledDown) {
+      pulled -= 1;
     }
+    if (pulled >= chars.length || !noLineStart.has(chars[pulled]!)) end = pulled;
     // Do not end on an opening mark when that leaves something on the line.
     while (end - index > 1 && end < chars.length && noLineEnd.has(chars[end - 1]!)) {
       end -= 1;

@@ -18,9 +18,6 @@ export const maxSlantDeg = 35;
  */
 export const stackedLinePitch = 1.25;
 
-/** breakLines may hang two marks; the fit search allows that many extra em plus one. */
-export const hangingSlackChars = 2;
-
 /**
  * Pixel width of the white stroke placedBlockSvg paints under art text
  * (`max(2, fontSize * 0.12)`, already converted out of font units).
