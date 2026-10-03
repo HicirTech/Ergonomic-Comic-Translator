@@ -131,7 +131,7 @@ const regionWith = (box: Box, lines: Box[]): PageVisionResult["regions"][number]
   lines: lines.map(boxLine),
   orientation: { tilt: 0, consistency: 1, writingMode: "h", ambiguous: false, frame: { cx: 0, cy: 0, w: 1, h: 1, angle: 0 } },
   classification: { layout: "text_free", kind: "free_text", policy: "translate" },
-  clean: "flat",
+  clean: "membrane",
   paper: null,
   utterances: [],
 });
@@ -183,7 +183,7 @@ describe("page line recall", () => {
 
 describe("translation policy against the textless page", () => {
   const { text, textless } = pageWithThreeSquares();
-  const withPolicy = (box: Box, policy: "translate" | "keep", clean: "flat" | "none" | "kept") => ({
+  const withPolicy = (box: Box, policy: "translate" | "keep", clean: "membrane" | "none" | "kept") => ({
     ...regionWith(box, []),
     classification: policy === "keep"
       ? { layout: "text_free" as const, kind: "sfx" as const, policy }
@@ -193,7 +193,7 @@ describe("translation policy against the textless page", () => {
   /** Squares at x 0, 200 and 400 are text the textless page removed; the rest of the page is art it kept. */
   const vision: Pick<PageVisionResult, "regions" | "uncovered" | "timingsMs"> = {
     regions: [
-      withPolicy({ x0: 0, y0: 0, x1: 100, y1: 100 }, "translate", "flat"),
+      withPolicy({ x0: 0, y0: 0, x1: 100, y1: 100 }, "translate", "membrane"),
       withPolicy({ x0: 520, y0: 120, x1: 580, y1: 180 }, "translate", "none"),
       withPolicy({ x0: 400, y0: 0, x1: 500, y1: 100 }, "keep", "kept"),
       withPolicy({ x0: 250, y0: 150, x1: 300, y1: 190 }, "keep", "kept"),

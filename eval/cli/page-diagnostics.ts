@@ -29,7 +29,7 @@ export const attributeOutsideChanges = (
     insideMatched: 0,
     insideFalsePositive: 0,
     outsideRegions: 0,
-    flat: 0,
+    membrane: 0,
     inpaint: 0,
     kept: 0,
     none: 0,

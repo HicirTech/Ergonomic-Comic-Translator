@@ -110,7 +110,7 @@ describe("ocr eval summary", () => {
       meanDamageInsideMatched: 0,
       meanDamageInsideFalsePositive: 0,
       meanDamageOutsideRegions: 0,
-      meanDamageFlat: 0,
+      meanDamageMembrane: 0,
       meanDamageInpaint: 0,
       meanMaskedMae: 1.5,
       meanChangesOutside: 4,
@@ -205,7 +205,7 @@ describe("ocr eval summary", () => {
       predictedBoxes: [horizontal, vertical],
       detectionRecall: 0,
       detectionPrecision: 0,
-      removal: { maskedMae: 1, changesOutsideDilatedMask: 2, strongResidualShare: 0, damage: { changed: 2, insideMatched: 0, insideFalsePositive: 0, outsideRegions: 2, flat: 0, inpaint: 0, kept: 0, none: 0 } },
+      removal: { maskedMae: 1, changesOutsideDilatedMask: 2, strongResidualShare: 0, damage: { changed: 2, insideMatched: 0, insideFalsePositive: 0, outsideRegions: 2, membrane: 0, inpaint: 0, kept: 0, none: 0 } },
       falsePositives: [],
       sfx: noSfx,
       blocks: [
@@ -300,7 +300,7 @@ describe("ocr eval summary", () => {
       predictedBoxes: [horizontal, vertical],
       detectionRecall: 1,
       detectionPrecision: 1,
-      removal: { maskedMae: 0, changesOutsideDilatedMask: 0, strongResidualShare: 0, damage: { changed: 0, insideMatched: 0, insideFalsePositive: 0, outsideRegions: 0, flat: 0, inpaint: 0, kept: 0, none: 0 } },
+      removal: { maskedMae: 0, changesOutsideDilatedMask: 0, strongResidualShare: 0, damage: { changed: 0, insideMatched: 0, insideFalsePositive: 0, outsideRegions: 0, membrane: 0, inpaint: 0, kept: 0, none: 0 } },
       falsePositives: [],
       sfx: noSfx,
       blocks: [
@@ -332,7 +332,7 @@ describe("ocr eval summary", () => {
       predictedBoxes: [found],
       detectionRecall: 0,
       detectionPrecision: 0,
-      removal: { maskedMae: 0, changesOutsideDilatedMask: 0, strongResidualShare: 0, damage: { changed: 0, insideMatched: 0, insideFalsePositive: 0, outsideRegions: 0, flat: 0, inpaint: 0, kept: 0, none: 0 } },
+      removal: { maskedMae: 0, changesOutsideDilatedMask: 0, strongResidualShare: 0, damage: { changed: 0, insideMatched: 0, insideFalsePositive: 0, outsideRegions: 0, membrane: 0, inpaint: 0, kept: 0, none: 0 } },
       falsePositives: [],
       sfx: noSfx,
       blocks: [
@@ -482,7 +482,7 @@ describe("ocr page score", () => {
       lines: [],
       orientation: { tilt: 0, consistency: 1, writingMode, ambiguous: false, frame: { cx: 0, cy: 0, w: 1, h: 1, angle: 0 } },
       classification: { layout: "text_free", kind: "free_text", policy: "translate" },
-      clean: "flat",
+      clean: "membrane",
       paper: null,
       utterances: [{
         box,
@@ -568,7 +568,7 @@ describe("planned search reads", () => {
       frame: { cx: 20, cy: 8, w: 40, h: 16, angle: tilt },
     },
     classification: { layout: "text_free", kind: "free_text", policy: "translate" },
-    clean: "flat",
+    clean: "membrane",
     paper: null,
     utterances: [{
       box: { x0: 2, y0: 2, x1: 38, y1: 14 },

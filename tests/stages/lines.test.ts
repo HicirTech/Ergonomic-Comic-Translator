@@ -3,6 +3,8 @@ import { lineAngleDistance } from "../../src/geometry/angle.ts";
 import { rectCorners } from "../../src/geometry/rotated-rect.ts";
 import { dbMapToPage, planDbCrop, planDbPage } from "../../src/stages/lines/db-input.ts";
 import { extractTextLines } from "../../src/stages/lines/db-postprocess.ts";
+import { textThickness } from "../../src/stages/lines/text-thickness.ts";
+import { line } from "./fixtures.ts";
 
 /** Paints a filled rotated rectangle of probability `value` into a map (point-in-polygon per pixel centre). */
 const paintRect = (map: Float32Array, width: number, rect: { cx: number; cy: number; long: number; short: number; angle: number }, value: number) => {
@@ -101,5 +103,14 @@ describe("DB crop planning", () => {
 
   it("covers a whole page without scaling", () => {
     expect(planDbPage(1280, 1807)).toMatchObject({ scale: 1, pad: 0, width: 1280, height: 1824 });
+  });
+});
+
+describe("textThickness", () => {
+  it("is the thickness most of the text's length is set in", () => {
+    // One long line and two stray fragments: the plain median would be 25.
+    expect(textThickness([line(300, 100, 470, 58, 0), line(380, 200, 25, 25, 0), line(350, 50, 23, 19, 90)])).toBe(58);
+    expect(textThickness([line(100, 100, 300, 30, 0), line(100, 140, 280, 32, 0), line(100, 180, 290, 80, 0)])).toBe(32);
+    expect(textThickness([])).toBeNull();
   });
 });

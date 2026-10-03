@@ -64,7 +64,7 @@ const migan: InpaintModel = {
 };
 
 /**
- * S6 inpainting for regions a flat fill cannot restore. Reads the page and mask from files, runs 512 px
+ * S6 inpainting for regions the membrane fill cannot restore. Reads the page and mask from files, runs 512 px
  * tiles, composites only masked pixels, and writes a lossless PNG, so no pixel data crosses the IPC.
  */
 const createInpaintEngine = (model: InpaintModel): VisionEngine => {

@@ -156,7 +156,7 @@ describe("typesetPage", () => {
         quarterTurns: 0,
         flags: [],
       }],
-      clean: "flat",
+      clean: "membrane",
       paper: null,
     }],
     uncovered: [],

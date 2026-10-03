@@ -11,8 +11,8 @@ export interface RegionResult {
   orientation: RegionOrientation;
   classification: RegionClass;
   utterances: UtteranceResult[];
-  /** How the region was cleaned: flat fill, model inpainting, kept (SFX), or nothing to remove. */
-  clean: "flat" | "inpaint" | "kept" | "none";
-  /** Median colour of the paper around the removed text; null when the region was not cleaned. */
+  /** How the region was cleaned: membrane fill, model inpainting, kept (SFX), or nothing to remove. */
+  clean: "membrane" | "inpaint" | "kept" | "none";
+  /** Colour of the paper next to the removed text; null when the region was not cleaned. */
   paper: [number, number, number] | null;
 }

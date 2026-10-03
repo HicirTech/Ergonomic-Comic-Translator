@@ -56,7 +56,7 @@ const pageOf = (background: SyntheticPage["background"], bubble: boolean): Synth
 
 const region = (
   box: Box,
-  clean: "flat" | "inpaint",
+  clean: "membrane" | "inpaint",
   policy: "translate" | "keep",
 ): PageVisionResult["regions"][number] => ({
   box,
@@ -83,7 +83,7 @@ describe("outside-mask damage", () => {
     mask[0] = 1;
     setPixel(cleaned, 0, 0, 0);
     const split = attributeOutsideChanges(original.data, cleaned.data, width, height, mask, [
-      { box: { x0: 0, y0: 0, x1: 3, y1: 3 }, clean: "flat", matched: true },
+      { box: { x0: 0, y0: 0, x1: 3, y1: 3 }, clean: "membrane", matched: true },
       { box: { x0: 0, y0: 0, x1: 6, y1: 6 }, clean: "inpaint", matched: false },
     ]);
     expect(split).toEqual({
@@ -91,7 +91,7 @@ describe("outside-mask damage", () => {
       insideMatched: 1,
       insideFalsePositive: 1,
       outsideRegions: 1,
-      flat: 1,
+      membrane: 1,
       inpaint: 1,
       kept: 0,
       none: 0,
@@ -104,7 +104,7 @@ describe("false positive surfaces", () => {
     const paper = pageOf("paper", true);
     const bubbleBox = { x0: 10, y0: 10, x1: 30, y1: 30 };
     const outside = { x0: 200, y0: 200, x1: 220, y1: 210 };
-    const regions = [region({ x0: 0, y0: 0, x1: 40, y1: 40 }, "flat", "translate"), region(bubbleBox, "inpaint", "keep"), region(outside, "flat", "translate")];
+    const regions = [region({ x0: 0, y0: 0, x1: 40, y1: 40 }, "membrane", "translate"), region(bubbleBox, "inpaint", "keep"), region(outside, "membrane", "translate")];
     const claimed = new Set([0]);
     expect(falsePositivesOf(paper, regions, claimed).map((item) => item.surface)).toEqual(["bubble", "plain-paper"]);
     expect(falsePositivesOf(pageOf("texture", true), regions, claimed).map((item) => item.surface)).toEqual(["bubble", "texture-or-noise"]);
@@ -122,12 +122,12 @@ describe("art lettering", () => {
       height: 20,
       sfx: [{ id: "s0", text: "sfx", fontSize: 40, angle: 0, cx: 15, cy: 5, width: 10, height: 10, polygon: quad(10, 0, 20, 10) }],
     };
-    const dialogue = { ...region({ x0: 0, y0: 0, x1: 12, y1: 12 }, "flat", "translate"), lines: [line(15, 5, 6, 2, 0), line(2, 2, 3, 2, 0)] };
+    const dialogue = { ...region({ x0: 0, y0: 0, x1: 12, y1: 12 }, "membrane", "translate"), lines: [line(15, 5, 6, 2, 0), line(2, 2, 3, 2, 0)] };
     const regions = [
       dialogue,
       region({ x0: 12, y0: 2, x1: 18, y1: 8 }, "inpaint", "translate"),
-      region({ x0: 13, y0: 3, x1: 17, y1: 7 }, "flat", "keep"),
-      region({ x0: 0, y0: 14, x1: 4, y1: 16 }, "flat", "translate"),
+      region({ x0: 13, y0: 3, x1: 17, y1: 7 }, "membrane", "keep"),
+      region({ x0: 0, y0: 14, x1: 4, y1: 16 }, "membrane", "translate"),
     ];
     const background = rgb(20, 20, 100);
     const cleaned = rgb(20, 20, 100);
@@ -144,7 +144,7 @@ describe("art lettering", () => {
 
   it("scores nothing on a page without lettering", () => {
     const page = pageOf("paper", true);
-    const score = sfxScoreOf(page, [region({ x0: 0, y0: 0, x1: 4, y1: 4 }, "flat", "translate")], new Set([0]), rgb(8, 8, 1).data, rgb(8, 8, 2).data);
+    const score = sfxScoreOf(page, [region({ x0: 0, y0: 0, x1: 4, y1: 4 }, "membrane", "translate")], new Set([0]), rgb(8, 8, 1).data, rgb(8, 8, 2).data);
     expect(score).toEqual({ marks: 0, absorbedLines: 0, translatedRegions: 0, keptRegions: 0, damagedPixels: 0, pixels: 0 });
   });
 });
@@ -166,7 +166,7 @@ describe("synthetic page diagnostics", () => {
     setPixel(cleaned, 0, 0, 0);
     setPixel(cleaned, 4, 4, 0);
     setPixel(cleaned, 7, 7, 0);
-    const matched = region({ x0: 0, y0: 0, x1: 2, y1: 2 }, "flat", "translate");
+    const matched = region({ x0: 0, y0: 0, x1: 2, y1: 2 }, "membrane", "translate");
     const extra = region({ x0: 4, y0: 4, x1: 6, y1: 6 }, "inpaint", "keep");
     const vision: PageVisionResult = {
       width: 8,
@@ -200,13 +200,13 @@ describe("synthetic page diagnostics", () => {
       insideMatched: 1,
       insideFalsePositive: 1,
       outsideRegions: 1,
-      flat: 1,
+      membrane: 1,
       inpaint: 1,
     });
     const text = formatSummaryZh(buildOcrReport(1, false, [scored]));
     expect(text).toContain("误检 1");
     expect(text).toContain("白纸 1");
-    expect(text).toContain("平涂 1.0");
+    expect(text).toContain("膜式填充 1.0");
     expect(text).not.toContain("glyph");
   });
 });

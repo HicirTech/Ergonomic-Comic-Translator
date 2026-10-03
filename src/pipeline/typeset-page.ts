@@ -81,7 +81,7 @@ export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: Volu
     const layout = layoutText(shaper, target, direction, width, height, minFontSize, Math.min(maxFontSize, Math.max(minFontSize, sourceSize * sourceSizeHeadroom)));
     if (layout.overflow) overflow.push(unit.id);
     // Outside a bubble the text sits on art, and a bubble that had to be inpainted is not plain paper either.
-    const style = letteringStyle(region.paper ?? null, region.bubble === null || region.clean !== "flat");
+    const style = letteringStyle(region.paper ?? null, region.bubble === null || region.clean !== "membrane");
     blocks.push(placedBlockSvg(shaper, layout, { cx: (box.x0 + box.x1) / 2, cy: (box.y0 + box.y1) / 2, width, height, angle }, style));
   }
   return { svg: pageOverlaySvg(vision.width, vision.height, blocks), overflow };

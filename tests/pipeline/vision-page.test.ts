@@ -13,12 +13,15 @@ import { line } from "../stages/fixtures.ts";
 const width = 400;
 const height = 300;
 
-/** White bubble (left) with two dark vertical columns; textured panel (right) with a tilted dark bar. */
-const drawPage = async (path: string) => {
+/**
+ * White bubble (left) with two dark vertical columns; a panel (right) with a tilted dark bar. The panel is
+ * finely patterned (halftone) or a smooth gradient.
+ */
+const drawPage = async (path: string, panel: "halftone" | "gradient" = "halftone") => {
   const data = new Uint8Array(width * height * 3).fill(250);
   const set = (x: number, y: number, value: number) => data.fill(value, (y * width + x) * 3, (y * width + x) * 3 + 3);
   for (let y = 0; y < height; y += 1) {
-    for (let x = 200; x < width; x += 1) set(x, y, 110 + ((x * 7 + y * 13) % 60));
+    for (let x = 200; x < width; x += 1) set(x, y, panel === "halftone" ? ((x + y) % 2 === 0 ? 90 : 170) : 110 + Math.round((x - 200) * 0.5));
   }
   for (const columnX of [120, 60]) {
     for (let y = 60; y < 220; y += 1) for (let x = columnX - 8; x < columnX + 8; x += 1) set(x, y, 15);
@@ -84,7 +87,7 @@ beforeAll(async () => {
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 describe("runVisionPage", () => {
-  it("runs the R wave: splits speakers, searches slanted text, flat-fills plain paper and inpaints the rest", async () => {
+  it("runs the R wave: splits speakers, searches slanted text, fills plain paper in place and inpaints patterned paper", async () => {
     const inpaintCalls: InpaintTask[] = [];
     const readCalls: { engine: string; crops: OcrCrop[] }[] = [];
     const result = await runVisionPage(fakeClient(inpaintCalls, readCalls), join(root, "page.png"), "p1", root, "v");
@@ -94,7 +97,7 @@ describe("runVisionPage", () => {
     expect(bubble!.orientation.writingMode).toBe("v");
     expect(bubble!.utterances).toHaveLength(2);
     expect(bubble!.utterances[1]!.startReasons).toContain("close_open");
-    expect(bubble!.clean).toBe("flat");
+    expect(bubble!.clean).toBe("membrane");
     expect(bubble!.classification).toEqual({ layout: "bubble", kind: "dialogue", policy: "translate" });
 
     expect(sign!.orientation.tilt).toBeCloseTo(25, 0);
@@ -109,6 +112,18 @@ describe("runVisionPage", () => {
     expect(existsSync(result.cleanedPath)).toBe(true);
     expect(Object.keys(result.timingsMs)).toEqual(expect.arrayContaining(["detect", "lines", "ocr", "inpaint"]));
     expect(Object.keys(result.timingsMs)).not.toContain("gate_ocr");
+  });
+
+  it("restores smooth paper under text with the membrane fill and leaves the model out", async () => {
+    await drawPage(join(root, "smooth.png"), "gradient");
+    const inpaintCalls: InpaintTask[] = [];
+    const result = await runVisionPage(fakeClient(inpaintCalls, []), join(root, "smooth.png"), "p3", root, "v");
+
+    expect(result.regions[1]!.clean).toBe("membrane");
+    expect(inpaintCalls).toHaveLength(0);
+    const cleaned = await sharp(result.cleanedPath).raw().toBuffer();
+    // The middle of the bar shows the gradient again: 110 + 0.5 * (300 - 200) = 160.
+    expect(Math.abs(cleaned[(150 * width + 300) * 3]! - 160)).toBeLessThanOrEqual(3);
   });
 
   it("gives a region to a dialogue line the detector missed, and leaves a short fragment uncovered", async () => {

@@ -5,7 +5,7 @@ import type { PaintedSurface } from "../../synthetic/painted-surface.ts";
 export interface FalsePositiveRegion {
   cls: "text_bubble" | "text_free" | null;
   classification: RegionClass;
-  clean: "flat" | "inpaint" | "kept" | "none";
+  clean: "membrane" | "inpaint" | "kept" | "none";
   width: number;
   height: number;
   area: number;

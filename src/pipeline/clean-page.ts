@@ -3,8 +3,8 @@ import { join } from "path";
 import sharp from "sharp";
 import { rgbToGray } from "../imaging/gray.ts";
 import { decodeRgb } from "../imaging/page-image.ts";
-import { canFlatFill, flatFill } from "../stages/clean/flat-fill.ts";
 import { planInpaintTiles } from "../stages/clean/inpaint-tiles.ts";
+import { canMembraneFill, membraneFill } from "../stages/clean/membrane-fill.ts";
 import { addToPageMask, regionTextMask } from "../stages/mask/text-mask.ts";
 import { classifyRegion } from "../stages/regions/classify.ts";
 import type { OrientedRegion, RegionResult, StageTimer, UtteranceResult, VisionClient } from "./interfaces/index.ts";
@@ -15,9 +15,10 @@ const median = (values: number[]) => {
 };
 
 /**
- * S5/S6 for one page: classify each region, build stroke masks, flat-fill plain paper in this process and
- * send the remaining strokes to the inpainting engine. SFX are kept. Writes `<pageKey>.flat.png` and, when
- * inpainting ran, `<pageKey>.mask.bin` and `<pageKey>.clean.png` into `workDirectory`.
+ * S5/S6 for one page: classify each region, build stroke masks, restore plain and smooth paper with the
+ * membrane fill in this process and send strokes on finely textured paper to the inpainting engine. SFX are
+ * kept. Writes `<pageKey>.filled.png` and, when inpainting ran, `<pageKey>.mask.bin` and
+ * `<pageKey>.clean.png` into `workDirectory`.
  */
 export const cleanPage = async (
   client: VisionClient,
@@ -32,11 +33,13 @@ export const cleanPage = async (
   const { width, height } = rgb;
   const gray = rgbToGray(rgb);
   const dialogueThickness = median(oriented.filter(({ region }) => region.bubble).flatMap(({ region }) => region.lines.map((line) => line.rect.short)));
-  const residual = new Uint8Array(width * height);
-  let residualPixels = 0;
+  const smooth = new Uint8Array(width * height);
+  let smoothPixels = 0;
+  const textured = new Uint8Array(width * height);
+  let texturedPixels = 0;
 
-  const regions = await timed("mask_flat", async () =>
-    oriented.map(({ region, orientation }, regionIndex): RegionResult => {
+  const regions = await timed("mask_fill", async () => {
+    const results = oriented.map(({ region, orientation }, regionIndex): RegionResult => {
       const utterances = utterancesOf(regionIndex);
       const text = utterances.map((utterance) => utterance.text).join("");
       const classification = classifyRegion(region, orientation, text, width, height, dialogueThickness);
@@ -45,33 +48,37 @@ export const cleanPage = async (
       if (classification.policy === "keep") {
         clean = "kept";
       } else {
-        const mask = regionTextMask(rgb, gray, region.lines);
+        const mask = regionTextMask(rgb, gray, region.lines, region.bubble);
         if (mask && mask.strokePixels > 0) {
           paper = mask.ringMedian;
-          if (canFlatFill(mask)) {
-            flatFill(rgb, mask);
-            clean = "flat";
+          if (canMembraneFill(mask)) {
+            addToPageMask(smooth, width, mask);
+            smoothPixels += mask.strokePixels;
+            clean = "membrane";
           } else {
-            addToPageMask(residual, width, mask);
-            residualPixels += mask.strokePixels;
+            addToPageMask(textured, width, mask);
+            texturedPixels += mask.strokePixels;
             clean = "inpaint";
           }
         }
       }
       return { box: region.box, cls: region.cls, bubble: region.bubble, lines: region.lines, orientation, classification, utterances, clean, paper };
-    }));
+    });
+    if (smoothPixels > 0) membraneFill(rgb, smooth);
+    return results;
+  });
 
   // sharp does not create the parent. The web job never mkdir'd volumes/<id>/work, so every page died here.
   mkdirSync(workDirectory, { recursive: true });
-  const flatPath = join(workDirectory, `${pageKey}.flat.png`);
-  await sharp(rgb.data, { raw: { width, height, channels: 3 } }).png().toFile(flatPath);
-  if (residualPixels === 0) {
-    return { regions, cleanedPath: flatPath };
+  const filledPath = join(workDirectory, `${pageKey}.filled.png`);
+  await sharp(rgb.data, { raw: { width, height, channels: 3 } }).png().toFile(filledPath);
+  if (texturedPixels === 0) {
+    return { regions, cleanedPath: filledPath };
   }
   const maskPath = join(workDirectory, `${pageKey}.mask.bin`);
-  writeFileSync(maskPath, residual);
+  writeFileSync(maskPath, textured);
   const cleanedPath = join(workDirectory, `${pageKey}.clean.png`);
-  const tiles = planInpaintTiles(residual, width, height);
-  await timed("inpaint", () => client.inpaint({ imagePath: flatPath, maskPath, width, height, tiles, outputPath: cleanedPath }));
+  const tiles = planInpaintTiles(textured, width, height);
+  await timed("inpaint", () => client.inpaint({ imagePath: filledPath, maskPath, width, height, tiles, outputPath: cleanedPath }));
   return { regions, cleanedPath };
 };

@@ -45,7 +45,7 @@ const region = (x0: number, y0: number, texts: string[], policy: "translate" | "
   orientation: { tilt: 0, consistency: 1, writingMode: "v", ambiguous: false, frame: { cx: 0, cy: 0, w: 1, h: 1, angle: 0 } },
   classification: policy === "keep" ? { layout: "text_free", kind: "sfx", policy } : { layout: "bubble", kind: "dialogue", policy },
   utterances: texts.map((text) => utterance(text)),
-  clean: "flat",
+  clean: "membrane",
   paper: null,
 });
 

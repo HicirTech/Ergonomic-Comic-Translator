@@ -17,7 +17,7 @@ describe("cleanPage", () => {
       const work = join(root, "missing-work");
       const client = { inpaint: async () => {} } as unknown as VisionClient;
       const result = await cleanPage(client, image, "page", work, [], () => [], passthrough);
-      expect(result.cleanedPath).toBe(join(work, "page.flat.png"));
+      expect(result.cleanedPath).toBe(join(work, "page.filled.png"));
       expect(existsSync(result.cleanedPath)).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });

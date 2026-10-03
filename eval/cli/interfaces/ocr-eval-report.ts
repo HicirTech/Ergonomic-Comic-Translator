@@ -46,7 +46,7 @@ export interface OcrEvalReport {
     meanDamageInsideMatched: number;
     meanDamageInsideFalsePositive: number;
     meanDamageOutsideRegions: number;
-    meanDamageFlat: number;
+    meanDamageMembrane: number;
     meanDamageInpaint: number;
     meanMaskedMae: number;
     meanChangesOutside: number;
