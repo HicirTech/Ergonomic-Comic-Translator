@@ -70,14 +70,22 @@ describe("real eval options", () => {
     const parsed = parseRealEvalArgs(["volume.cbz"]);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.options).toEqual({ out: null, pages: null, lines: "mobile", gpu: false, positionals: ["volume.cbz"] });
+    expect(parsed.options).toEqual({ out: null, pages: null, lines: "mobile", gpu: false, groundTruthOnly: false, positionals: ["volume.cbz"] });
   });
 
   it("does not treat the value of a present option as a positional", () => {
     const parsed = parseRealEvalArgs(["--pages", "2", "a.cbz", "--lines", "server", "--out", "D:\\real-out", "b.zip", "--gpu"]);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.options).toEqual({ out: "D:\\real-out", pages: 2, lines: "server", gpu: true, positionals: ["a.cbz", "b.zip"] });
+    expect(parsed.options).toEqual({ out: "D:\\real-out", pages: 2, lines: "server", gpu: true, groundTruthOnly: false, positionals: ["a.cbz", "b.zip"] });
+  });
+
+  it("builds the ground truth alone on the CPU, so it refuses --gpu", () => {
+    const parsed = parseRealEvalArgs(["--ground-truth-only", "volume.cbz"]);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.options).toMatchObject({ groundTruthOnly: true, gpu: false, positionals: ["volume.cbz"] });
+    expect(parseRealEvalArgs(["--ground-truth-only", "--gpu", "volume.cbz"]).ok).toBe(false);
   });
 
   it("keeps the positional that follows --lines", () => {

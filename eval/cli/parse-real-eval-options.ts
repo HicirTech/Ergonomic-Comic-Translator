@@ -3,7 +3,7 @@ import { defaultLineModel, parseLineModel } from "./parse-line-model.ts";
 
 const valueOptions = new Set(["--out", "--pages", "--lines"]);
 
-const usage = "用法：bun run eval:real [--out 目录] [--pages 正整数] [--lines mobile|server] [--gpu] <zip|cbz|文件夹> [...]";
+const usage = "用法：bun run eval:real [--out 目录] [--pages 正整数] [--lines mobile|server] [--gpu] [--ground-truth-only] <zip|cbz|文件夹> [...]\n--ground-truth-only 只核对无字页并写入缓存，只用 CPU，不打分";
 
 export const realEvalUsage = usage;
 
@@ -21,6 +21,7 @@ export const parseRealEvalArgs = (args: readonly string[]): RealEvalParse => {
   let pages: number | null = null;
   let lines = defaultLineModel;
   let gpu = false;
+  let groundTruthOnly = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
     if (valueOptions.has(arg)) {
@@ -40,11 +41,14 @@ export const parseRealEvalArgs = (args: readonly string[]): RealEvalParse => {
       }
     } else if (arg === "--gpu") {
       gpu = true;
+    } else if (arg === "--ground-truth-only") {
+      groundTruthOnly = true;
     } else if (arg.startsWith("--")) {
       return { ok: false, error: `${usage}\n未知参数 ${arg}` };
     } else {
       positionals.push(arg);
     }
   }
-  return { ok: true, options: { out, pages, lines, gpu, positionals } };
+  if (gpu && groundTruthOnly) return { ok: false, error: `${usage}\n--ground-truth-only 只用 CPU，不能与 --gpu 同用` };
+  return { ok: true, options: { out, pages, lines, gpu, groundTruthOnly, positionals } };
 };

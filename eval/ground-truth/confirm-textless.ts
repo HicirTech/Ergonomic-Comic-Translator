@@ -3,7 +3,7 @@ import type { Box } from "../../src/geometry/interfaces/index.ts";
 import type { VisionClient } from "../../src/pipeline/interfaces/index.ts";
 import type { OcrCandidate, OcrCrop } from "../../src/stages/ocr/interfaces/index.ts";
 import type { ClusterMember, MemberReading, TextlessConfirmation } from "./interfaces/index.ts";
-import { deriveTextAreas } from "./textless-diff.ts";
+import { deriveTextAreasFromFiltered, differenceParameters, median3x3 } from "./textless-diff.ts";
 
 /** Difference boxes read per page: the largest ones, where a dialogue box or a caption would sit. */
 export const readBoxLimit = 8;
@@ -20,6 +20,17 @@ const duplicateCoverage = 0.5;
 /** The line recognizer reads horizontal text upright (turn 0) and vertical text turned counter-clockwise (turn 3). */
 const lineRecognizerTurns = [0, 3];
 const mangaOcrTurns = [0];
+
+/** Everything besides the pages and the recognizer models that changes a member's reading. */
+export const readingParameters = {
+  readBoxLimit,
+  readableMinProb,
+  readableMinChars,
+  duplicateCoverage,
+  lineRecognizerTurns,
+  mangaOcrTurns,
+  ...differenceParameters,
+} as const;
 
 type ReadingClient = Pick<VisionClient, "recognizeLines" | "readUtterances">;
 
@@ -46,9 +57,10 @@ export const largestDistinctBoxes = (boxes: readonly Box[]) => {
 /** Per member, the difference boxes against every other member. A pair's boxes are the same seen from either page. */
 const differenceBoxes = (members: readonly ClusterMember[]) => {
   const boxes = members.map((): Box[] => []);
+  const filtered = members.map((member) => median3x3(member.image));
   for (let left = 0; left < members.length; left += 1) {
     for (let right = left + 1; right < members.length; right += 1) {
-      const areas = deriveTextAreas(members[left]!.image, members[right]!.image).boxes;
+      const areas = deriveTextAreasFromFiltered(filtered[left]!, filtered[right]!).boxes;
       boxes[left]!.push(...areas);
       boxes[right]!.push(...areas);
     }
@@ -99,10 +111,10 @@ export const decideTextless = (readings: readonly MemberReading[]): Pick<Textles
 };
 
 /**
- * OCR check of one cluster. Each member reads its largest difference boxes against the other members and
- * the member with no readable box is the textless one. What was read only decides: it is not kept.
+ * The expensive half of the OCR check: each member reads its largest difference boxes against the other
+ * members. Ascending by ordinal. What was read only counts: the text is not kept.
  */
-export const confirmCluster = async (client: ReadingClient, members: readonly ClusterMember[]): Promise<TextlessConfirmation> => {
+export const readCluster = async (client: ReadingClient, members: readonly ClusterMember[]): Promise<MemberReading[]> => {
   const ordered = [...members].sort((a, b) => a.ordinal - b.ordinal);
   const differences = differenceBoxes(ordered);
   const readings: MemberReading[] = [];
@@ -110,5 +122,15 @@ export const confirmCluster = async (client: ReadingClient, members: readonly Cl
     const boxes = largestDistinctBoxes(differences[index]!);
     readings.push({ ordinal: member.ordinal, readBoxCount: boxes.length, readableBoxCount: await readableBoxCount(client, member, boxes) });
   }
-  return { members: readings, ...decideTextless(readings) };
+  return readings;
 };
+
+/** The decision for one cluster from its readings: the member with no readable box is the textless one. */
+export const confirmationOf = (readings: readonly MemberReading[]): TextlessConfirmation => ({
+  members: [...readings].sort((a, b) => a.ordinal - b.ordinal),
+  ...decideTextless(readings),
+});
+
+/** OCR check of one cluster: readCluster, then confirmationOf. */
+export const confirmCluster = async (client: ReadingClient, members: readonly ClusterMember[]): Promise<TextlessConfirmation> =>
+  confirmationOf(await readCluster(client, members));

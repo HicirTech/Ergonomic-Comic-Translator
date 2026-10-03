@@ -36,14 +36,18 @@ export const median3x3 = (image: RgbImage): RgbImage => {
   return { data: out, width, height };
 };
 
-/** Mask (1 = text or its box) and one box per connected area of at least 200 pixels. */
-export const deriveTextAreas = (original: RgbImage, textless: RgbImage) => {
-  if (original.width !== textless.width || original.height !== textless.height) {
+/** The settings that decide the reference areas; the textless reading cache is keyed by them. */
+export const differenceParameters = { diffLevel, closeRadius, minArea } as const;
+
+/**
+ * deriveTextAreas for two pages that already went through median3x3. A cluster compares every pair of its
+ * pages, so filtering each page once instead of once per comparison saves most of the ground-truth time.
+ */
+export const deriveTextAreasFromFiltered = (a: RgbImage, b: RgbImage) => {
+  if (a.width !== b.width || a.height !== b.height) {
     throw new Error("A page and its textless variant must have the same size");
   }
-  const { width, height } = original;
-  const a = median3x3(original);
-  const b = median3x3(textless);
+  const { width, height } = a;
   const changed = new Uint8Array(width * height);
   for (let index = 0; index < changed.length; index += 1) {
     const offset = index * 3;
@@ -64,3 +68,6 @@ export const deriveTextAreas = (original: RgbImage, textless: RgbImage) => {
   const boxes: Box[] = components.filter((component) => kept.has(component.label)).map((component) => component.box);
   return { mask, boxes };
 };
+
+/** Mask (1 = text or its box) and one box per connected area of at least 200 pixels. */
+export const deriveTextAreas = (original: RgbImage, textless: RgbImage) => deriveTextAreasFromFiltered(median3x3(original), median3x3(textless));

@@ -3,13 +3,16 @@
 // A page counts as textless only after OCR finds no readable text where it differs from its near-identical
 // pages (ground-truth/confirm-textless.ts). classifyPages' greedy pairing is not used. Clusters are read
 // one by one, so --pages n stops the OCR check too: the ground-truth counts then cover the clusters read.
-// usage: bun run eval:real [--out <dir>] [--pages <n>] [--lines mobile|server] [--gpu] <zip|cbz|folder> [...]
+// Each cluster's readings are cached by page content (ground-truth/reading-cache.ts); --ground-truth-only
+// fills that cache on the CPU without scoring, so later scoring runs only pay for the vision pass.
+// usage: bun run eval:real [--out <dir>] [--pages <n>] [--lines mobile|server] [--gpu] [--ground-truth-only] <zip|cbz|folder> [...]
 import { isAbsolute, join, relative, resolve } from "path";
 import { writeFileAtomically } from "../../src/core/atomic-write.ts";
 import { dataPaths, resolveDataRoot } from "../../src/core/data-paths.ts";
 import { openResourceProbe } from "../../src/gov/probe.ts";
 import { ResourceMonitor } from "../../src/gov/resource-monitor.ts";
 import { decodeRgb } from "../../src/imaging/page-image.ts";
+import { readModelsLock } from "../../src/models/lock.ts";
 import { runVisionPage } from "../../src/pipeline/vision-page.ts";
 import { openVisionSession } from "../../src/sessions/vision-session.ts";
 import { IngestLimitError } from "../../src/stages/ingest/ingest-limit-error.ts";
@@ -17,10 +20,11 @@ import { ingestEntries } from "../../src/stages/ingest/ingest.ts";
 import { readSources } from "../../src/stages/ingest/read-sources.ts";
 import { makeThumbnail } from "../../src/stages/profile/thumbnail.ts";
 import { clusterNearIdenticalPages } from "../ground-truth/cluster-pages.ts";
-import { confirmCluster } from "../ground-truth/confirm-textless.ts";
-import type { ClusterMember, ConfirmedPair, TextlessConfirmation } from "../ground-truth/interfaces/index.ts";
+import { confirmationOf, readCluster } from "../ground-truth/confirm-textless.ts";
+import type { ClusterMember, ClusterPage, ConfirmedPair, TextlessConfirmation } from "../ground-truth/interfaces/index.ts";
+import { loadReadings, readingCacheKey, saveReadings } from "../ground-truth/reading-cache.ts";
 import { summarizeGroundTruth } from "../ground-truth/summarize-ground-truth.ts";
-import { formatRealSummaryZh } from "./format-real-summary-zh.ts";
+import { formatGroundTruthZh, formatRealSummaryZh } from "./format-real-summary-zh.ts";
 import type { RealPairScore } from "./interfaces/index.ts";
 import { parseRealEvalArgs, realEvalUsage } from "./parse-real-eval-options.ts";
 import { buildRealReport, scoreRealPair } from "./real-score.ts";
@@ -72,10 +76,14 @@ const clusters = clusterNearIdenticalPages(thumbnails);
 const byOrdinal = new Map(pages.map((page) => [page.ordinal, page]));
 console.log(`相似页簇 ${clusters.length} 个，共 ${clusters.reduce((sum, cluster) => sum + cluster.length, 0)} 页`);
 
+const readingCache = join(paths.cache, "eval", "textless-readings");
+const modelsLock = readModelsLock();
+
 const probe = openResourceProbe();
 const monitor = new ResourceMonitor(probe);
 monitor.start();
-const opening = await openVisionSession(paths, monitor, !parsed.options.gpu, "real eval", { lineModel: parsed.options.lines });
+const purpose = parsed.options.groundTruthOnly ? "real eval ground truth" : "real eval";
+const opening = await openVisionSession(paths, monitor, !parsed.options.gpu, purpose, { lineModel: parsed.options.lines });
 if (!opening.ok) {
   monitor.stop();
   probe.close();
@@ -93,10 +101,9 @@ const waitWhileYellow = async () => {
   while (!session.signal.aborted && monitor.latest?.assessment.light === "yellow") await Bun.sleep(1000);
 };
 
-const scorePair = async (pair: ConfirmedPair, members: readonly ClusterMember[]) => {
+const scorePair = async (pair: ConfirmedPair) => {
   const textPage = byOrdinal.get(pair.textOrdinal)!;
   const textlessPage = byOrdinal.get(pair.textlessOrdinal)!;
-  const imageOf = (ordinal: number) => members.find((member) => member.ordinal === ordinal)!.image;
   const pageId = `p${String(textPage.ordinal).padStart(4, "0")}`;
   const vision = await runVisionPage(session.client, textPage.storedPath, pageId, join(out, "work"), evalWritingPrior);
   return scoreRealPair({
@@ -105,27 +112,42 @@ const scorePair = async (pair: ConfirmedPair, members: readonly ClusterMember[])
     textlessOrdinal: textlessPage.ordinal,
     textSha256: textPage.sha256,
     textlessSha256: textlessPage.sha256,
-  }, imageOf(textPage.ordinal), imageOf(textlessPage.ordinal), await decodeRgb(vision.cleanedPath), vision);
+  }, await decodeRgb(textPage.storedPath), await decodeRgb(textlessPage.storedPath), await decodeRgb(vision.cleanedPath), vision);
 };
 
+/** Cached readings when this cluster was read before with the same settings and models; otherwise reads and stores them. */
+const clusterReadings = async (cluster: readonly number[]) => {
+  const pages: ClusterPage[] = cluster.map((ordinal) => ({ ordinal, sha256: byOrdinal.get(ordinal)!.sha256 }));
+  const key = readingCacheKey(pages, modelsLock);
+  const cached = loadReadings(readingCache, pages, key);
+  if (cached) return { readings: cached, fromCache: true };
+  const members = await Promise.all(cluster.map(async (ordinal): Promise<ClusterMember> => {
+    const { storedPath } = byOrdinal.get(ordinal)!;
+    return { ordinal, imagePath: storedPath, image: await decodeRgb(storedPath) };
+  }));
+  const readings = await readCluster(session.client, members);
+  saveReadings(readingCache, pages, readings, key);
+  return { readings, fromCache: false };
+};
+
+let cachedClusters = 0;
 try {
   console.log(`模型已加载：${session.loads.map((load) => `${load.engine}@${load.ep} ${Math.round(load.loadMs)} ms`).join("，")}`);
   for (const [index, cluster] of clusters.entries()) {
     if (limitReached()) break;
     await waitWhileYellow();
     if (session.signal.aborted) break;
-    const members = await Promise.all(cluster.map(async (ordinal): Promise<ClusterMember> => {
-      const { storedPath } = byOrdinal.get(ordinal)!;
-      return { ordinal, imagePath: storedPath, image: await decodeRgb(storedPath) };
-    }));
-    const confirmation = await confirmCluster(session.client, members);
+    const { readings, fromCache } = await clusterReadings(cluster);
+    if (fromCache) cachedClusters += 1;
+    const confirmation = confirmationOf(readings);
     confirmations.push(confirmation);
-    console.log(`第 ${index + 1}/${clusters.length} 簇：${members.length} 页，确认 ${confirmation.pairs.length} 对`);
+    console.log(`第 ${index + 1}/${clusters.length} 簇：${cluster.length} 页，确认 ${confirmation.pairs.length} 对${fromCache ? "（缓存）" : ""}`);
+    if (parsed.options.groundTruthOnly) continue;
     for (const pair of confirmation.pairs) {
       if (limitReached()) break;
       await waitWhileYellow();
       if (session.signal.aborted) break;
-      scores.push(await scorePair(pair, members));
+      scores.push(await scorePair(pair));
       console.log(`第 ${scores.length}${limit === null ? "" : `/${limit}`} 对：召回 ${scores.at(-1)!.detectionRecall.toFixed(3)}，损伤像素 ${scores.at(-1)!.damageCount}`);
     }
   }
@@ -141,10 +163,15 @@ if (session.signal.aborted) {
   console.error("eval:real: 评测未完成");
   process.exit(2);
 }
-const report = buildRealReport(
-  { gpu: parsed.options.gpu, lines: parsed.options.lines, groundTruth: summarizeGroundTruth(pages.length, clusters, confirmations) },
-  scores,
-);
+const groundTruth = summarizeGroundTruth(pages.length, clusters, confirmations);
+console.log(`读数缓存命中 ${cachedClusters}/${confirmations.length} 簇：${readingCache}`);
+if (parsed.options.groundTruthOnly) {
+  writeFileAtomically(join(out, "ground-truth.json"), JSON.stringify(groundTruth, null, 1));
+  console.log(formatGroundTruthZh(groundTruth));
+  console.log(`真值：${join(out, "ground-truth.json")}`);
+  process.exit(0);
+}
+const report = buildRealReport({ gpu: parsed.options.gpu, lines: parsed.options.lines, groundTruth }, scores);
 writeFileAtomically(join(out, "report.json"), JSON.stringify(report, null, 1));
 console.log(formatRealSummaryZh(report));
 console.log(`报告：${join(out, "report.json")}`);

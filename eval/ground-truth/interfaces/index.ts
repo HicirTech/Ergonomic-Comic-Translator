@@ -1,5 +1,7 @@
+export type { CachedReading } from "./cached-reading.ts";
 export type { ClusterExclusion } from "./cluster-exclusion.ts";
 export type { ClusterMember } from "./cluster-member.ts";
+export type { ClusterPage } from "./cluster-page.ts";
 export type { ConfirmedPair } from "./confirmed-pair.ts";
 export type { ExclusionReason } from "./exclusion-reason.ts";
 export type { MemberReading } from "./member-reading.ts";
