@@ -20,15 +20,19 @@ checking are automatic.
    other page is read, and a page without text comes back unchanged. PDF input is not supported.
 2. **Read** (ONNX Runtime, GPU or CPU). Text and bubble detection, text line geometry including slanted text,
    orientation, splitting one bubble into several speakers' lines, OCR, text masks and cleaning (flat fill for
-   plain bubbles, LaMa inpainting on artwork).
+   plain bubbles, LaMa inpainting on artwork). A wide dialogue box is read line by line when the sentence
+   reader drops part of it.
 3. **Names and terms first.** Names and recurring terms of the whole volume are collected, translated with
    context from across the volume, and frozen so every page uses the same Chinese names.
 4. **Translate** (llama.cpp). Page by page in reading order, with earlier pages as rolling context. Every answer
    is checked automatically (structure, refusals, echoed source text, untranslated kana or hangul, repetition);
-   failed lines are retried, and glossary names are enforced.
+   failed lines are retried, and glossary names are enforced. A complete answer that is still doubtful after
+   the retries (some kana left, a short text returned as it was, a much-repeated cry) is used and marked for
+   review.
 5. **Letter.** Chinese text is set horizontally or vertically in the original box at the original angle, with
-   Chinese line-breaking rules, in Noto Sans SC Bold. A line that could not be translated shows
-   "（这句没能翻译）" instead of an empty bubble.
+   Chinese line-breaking rules, in Noto Sans SC Bold. It stays inside its bubble and the page, is at most a
+   tenth larger than the text it replaces, uses light ink on dark boxes, and gets an outline unless the bubble
+   is plain paper. A line without a usable translation shows "（这句没能翻译）" instead of an empty bubble.
 6. **Export.** CBZ (PNG pages with `ComicInfo.xml`) and PDF (right to left for manga).
 
 The source language (Japanese, Korean, Traditional Chinese or English) is detected from the recognised text,
