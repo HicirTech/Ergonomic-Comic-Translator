@@ -37,7 +37,11 @@ const drawPage = async (path: string) => {
 const columns = [line(120, 140, 170, 26, 90), line(60, 140, 170, 26, 90)];
 const tilted = line(300, 150, 130, 26, 25);
 
-const fakeClient = (inpaintCalls: InpaintTask[], readCalls: { engine: string; crops: OcrCrop[] }[]): VisionClient => ({
+const fakeClient = (
+  inpaintCalls: InpaintTask[],
+  readCalls: { engine: string; crops: OcrCrop[] }[],
+  pageLines: ReturnType<typeof line>[] = [],
+): VisionClient => ({
   detect: async () => ({
     width,
     height,
@@ -47,7 +51,7 @@ const fakeClient = (inpaintCalls: InpaintTask[], readCalls: { engine: string; cr
       { cls: "text_free", score: 0.85, box: { x0: 230, y0: 110, x1: 370, y1: 190 } },
     ],
   }),
-  lines: async (_, regions) => (regions === null ? [[]] : regions.map((box) => (box.x0 < 200 ? columns : [tilted]))),
+  lines: async (_, regions) => (regions === null ? [pageLines] : regions.map((box) => (box.x0 < 200 ? columns : [tilted]))),
   recognizeLines: async (_, crops) => crops.map((crop, index) => [{
     quarterTurns: 0,
     text: ["「行くぞ。」", "「待って！」", "営業中です"][index] ?? "",
@@ -104,6 +108,20 @@ describe("runVisionPage", () => {
     expect(inpaintCalls[0]!.tiles.length).toBeGreaterThan(0);
     expect(existsSync(result.cleanedPath)).toBe(true);
     expect(Object.keys(result.timingsMs)).toEqual(expect.arrayContaining(["detect", "lines", "ocr", "inpaint"]));
+    expect(Object.keys(result.timingsMs)).not.toContain("gate_ocr");
+  });
+
+  it("gives a region to a dialogue line the detector missed, and leaves a short fragment uncovered", async () => {
+    // Both lie outside the detector's boxes; the fake recognizer reads the first gate crop as "「行くぞ。」".
+    const caption = line(200, 282, 300, 24, 0);
+    const fragment = line(350, 30, 40, 24, 0);
+    const result = await runVisionPage(fakeClient([], [], [caption, fragment]), join(root, "page.png"), "p2", root, "v");
+
+    expect(result.regions).toHaveLength(3);
+    expect(result.regions[2]).toMatchObject({ cls: null, bubble: null, lines: [caption], classification: { layout: "bottom_box", policy: "translate" } });
+    expect(result.regions[2]!.utterances).toHaveLength(1);
+    expect(result.uncovered).toEqual([fragment]);
+    expect(Object.keys(result.timingsMs)).toContain("gate_ocr");
   });
 });
 

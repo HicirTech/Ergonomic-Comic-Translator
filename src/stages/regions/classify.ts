@@ -13,7 +13,8 @@ const sfxMaxChars = 6;
 /** Two independent cues are needed: slanted dialogue exists, so tilt alone never makes an SFX. */
 const sfxMinCues = 2;
 
-const soundLike = (text: string) => {
+/** A short text that repeats a character or ends in a sound mark reads like a sound effect. */
+export const soundLike = (text: string) => {
   const chars = [...text.replace(/\s/gu, "")];
   if (chars.length === 0 || chars.length > sfxMaxChars) return false;
   const repeated = new Set(chars).size < chars.length;
