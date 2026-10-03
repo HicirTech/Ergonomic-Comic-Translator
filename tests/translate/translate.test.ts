@@ -137,4 +137,20 @@ describe("translatePage", () => {
     expect(result.failures).toEqual({ "1": ["G1_REFUSAL"] });
     expect(result.requests).toBe(4);
   });
+
+  it("keeps a complete answer that is only doubtful, still reported as failing", async () => {
+    const answers: Record<string, string> = { "1": "はぁ…走了", "2": "OK", "3": `${"啊".repeat(12)}！` };
+    const units = [unit("1", "はぁ…行く"), unit("2", "ＯＫ"), unit("3", "ああっ！")];
+    const result = await translatePage(request(units), async (_messages, schema) =>
+      completion(JSON.stringify(Object.fromEntries((schema.required as string[]).map((id) => [id, answers[id]])))), 1);
+    expect(result.targets).toEqual(answers);
+    expect(result.failures).toEqual({ "1": ["G3_RESIDUE"], "2": ["G1B_ECHO"], "3": ["G5_REPEAT"] });
+    expect(result.requests).toBe(6);
+  });
+
+  it("does not keep a refusal, whatever else it failed", async () => {
+    const result = await translatePage(request([unit("1", "行く")]), async () => completion("{\"1\":\"作为AI我无法翻译です\"}"), 1);
+    expect(result.targets).toEqual({});
+    expect(result.failures).toEqual({ "1": ["G1_REFUSAL", "G3_RESIDUE"] });
+  });
 });
