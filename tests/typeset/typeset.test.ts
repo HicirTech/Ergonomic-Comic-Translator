@@ -197,11 +197,11 @@ describe("typesetPage", () => {
     expect(box.y1).toBeCloseTo(593.6, 1);
   });
 
-  it("sets the text no larger than the text it replaces", () => {
+  it("sets the text at most a tenth larger than the text it replaces", () => {
     const region = vision.regions[0]!;
     const withLines: PageVisionResult = { ...vision, regions: [{ ...region, lines: [line(200, 180, 150, 40, 0), line(200, 230, 150, 40, 0)] }] };
-    // A 40 px line rectangle holds text of about 0.74 * 40 = 29.6 px, and two characters would fit far larger.
-    expect(placedBox(typesetPage(fakeShaper, withLines, text, translation).svg).fontSize).toBe(29);
+    // A 40 px line rectangle holds text of about 0.74 * 40 = 29.6 px; two characters would fit far larger than 1.1 * 29.6.
+    expect(placedBox(typesetPage(fakeShaper, withLines, text, translation).svg).fontSize).toBe(32);
   });
 
   it("letters in light ink on dark paper, and outlines unless the bubble is plain paper", () => {

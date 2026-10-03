@@ -24,6 +24,11 @@ const maxFontSize = 72;
  * plain text of 40 px and more.
  */
 const glyphShareOfLine = 0.74;
+/**
+ * A translation that needs less room than its source may be set this much larger than the source text.
+ * Without the headroom short translations came out smaller than the v1 lettering of the same bubbles.
+ */
+const sourceSizeHeadroom = 1.1;
 const fallbackFontSize = 20;
 /** Shown where a translation failed every retry, so a cleaned bubble is never left empty. */
 export const untranslatedPlaceholderZh = "（这句没能翻译）";
@@ -43,9 +48,9 @@ const clipTo = (box: Box, limit: Box): Box => {
  * S10 for one page: every translated utterance is laid out in its box (the region frame, or its own
  * slot when a bubble was split), rotated back to the original angle, in the ink that contrasts with the
  * paper under it, outlined unless that paper is plain.
- * An upright box never leaves its bubble or the page, and the text is never set larger than the text it
- * replaces. Units without a translation get a Chinese placeholder. Returns the overlay SVG and the ids
- * that overflowed at the minimum size.
+ * An upright box never leaves its bubble or the page, and the text is set at most a little larger than
+ * the text it replaces. Units without a translation get a Chinese placeholder. Returns the overlay SVG
+ * and the ids that overflowed at the minimum size.
  */
 export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: VolumePageText, translation: PageTranslationResult) => {
   const blocks: string[] = [];
@@ -73,7 +78,7 @@ export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: Volu
     const height = boxHeight(box);
     const direction = height > verticalAspect * width ? "v" : "h";
     const sourceSize = median(region.lines.map((line) => line.rect.short * glyphShareOfLine)) ?? fallbackFontSize;
-    const layout = layoutText(shaper, target, direction, width, height, minFontSize, Math.min(maxFontSize, Math.max(minFontSize, sourceSize)));
+    const layout = layoutText(shaper, target, direction, width, height, minFontSize, Math.min(maxFontSize, Math.max(minFontSize, sourceSize * sourceSizeHeadroom)));
     if (layout.overflow) overflow.push(unit.id);
     // Outside a bubble the text sits on art, and a bubble that had to be inpainted is not plain paper either.
     const style = letteringStyle(region.paper ?? null, region.bubble === null || region.clean !== "flat");
