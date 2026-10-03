@@ -172,6 +172,7 @@ const plannedUtterance = (writingMode: "h" | "v", lineCount: number): PlannedUtt
   // Present even when the utterance must not be probed, so the guard is not just a null crop.
   lineCrop: lineProbe,
   lineReading: null,
+  lineThickness: null,
 });
 
 const timed: StageTimer = async (_name, work) => work();

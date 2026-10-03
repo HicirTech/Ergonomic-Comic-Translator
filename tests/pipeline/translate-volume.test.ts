@@ -24,6 +24,7 @@ const completion = (content: string): ChatResult => ({
 const utterance = (text: string, overrides: Partial<RegionResult["utterances"][number]> = {}): RegionResult["utterances"][number] => ({
   box: { x0: 0, y0: 0, x1: 1, y1: 1 },
   lineIndexes: [],
+  lineThickness: null,
   startReasons: [],
   nameTag: false,
   thought: false,

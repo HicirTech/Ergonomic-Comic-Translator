@@ -1,6 +1,7 @@
 import { boxHeight, boxWidth, expandBox } from "../geometry/box.ts";
 import type { Box } from "../geometry/interfaces/index.ts";
 import { rotatePoint } from "../geometry/rotated-rect.ts";
+import { textThickness } from "../stages/lines/text-thickness.ts";
 import type { Shaper } from "../typeset/interfaces/index.ts";
 import { layoutText } from "../typeset/layout.ts";
 import { letteringStyle } from "../typeset/lettering-style.ts";
@@ -17,7 +18,6 @@ const verticalAspect = 1.3;
 /** Slanted text is re-typeset at its angle; below this it is set upright (as BallonsTranslator, MIT, koharu do). */
 const uprightBelowDegrees = 3;
 const minFontSize = 12;
-const maxFontSize = 72;
 /**
  * Font size of the text in a DB line rectangle, as a share of the rectangle's thickness. Measured on the
  * synthetic pages (known font sizes): the rectangle is 1.38 times the font size at the median, 1.30 for
@@ -32,11 +32,6 @@ const sourceSizeHeadroom = 1.1;
 const fallbackFontSize = 20;
 /** Shown where a translation failed every retry, so a cleaned bubble is never left empty. */
 export const untranslatedPlaceholderZh = "（这句没能翻译）";
-
-const median = (values: number[]) => {
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted.length > 0 ? sorted[sorted.length >> 1]! : null;
-};
 
 /** The part of an upright box inside the limit, or the box itself when hardly anything of it is inside. */
 const clipTo = (box: Box, limit: Box): Box => {
@@ -77,8 +72,10 @@ export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: Volu
     const width = boxWidth(box);
     const height = boxHeight(box);
     const direction = height > verticalAspect * width ? "v" : "h";
-    const sourceSize = median(region.lines.map((line) => line.rect.short * glyphShareOfLine)) ?? fallbackFontSize;
-    const layout = layoutText(shaper, target, direction, width, height, minFontSize, Math.min(maxFontSize, Math.max(minFontSize, sourceSize * sourceSizeHeadroom)));
+    // An utterance set larger or smaller than the rest of its bubble keeps its own size.
+    const lineThickness = region.utterances[ref.utteranceIndex]!.lineThickness ?? textThickness(region.lines);
+    const sourceSize = lineThickness === null ? fallbackFontSize : lineThickness * glyphShareOfLine;
+    const layout = layoutText(shaper, target, direction, width, height, minFontSize, Math.max(minFontSize, sourceSize * sourceSizeHeadroom));
     if (layout.overflow) overflow.push(unit.id);
     const style = letteringStyle(region.ink ?? null, region.paper ?? null, region.outline ?? null);
     blocks.push(placedBlockSvg(shaper, layout, { cx: (box.x0 + box.x1) / 2, cy: (box.y0 + box.y1) / 2, width, height, angle }, style));

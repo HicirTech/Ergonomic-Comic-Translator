@@ -5,6 +5,8 @@ export interface UtteranceResult {
   /** Box in the region's upright frame. */
   box: Box;
   lineIndexes: number[];
+  /** Median thickness of the utterance's own line rectangles: its text size. Null without lines. */
+  lineThickness: number | null;
   startReasons: CutReason[];
   nameTag: boolean;
   thought: boolean;

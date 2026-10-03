@@ -19,4 +19,6 @@ export interface PlannedUtterance {
   lineCrop: OcrCrop | null;
   /** The structure OCR of a horizontal utterance's lines, joined; null for vertical text and when no line was read. */
   lineReading: LineReading | null;
+  /** Median thickness of the utterance's own line rectangles; null for a region read whole, without lines. */
+  lineThickness: number | null;
 }

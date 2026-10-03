@@ -150,6 +150,7 @@ describe("typesetPage", () => {
       utterances: [{
         box: { x0: 0, y0: 0, x1: 200, y1: 200 },
         lineIndexes: [],
+        lineThickness: null,
         startReasons: [],
         nameTag: false,
         thought: false,
@@ -218,6 +219,18 @@ describe("typesetPage", () => {
     expect(svgOf({})).toContain("fill=\"#111111\">");
     expect(svgOf({ ink: [24, 20, 22], paper: [70, 72, 80] })).toContain("fill=\"#181416\">");
     expect(svgOf({ ink: [250, 250, 250], paper: [28, 30, 36], outline: [0, 0, 0] })).toContain("fill=\"#fafafa\" stroke=\"#000000\"");
+  });
+
+  it("sets each utterance at the size of its own lines", () => {
+    const region = vision.regions[0]!;
+    const big: PageVisionResult = {
+      ...vision,
+      regions: [{ ...region, lines: [line(200, 150, 180, 30, 0), line(200, 250, 180, 80, 0)], utterances: [{ ...region.utterances[0]!, lineThickness: 80 }] }],
+    };
+    // The region's median line is 80 px thick here too, but only because of this utterance: 0.74 * 80 * 1.1 = 65.
+    expect(placedBox(typesetPage(fakeShaper, big, text, translation).svg).fontSize).toBe(65);
+    const small: PageVisionResult = { ...big, regions: [{ ...big.regions[0]!, utterances: [{ ...region.utterances[0]!, lineThickness: 30 }] }] };
+    expect(placedBox(typesetPage(fakeShaper, small, text, translation).svg).fontSize).toBe(24);
   });
 
   it("never leaves a cleaned bubble empty when the translation failed", () => {

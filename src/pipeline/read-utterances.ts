@@ -80,6 +80,7 @@ export const utteranceResults = (
     return {
       box: item.box,
       lineIndexes: item.split.lines,
+      lineThickness: item.lineThickness,
       startReasons: item.split.startReasons,
       nameTag: item.split.nameTag,
       thought: item.split.thought,

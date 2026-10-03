@@ -421,6 +421,7 @@ describe("ocr page score", () => {
         utterances: [{
           box: regionBox,
           lineIndexes: [],
+          lineThickness: null,
           startReasons: [],
           nameTag: false,
           thought: false,
@@ -491,6 +492,7 @@ describe("ocr page score", () => {
       utterances: [{
         box,
         lineIndexes: [],
+        lineThickness: null,
         startReasons: [],
         nameTag: false,
         thought: false,
@@ -579,6 +581,7 @@ describe("planned search reads", () => {
     utterances: [{
       box: { x0: 2, y0: 2, x1: 38, y1: 14 },
       lineIndexes: [0],
+      lineThickness: null,
       startReasons: [],
       nameTag: false,
       thought: false,
