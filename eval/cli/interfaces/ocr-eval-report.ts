@@ -6,6 +6,7 @@ import type { OcrKindSummary } from "./ocr-kind-summary.ts";
 import type { OcrLineRotation } from "./ocr-line-rotation.ts";
 import type { FalsePositiveRegion } from "./false-positive-region.ts";
 import type { OcrRemovalScore } from "./ocr-removal-score.ts";
+import type { OcrSfxScore } from "./ocr-sfx-score.ts";
 
 /** Full per-item eval. The stdout table is a projection of `summary` and `checks` only. */
 export interface OcrEvalReport {
@@ -50,6 +51,12 @@ export interface OcrEvalReport {
     meanMaskedMae: number;
     meanChangesOutside: number;
     meanStrongResidual: number;
+    /** Art lettering totals over all pages; see OcrSfxScore. The damage share pools the pixels of every mark. */
+    sfxMarks: number;
+    sfxAbsorbedLines: number;
+    sfxTranslatedRegions: number;
+    sfxKeptRegions: number;
+    sfxDamageShare: number;
     byKind: Record<LayoutKind, OcrKindSummary>;
   };
   pages: {
@@ -60,6 +67,7 @@ export interface OcrEvalReport {
     removal: OcrRemovalScore;
     /** Predicted regions that cover no ground-truth block. */
     falsePositives: FalsePositiveRegion[];
+    sfx: OcrSfxScore;
     blocks: OcrBlockScore[];
     rotations: OcrLineRotation[];
   }[];

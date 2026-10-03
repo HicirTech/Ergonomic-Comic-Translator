@@ -60,6 +60,21 @@ export const bubblePadPx = 28;
 export const bubbleStrokePx = 3;
 export const panelPadPx = 24;
 
+/**
+ * Art lettering across a bubble outline, as on dense SFX pages: several times the dialogue size, capped so
+ * it still fits beside the bubble. It keeps this gap from the dialogue, which it must never cover.
+ */
+export const sfxFontScale = 2.2;
+export const maxSfxFontSizePx = 110;
+export const sfxTextGapPx = 8;
+/** Outward steps when pushing the lettering off the dialogue, and the directions around the bubble tried in order. */
+export const sfxPushStepPx = 8;
+export const sfxRimAnglesDeg = [-40, 40, -140, 140, 0, 180, -90, 90] as const;
+export const sfxFillRgb = [222, 52, 136] as const;
+export const sfxStrokeRgb = [44, 18, 52] as const;
+/** Outline width of the lettering as a share of its font size. */
+export const sfxStrokeShare = 0.08;
+
 /** Bands closer than this share a row and are read right to left. */
 export const readingBandPx = 80;
 

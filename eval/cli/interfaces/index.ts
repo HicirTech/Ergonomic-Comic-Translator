@@ -7,6 +7,7 @@ export type { OcrEvalReport } from "./ocr-eval-report.ts";
 export type { OcrKindSummary } from "./ocr-kind-summary.ts";
 export type { OcrLineRotation } from "./ocr-line-rotation.ts";
 export type { OcrRemovalScore } from "./ocr-removal-score.ts";
+export type { OcrSfxScore } from "./ocr-sfx-score.ts";
 export type { RealEvalOptions } from "./real-eval-options.ts";
 export type { RealEvalReport } from "./real-eval-report.ts";
 export type { RealPairScore } from "./real-pair-score.ts";

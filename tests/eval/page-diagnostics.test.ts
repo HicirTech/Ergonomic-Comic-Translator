@@ -4,11 +4,12 @@ import type { RgbImage } from "../../src/imaging/interfaces/index.ts";
 import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
 import type { TextLine } from "../../src/stages/lines/interfaces/index.ts";
 import { scoreSyntheticPage } from "../../eval/cli/score-page.ts";
-import { attributeOutsideChanges, falsePositivesOf } from "../../eval/cli/page-diagnostics.ts";
+import { attributeOutsideChanges, falsePositivesOf, sfxScoreOf } from "../../eval/cli/page-diagnostics.ts";
 import { formatSummaryZh } from "../../eval/cli/format-summary-zh.ts";
 import { buildOcrReport } from "../../eval/cli/summarize-ocr.ts";
 import type { SyntheticPage } from "../../eval/synthetic/interfaces/index.ts";
 import { bubblePadPx } from "../../eval/synthetic/constants.ts";
+import { line } from "../stages/fixtures.ts";
 
 const rgb = (width: number, height: number, value: number): RgbImage => {
   const data = new Uint8Array(width * height * 3);
@@ -50,6 +51,7 @@ const pageOf = (background: SyntheticPage["background"], bubble: boolean): Synth
     polygon: quad(0, 0, 40, 40),
     lines: [{ text: "glyph", order: 0, polygon: quad(0, 0, 40, 40), cx: 20, cy: 20, width: 40, height: 40 }],
   }],
+  sfx: [],
 });
 
 const region = (
@@ -108,6 +110,41 @@ describe("false positive surfaces", () => {
     expect(bubblePadPx).toBeGreaterThan(0);
     const [kept] = falsePositivesOf(paper, regions, claimed);
     expect(kept).toMatchObject({ cls: "text_free", clean: "inpaint", classification: { policy: "keep" }, width: 20, height: 20, area: 400 });
+  });
+});
+
+describe("art lettering", () => {
+  it("counts lettering read with the dialogue, lettering taken for text by policy, and changed lettering pixels", () => {
+    const page: SyntheticPage = {
+      ...pageOf("paper", true),
+      width: 20,
+      height: 20,
+      sfx: [{ id: "s0", text: "sfx", fontSize: 40, angle: 0, cx: 15, cy: 5, width: 10, height: 10, polygon: quad(10, 0, 20, 10) }],
+    };
+    const dialogue = { ...region({ x0: 0, y0: 0, x1: 12, y1: 12 }, "flat", "translate"), lines: [line(15, 5, 6, 2, 0), line(2, 2, 3, 2, 0)] };
+    const regions = [
+      dialogue,
+      region({ x0: 12, y0: 2, x1: 18, y1: 8 }, "inpaint", "translate"),
+      region({ x0: 13, y0: 3, x1: 17, y1: 7 }, "flat", "keep"),
+      region({ x0: 0, y0: 14, x1: 4, y1: 16 }, "flat", "translate"),
+    ];
+    const background = rgb(20, 20, 100);
+    const cleaned = rgb(20, 20, 100);
+    for (const [x, y] of [[11, 1], [12, 2], [19, 9], [1, 15]] as const) setPixel(cleaned, x, y, 0);
+    expect(sfxScoreOf(page, regions, new Set([0]), background.data, cleaned.data)).toEqual({
+      marks: 1,
+      absorbedLines: 1,
+      translatedRegions: 1,
+      keptRegions: 1,
+      damagedPixels: 3,
+      pixels: 100,
+    });
+  });
+
+  it("scores nothing on a page without lettering", () => {
+    const page = pageOf("paper", true);
+    const score = sfxScoreOf(page, [region({ x0: 0, y0: 0, x1: 4, y1: 4 }, "flat", "translate")], new Set([0]), rgb(8, 8, 1).data, rgb(8, 8, 2).data);
+    expect(score).toEqual({ marks: 0, absorbedLines: 0, translatedRegions: 0, keptRegions: 0, damagedPixels: 0, pixels: 0 });
   });
 });
 

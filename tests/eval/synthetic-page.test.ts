@@ -2,12 +2,25 @@ import sharp from "sharp";
 import { describe, expect, it } from "bun:test";
 import { canonicalJson } from "../../src/core/canonical-json.ts";
 import { sha256Hex } from "../../src/core/hash.ts";
+import { boundingBoxOfPoints, expandBox, intersectionArea } from "../../src/geometry/box.ts";
+import { rasterizeConvexQuad } from "../../src/geometry/raster.ts";
 import { lineCrop } from "../../src/pipeline/plan-utterances.ts";
 import type { Shaper } from "../../src/typeset/interfaces/index.ts";
-import { maxFontSizePx, maxSlantDeg, minFontSizePx, minSlantDeg, pageHeightPx, pageWidthPx } from "../../eval/synthetic/constants.ts";
+import {
+  bubblePadPx,
+  maxFontSizePx,
+  maxSlantDeg,
+  minFontSizePx,
+  minSlantDeg,
+  pageHeightPx,
+  pageMarginPx,
+  pageWidthPx,
+  sfxTextGapPx,
+} from "../../eval/synthetic/constants.ts";
 import { blockCropOf, linePolygon, rotatedRectFromPolygon, textLineFromPolygon } from "../../eval/synthetic/line-geometry.ts";
 import { assertGlyphsPresent, missingGlyphs } from "../../eval/synthetic/missing-glyph.ts";
 import { paintSyntheticPage } from "../../eval/synthetic/paint-page.ts";
+import { insideBubble } from "../../eval/synthetic/painted-surface.ts";
 import { planSyntheticPages } from "../../eval/synthetic/plan-pages.ts";
 import { singleSentences } from "../../eval/synthetic/sentences.ts";
 
@@ -158,6 +171,58 @@ describe("synthetic pages", () => {
     const art = await paintSyntheticPage(fakeShaper, { ...page, blocks: page.blocks.map((block) => ({ ...block, kind: "art-h" })) });
     const ink = (mask: Uint8Array) => mask.reduce((sum, value) => sum + value, 0);
     expect(ink(art.mask)).toBeGreaterThan(ink(plain.mask));
+  });
+
+  it("puts art lettering across the bubble outline, clear of every block and on the page", () => {
+    let placed = 0;
+    for (const seed of [1, 2, 8, 99]) {
+      for (const page of planSyntheticPages(fakeShaper, seed, 9)) {
+        const host = page.blocks.find((block) => block.bubble);
+        if (!host) {
+          expect(page.sfx).toEqual([]);
+          continue;
+        }
+        for (const mark of page.sfx) {
+          placed += 1;
+          const bounds = boundingBoxOfPoints(mark.polygon);
+          for (const block of page.blocks) {
+            expect(intersectionArea(bounds, expandBox(boundingBoxOfPoints(block.polygon), sfxTextGapPx))).toBe(0);
+          }
+          const disc = expandBox(boundingBoxOfPoints(host.polygon), bubblePadPx);
+          const samples = mark.polygon.flatMap((point, index) => {
+            const next = mark.polygon[(index + 1) % 4]!;
+            return [0, 0.25, 0.5, 0.75].map((share) => ({ x: point.x + (next.x - point.x) * share, y: point.y + (next.y - point.y) * share }));
+          });
+          expect(samples.some((point) => insideBubble(point, disc))).toBe(true);
+          expect(samples.some((point) => !insideBubble(point, disc))).toBe(true);
+          for (const point of mark.polygon) {
+            expect(point.x).toBeGreaterThanOrEqual(pageMarginPx);
+            expect(point.y).toBeGreaterThanOrEqual(pageMarginPx);
+            expect(point.x).toBeLessThanOrEqual(pageWidthPx - pageMarginPx);
+            expect(point.y).toBeLessThanOrEqual(pageHeightPx - pageMarginPx);
+          }
+        }
+      }
+    }
+    expect(placed).toBeGreaterThan(8);
+  });
+
+  it("paints art lettering into the clean background and keeps it out of the text mask", async () => {
+    const page = planSyntheticPages(fakeShaper, 1, 1)[0]!;
+    expect(page.sfx).toHaveLength(1);
+    const withLettering = await paintSyntheticPage(fakeShaper, page);
+    const without = await paintSyntheticPage(fakeShaper, { ...page, sfx: [] });
+    const lettering = new Uint8Array(page.width * page.height);
+    rasterizeConvexQuad(lettering, page.width, page.height, page.sfx[0]!.polygon);
+    const raw = async (png: Uint8Array) => (await sharp(png).removeAlpha().raw().toBuffer()) as Uint8Array;
+    const [backgroundA, backgroundB] = [await raw(withLettering.backgroundPng), await raw(without.backgroundPng)];
+    let changed = 0;
+    for (let index = 0; index < lettering.length; index += 1) {
+      if (!lettering[index]) continue;
+      if (backgroundA[index * 3] !== backgroundB[index * 3] || backgroundA[index * 3 + 1] !== backgroundB[index * 3 + 1]) changed += 1;
+      expect(withLettering.mask[index]).toBe(without.mask[index]!);
+    }
+    expect(changed).toBeGreaterThan(0);
   });
 
   it("names the characters the font cannot draw", () => {

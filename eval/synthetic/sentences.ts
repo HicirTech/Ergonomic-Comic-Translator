@@ -23,4 +23,7 @@ export const lineGroups = [
   ["それならいいけど・・・・", "まだ分からない……"],
 ] as const;
 
-export const corpusTexts = [...new Set<string>([...singleSentences, ...lineGroups.flat()])];
+/** Art lettering (sound effects). Painted into the background: the owner's rule leaves it untranslated and uncleaned. */
+export const sfxTexts = ["ドドド", "ゴゴゴ", "バーン", "ザワッ"] as const;
+
+export const corpusTexts = [...new Set<string>([...singleSentences, ...lineGroups.flat(), ...sfxTexts])];

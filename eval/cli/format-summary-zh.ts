@@ -78,6 +78,7 @@ export const formatSummaryZh = (report: OcrEvalReport) => {
     `扣字掩膜内MAE ${summary.meanMaskedMae.toFixed(2)}  膨胀掩膜外变化像素 ${summary.meanChangesOutside.toFixed(1)}  文字残留 ${ratio(summary.meanStrongResidual)}`,
     `误检 ${summary.falsePositiveCount}（气泡 ${summary.falsePositivesOnBubble}，纹理或噪声 ${summary.falsePositivesOnTextureOrNoise}，白纸 ${summary.falsePositivesOnPlainPaper}）`,
     `掩膜外变化归属：命中区域 ${summary.meanDamageInsideMatched.toFixed(1)}，误检区域 ${summary.meanDamageInsideFalsePositive.toFixed(1)}，区域外 ${summary.meanDamageOutsideRegions.toFixed(1)}；平涂 ${summary.meanDamageFlat.toFixed(1)}，修补 ${summary.meanDamageInpaint.toFixed(1)}`,
+    `横穿气泡的拟声词 ${summary.sfxMarks} 个：并进对白区域的行 ${summary.sfxAbsorbedLines}，单独成区送译 ${summary.sfxTranslatedRegions}、保留 ${summary.sfxKeptRegions}，被改动的像素 ${ratio(summary.sfxDamageShare)}`,
     `纵向字错率不超过横向 ${thresholds.verticalCerGapLimit}：${mark(checks.verticalCer)}`,
     `逐行所选旋转至少 ${thresholds.rotationBestShareMin}：${mark(checks.lineRotation)}`,
     `句子所选旋转至少 ${thresholds.sentenceRotationBestShareMin}：${mark(checks.sentenceRotation)}`,

@@ -1,12 +1,14 @@
-import { boundingBoxOfPoints, intersectionArea } from "../../src/geometry/box.ts";
+import { boundingBoxOfPoints, boxCenter, expandBox, intersectionArea } from "../../src/geometry/box.ts";
 import type { Point } from "../../src/geometry/interfaces/index.ts";
 import { rotatePoint } from "../../src/geometry/rotated-rect.ts";
 import type { Shaper } from "../../src/typeset/interfaces/index.ts";
 import { normalizeForCer } from "../metrics/ocr-metrics.ts";
 import {
+  bubblePadPx,
   bubbleRoles,
   kindDirection,
   maxFontSizePx,
+  maxSfxFontSizePx,
   maxSlantDeg,
   minFontSizePx,
   minSlantDeg,
@@ -17,14 +19,20 @@ import {
   pageRoles,
   pageWidthPx,
   readingBandPx,
+  sfxFontScale,
+  sfxPushStepPx,
+  sfxRimAnglesDeg,
+  sfxStrokeShare,
+  sfxTextGapPx,
   stackedLinePitch,
 } from "./constants.ts";
 import { fitLine } from "./fit-line.ts";
-import type { GroundTruthBlock, GroundTruthLine, LayoutKind, SyntheticPage } from "./interfaces/index.ts";
+import type { GroundTruthBlock, GroundTruthLine, LayoutKind, Quad, SfxMark, SyntheticPage } from "./interfaces/index.ts";
 import { layoutQuad, linePolygon } from "./line-geometry.ts";
 import { assertGlyphsPresent } from "./missing-glyph.ts";
+import { insideBubble } from "./painted-surface.ts";
 import { createRng, rngInt } from "./rng.ts";
-import { corpusTexts, lineGroups, singleSentences } from "./sentences.ts";
+import { corpusTexts, lineGroups, sfxTexts, singleSentences } from "./sentences.ts";
 
 type PageRole = (typeof pageRoles)[number];
 
@@ -126,6 +134,49 @@ const assertOnPage = (page: SyntheticPage) => {
   }
 };
 
+const insideMargins = (point: Point) =>
+  point.x >= pageMarginPx && point.y >= pageMarginPx && point.x <= pageWidthPx - pageMarginPx && point.y <= pageHeightPx - pageMarginPx;
+
+/** Corners and three points between each pair, so a crossing edge counts even when no corner is inside. */
+const edgeSamples = (polygon: Quad) => polygon.flatMap((point, index) => {
+  const next = polygon[(index + 1) % polygon.length]!;
+  return [0, 0.25, 0.5, 0.75].map((share) => ({ x: point.x + (next.x - point.x) * share, y: point.y + (next.y - point.y) * share }));
+});
+
+/**
+ * Art lettering across the outline of the page's bubble. Tries the directions around the bubble in order and
+ * pushes the lettering outward until it clears every block; it is placed at the first spot that still
+ * reaches into the bubble and stays on the page. Null when the page has no bubble or no direction works.
+ */
+const placeSfx = (shaper: Shaper, blocks: readonly GroundTruthBlock[], fontSize: number, rng: () => number, id: string): SfxMark | null => {
+  const host = blocks.find((block) => block.bubble);
+  if (!host) return null;
+  const text = sfxTexts[rngInt(rng, 0, sfxTexts.length - 1)]!;
+  const size = Math.min(maxSfxFontSizePx, Math.round(fontSize * sfxFontScale));
+  const angle = rngInt(rng, minSlantDeg, maxSlantDeg) * (rng() < 0.5 ? -1 : 1);
+  const fitted = fitLine(shaper, text, "h", size, false);
+  const stroke = sfxStrokeShare * size;
+  const width = fitted.width + stroke * 2;
+  const height = fitted.height + stroke * 2;
+  const disc = expandBox(boundingBoxOfPoints(host.polygon), bubblePadPx);
+  const middle = boxCenter(disc);
+  const clear = blocks.map((block) => expandBox(boundingBoxOfPoints(block.polygon), sfxTextGapPx));
+  for (const degrees of sfxRimAnglesDeg) {
+    const radians = (degrees * Math.PI) / 180;
+    const rim = { x: middle.x + ((disc.x1 - disc.x0) / 2) * Math.cos(radians), y: middle.y + ((disc.y1 - disc.y0) / 2) * Math.sin(radians) };
+    for (let push = 0; push <= Math.max(width, height); push += sfxPushStepPx) {
+      const at = { x: rim.x + push * Math.cos(radians), y: rim.y + push * Math.sin(radians) };
+      const polygon = layoutQuad(at, width, height, angle);
+      if (!polygon.every(insideMargins)) break;
+      if (!edgeSamples(polygon).some((point) => insideBubble(point, disc))) break;
+      const bounds = boundingBoxOfPoints(polygon);
+      if (clear.some((box) => intersectionArea(bounds, box) > 0)) continue;
+      return { id, text, fontSize: size, angle, cx: at.x, cy: at.y, width, height, polygon };
+    }
+  }
+  return null;
+};
+
 const assignReadingOrder = (blocks: GroundTruthBlock[]) => {
   const ordered = [...blocks].sort((a, b) => {
     if (Math.abs(a.cy - b.cy) > readingBandPx) return a.cy - b.cy;
@@ -148,6 +199,7 @@ const planPage = (shaper: Shaper, seed: number, index: number, rng: () => number
   const id = `p${String(index).padStart(4, "0")}`;
   const blocks = specsFor(role, single, group, slant, artLine).map((spec, blockIndex) =>
     buildBlock(shaper, spec, fontSize, `${id}-b${blockIndex}`));
+  const sfx = placeSfx(shaper, blocks, fontSize, rng, `${id}-s0`);
   const page: SyntheticPage = {
     id,
     seed,
@@ -156,6 +208,7 @@ const planPage = (shaper: Shaper, seed: number, index: number, rng: () => number
     height: pageHeightPx,
     background: backgroundOf(role),
     blocks: assignReadingOrder(blocks),
+    sfx: sfx ? [sfx] : [],
   };
   assertOnPage(page);
   return page;

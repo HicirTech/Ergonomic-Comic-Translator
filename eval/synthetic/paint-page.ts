@@ -4,7 +4,7 @@ import { boundingBoxOfPoints, expandBox } from "../../src/geometry/box.ts";
 import type { RgbImage } from "../../src/imaging/interfaces/index.ts";
 import type { Shaper } from "../../src/typeset/interfaces/index.ts";
 import { layoutText } from "../../src/typeset/layout.ts";
-import { pageOverlaySvg, placedBlockSvg } from "../../src/typeset/svg.ts";
+import { layoutPaths, pageOverlaySvg, placedBlockSvg } from "../../src/typeset/svg.ts";
 import {
   bubbleFillRgb,
   bubblePadPx,
@@ -19,6 +19,9 @@ import {
   panelPadPx,
   paperNoiseAmp,
   paperRgb,
+  sfxFillRgb,
+  sfxStrokeRgb,
+  sfxStrokeShare,
   textureBlotchAmp,
   textureNoiseAmp,
   textureRgb,
@@ -120,39 +123,34 @@ const textSvg = (shaper: Shaper, page: SyntheticPage) => {
   return pageOverlaySvg(page.width, page.height, blocks);
 };
 
-interface PaintedPage {
-  backgroundPng: Uint8Array;
-  pagePng: Uint8Array;
-  maskPng: Uint8Array;
-  /** Glyph and outline pixels, 0 or 255, one byte per page pixel. */
-  mask: Uint8Array;
-}
+/**
+ * Art lettering: colour fill over a dark outline, placed and turned the way placedBlockSvg places a block.
+ * The glyph paths are in font units, so the outline width is a share of the em.
+ */
+const sfxSvg = (shaper: Shaper, page: SyntheticPage) => pageOverlaySvg(page.width, page.height, page.sfx.map((mark) => {
+  const layout = layoutText(shaper, mark.text, "h", mark.width, mark.height, mark.fontSize, mark.fontSize);
+  if (layout.lines !== 1 || layout.overflow) throw new Error(`Planned lettering no longer fits: ${mark.id}`);
+  const transform = `translate(${mark.cx.toFixed(2)} ${mark.cy.toFixed(2)}) rotate(${mark.angle}) translate(${(-mark.width / 2).toFixed(2)} ${(-mark.height / 2).toFixed(2)})`;
+  const paint = `fill="rgb(${sfxFillRgb.join(",")})" stroke="rgb(${sfxStrokeRgb.join(",")})" stroke-width="${(sfxStrokeShare * shaper.upem).toFixed(2)}"`;
+  return `<g transform="${transform}" ${paint} stroke-linejoin="round" paint-order="stroke">${layoutPaths(shaper, layout)}</g>`;
+}));
 
-/** Renders the clean background, the page with text, and the text mask. Resvg options match composePage. */
-export const paintSyntheticPage = async (shaper: Shaper, page: SyntheticPage): Promise<PaintedPage> => {
-  const background = fillBase(page);
-  paintScenery(page, background);
-  const overlay = new Resvg(textSvg(shaper, page), { fitTo: { mode: "original" }, font: { loadSystemFonts: false } }).render().asPng();
-  const decoded = await sharp(overlay).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  if (decoded.info.width !== page.width || decoded.info.height !== page.height || decoded.info.channels !== 4) {
-    throw new Error(`Text overlay is ${decoded.info.width}x${decoded.info.height}x${decoded.info.channels}, expected ${page.width}x${page.height}x4`);
-  }
-  const mask = new Uint8Array(page.width * page.height);
-  for (let index = 0; index < mask.length; index += 1) {
-    if (decoded.data[index * 4 + 3]! > 0) mask[index] = 255;
-  }
-  const rawRgb = { width: page.width, height: page.height, channels: 3 as const };
-  const backgroundPng = new Uint8Array(await sharp(background.data, { raw: rawRgb }).png().toBuffer());
-  // sharp keeps the overlay alpha, so the page would be RGBA while the background is RGB.
-  // The stored page is the composited colour only, same size and channel count as the background.
-  const composited = await sharp(background.data, { raw: rawRgb })
+/** Resvg options match composePage. */
+const renderSvg = (svg: string) => new Resvg(svg, { fitTo: { mode: "original" }, font: { loadSystemFonts: false } }).render().asPng();
+
+/**
+ * An RGB image with a page-sized overlay composited on top. sharp keeps the overlay alpha, so the result could
+ * be RGBA; only the composited colour is returned, with the size and channel count of the input.
+ */
+const compositeOverlay = async (image: RgbImage, overlay: Buffer) => {
+  const composited = await sharp(image.data, { raw: { width: image.width, height: image.height, channels: 3 } })
     .composite([{ input: overlay }])
     .raw()
     .toBuffer({ resolveWithObject: true });
-  if (composited.info.width !== page.width || composited.info.height !== page.height) {
-    throw new Error(`Composited page is ${composited.info.width}x${composited.info.height}, expected ${page.width}x${page.height}`);
+  if (composited.info.width !== image.width || composited.info.height !== image.height) {
+    throw new Error(`Composited page is ${composited.info.width}x${composited.info.height}, expected ${image.width}x${image.height}`);
   }
-  const rgb = new Uint8Array(page.width * page.height * 3);
+  const rgb = new Uint8Array(image.width * image.height * 3);
   if (composited.info.channels === 3) {
     rgb.set(composited.data);
   } else if (composited.info.channels === 4) {
@@ -164,6 +162,37 @@ export const paintSyntheticPage = async (shaper: Shaper, page: SyntheticPage): P
   } else {
     throw new Error(`Composited page has ${composited.info.channels} channels, expected 3 or 4`);
   }
+  return rgb;
+};
+
+interface PaintedPage {
+  backgroundPng: Uint8Array;
+  pagePng: Uint8Array;
+  maskPng: Uint8Array;
+  /** Glyph and outline pixels, 0 or 255, one byte per page pixel. */
+  mask: Uint8Array;
+}
+
+/**
+ * Renders the clean background, the page with text, and the text mask. Art lettering belongs to the clean
+ * background: it is painted before the text and stays out of the mask.
+ */
+export const paintSyntheticPage = async (shaper: Shaper, page: SyntheticPage): Promise<PaintedPage> => {
+  const painted = fillBase(page);
+  paintScenery(page, painted);
+  const background = page.sfx.length === 0 ? painted : { ...painted, data: await compositeOverlay(painted, renderSvg(sfxSvg(shaper, page))) };
+  const overlay = renderSvg(textSvg(shaper, page));
+  const decoded = await sharp(overlay).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  if (decoded.info.width !== page.width || decoded.info.height !== page.height || decoded.info.channels !== 4) {
+    throw new Error(`Text overlay is ${decoded.info.width}x${decoded.info.height}x${decoded.info.channels}, expected ${page.width}x${page.height}x4`);
+  }
+  const mask = new Uint8Array(page.width * page.height);
+  for (let index = 0; index < mask.length; index += 1) {
+    if (decoded.data[index * 4 + 3]! > 0) mask[index] = 255;
+  }
+  const rawRgb = { width: page.width, height: page.height, channels: 3 as const };
+  const backgroundPng = new Uint8Array(await sharp(background.data, { raw: rawRgb }).png().toBuffer());
+  const rgb = await compositeOverlay(background, overlay);
   const pagePng = new Uint8Array(await sharp(rgb, { raw: rawRgb }).png().toBuffer());
   const maskPng = new Uint8Array(await sharp(mask, { raw: { width: page.width, height: page.height, channels: 1 } }).png().toBuffer());
   return { backgroundPng, pagePng, maskPng, mask };

@@ -21,7 +21,7 @@ import {
 import { chosenLineQuarterTurns } from "../synthetic/line-geometry.ts";
 import type { SyntheticPage } from "../synthetic/interfaces/index.ts";
 import type { OcrBlockScore, OcrLineRotation, OcrRemovalScore, SearchCandidate } from "./interfaces/index.ts";
-import { attributeOutsideChanges, falsePositivesOf } from "./page-diagnostics.ts";
+import { attributeOutsideChanges, falsePositivesOf, sfxScoreOf } from "./page-diagnostics.ts";
 import { evalReadingDirection, plannedSearchReads } from "./search-reads.ts";
 
 const minOrderLines = 2;
@@ -196,6 +196,7 @@ export const scoreSyntheticPage = (
       matched: claimed.has(index),
     }))),
     falsePositives: falsePositivesOf(page, vision.regions, claimed),
+    sfx: sfxScoreOf(page, vision.regions, claimed, background.data, cleaned.data),
     blocks,
     rotations,
   };

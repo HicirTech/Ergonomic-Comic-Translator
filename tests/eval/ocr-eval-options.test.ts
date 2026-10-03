@@ -19,6 +19,9 @@ import {
   writingModeAccuracyMin,
 } from "../../eval/metrics/ocr-metrics.ts";
 
+/** Scores of a page without art lettering. */
+const noSfx = { marks: 0, absorbedLines: 0, translatedRegions: 0, keptRegions: 0, damagedPixels: 0, pixels: 0 };
+
 describe("ocr eval options", () => {
   it("keeps a positional when no option is present", () => {
     const parsed = parseOcrEvalArgs(["page.png"]);
@@ -122,6 +125,11 @@ describe("ocr eval summary", () => {
       meanMaskedMae: 1.5,
       meanChangesOutside: 4,
       meanStrongResidual: 0.2,
+      sfxMarks: 3,
+      sfxAbsorbedLines: 2,
+      sfxTranslatedRegions: 1,
+      sfxKeptRegions: 0,
+      sfxDamageShare: 0.25,
       byKind: {
         "h-line": { ...emptyKind, blocks: 1, cer: 0.1, baberuProductCer: 0.4, baberuBestCer: 0.1 },
         "h-block": emptyKind,
@@ -209,6 +217,7 @@ describe("ocr eval summary", () => {
       detectionPrecision: 0,
       removal: { maskedMae: 1, changesOutsideDilatedMask: 2, strongResidualShare: 0, damage: { changed: 2, insideMatched: 0, insideFalsePositive: 0, outsideRegions: 2, flat: 0, inpaint: 0, kept: 0, none: 0 } },
       falsePositives: [],
+      sfx: noSfx,
       blocks: [
         block({
           blockId: "h",
@@ -303,6 +312,7 @@ describe("ocr eval summary", () => {
       detectionPrecision: 1,
       removal: { maskedMae: 0, changesOutsideDilatedMask: 0, strongResidualShare: 0, damage: { changed: 0, insideMatched: 0, insideFalsePositive: 0, outsideRegions: 0, flat: 0, inpaint: 0, kept: 0, none: 0 } },
       falsePositives: [],
+      sfx: noSfx,
       blocks: [
         block({ blockId: "h", kind: "h-line", direction: "h", box: horizontal, lineOrderMatch: true }),
         block({ blockId: "v", kind: "v-column", direction: "v", box: vertical }),
@@ -334,6 +344,7 @@ describe("ocr eval summary", () => {
       detectionPrecision: 0,
       removal: { maskedMae: 0, changesOutsideDilatedMask: 0, strongResidualShare: 0, damage: { changed: 0, insideMatched: 0, insideFalsePositive: 0, outsideRegions: 0, flat: 0, inpaint: 0, kept: 0, none: 0 } },
       falsePositives: [],
+      sfx: noSfx,
       blocks: [
         block({ blockId: "ok", kind: "v-column", direction: "v", box: found }),
         block({
@@ -389,6 +400,7 @@ describe("ocr page score", () => {
       width: 2,
       height: 2,
       background: "dark",
+      sfx: [],
       blocks: [block],
     };
     const image: RgbImage = { data: new Uint8Array(12), width: 2, height: 2 };
@@ -501,6 +513,7 @@ describe("ocr page score", () => {
       width: 10,
       height: 30,
       background: "paper",
+      sfx: [],
       blocks,
     });
     const split = scoreSyntheticPage(

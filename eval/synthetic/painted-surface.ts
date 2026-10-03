@@ -6,7 +6,8 @@ import type { SyntheticPage } from "./interfaces/index.ts";
 /** What the generator painted under a point: a bubble disc, noisy scenery, or the paper fill. */
 export type PaintedSurface = "bubble" | "texture-or-noise" | "plain-paper";
 
-const insideBubble = (point: Point, box: Box) => {
+/** True inside the ellipse paintBubble draws in `box` (the block bounds grown by bubblePadPx). */
+export const insideBubble = (point: Point, box: Box) => {
   const cx = (box.x0 + box.x1) / 2;
   const cy = (box.y0 + box.y1) / 2;
   const rx = (box.x1 - box.x0) / 2;

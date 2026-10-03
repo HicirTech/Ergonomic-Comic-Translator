@@ -1,9 +1,10 @@
-import { boxArea, boxHeight, boxWidth } from "../../src/geometry/box.ts";
-import type { Box } from "../../src/geometry/interfaces/index.ts";
+import { boxArea, boxCenter, boxHeight, boxWidth } from "../../src/geometry/box.ts";
+import type { Box, Point } from "../../src/geometry/interfaces/index.ts";
+import { rasterizeConvexQuad } from "../../src/geometry/raster.ts";
 import type { RegionResult } from "../../src/pipeline/interfaces/index.ts";
 import type { SyntheticPage } from "../synthetic/interfaces/index.ts";
 import { paintedSurface } from "../synthetic/painted-surface.ts";
-import type { DamageSplit, FalsePositiveRegion } from "./interfaces/index.ts";
+import type { DamageSplit, FalsePositiveRegion, OcrSfxScore } from "./interfaces/index.ts";
 
 const pixelInBox = (box: Box, x: number, y: number) =>
   x + 0.5 >= box.x0 && x + 0.5 < box.x1 && y + 0.5 >= box.y0 && y + 0.5 < box.y1;
@@ -50,6 +51,45 @@ export const attributeOutsideChanges = (
     split[holder.clean] += 1;
   }
   return split;
+};
+
+/**
+ * The art lettering of a page against the pipeline's regions and the cleaned page. Lettering is part of the
+ * clean background, so any changed pixel inside its box is damage; a line of a claimed region centred on it
+ * was read and erased with the dialogue; an unclaimed region centred on it is lettering taken for text.
+ */
+export const sfxScoreOf = (
+  page: SyntheticPage,
+  regions: readonly RegionResult[],
+  claimed: ReadonlySet<number>,
+  background: Uint8Array,
+  cleaned: Uint8Array,
+): OcrSfxScore => {
+  if (page.sfx.length === 0) return { marks: 0, absorbedLines: 0, translatedRegions: 0, keptRegions: 0, damagedPixels: 0, pixels: 0 };
+  const lettering = new Uint8Array(page.width * page.height);
+  for (const mark of page.sfx) rasterizeConvexQuad(lettering, page.width, page.height, mark.polygon);
+  const onLettering = (point: Point) => {
+    const x = Math.floor(point.x);
+    const y = Math.floor(point.y);
+    return x >= 0 && y >= 0 && x < page.width && y < page.height && lettering[y * page.width + x] === 1;
+  };
+  let pixels = 0;
+  let damagedPixels = 0;
+  for (let index = 0; index < lettering.length; index += 1) {
+    if (!lettering[index]) continue;
+    pixels += 1;
+    if (differs(background, cleaned, index * 3)) damagedPixels += 1;
+  }
+  const taken = regions.filter((region, index) => !claimed.has(index) && onLettering(boxCenter(region.box)));
+  return {
+    marks: page.sfx.length,
+    absorbedLines: regions.reduce((sum, region, index) =>
+      sum + (claimed.has(index) ? region.lines.filter((line) => onLettering(line.rect.center)).length : 0), 0),
+    translatedRegions: taken.filter((region) => region.classification.policy !== "keep").length,
+    keptRegions: taken.filter((region) => region.classification.policy === "keep").length,
+    damagedPixels,
+    pixels,
+  };
 };
 
 /** Predicted regions that no ground-truth block claimed under matchByCoverage. */
