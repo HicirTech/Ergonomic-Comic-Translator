@@ -1,9 +1,10 @@
-import { boxArea } from "../../src/geometry/box.ts";
+import { boxArea, intersectionArea } from "../../src/geometry/box.ts";
 import type { Box } from "../../src/geometry/interfaces/index.ts";
 import { rgbToGray } from "../../src/imaging/gray.ts";
 import type { RgbImage } from "../../src/imaging/interfaces/index.ts";
 import { dilateSquare } from "../../src/imaging/morphology.ts";
-import type { RegionResult } from "../../src/pipeline/interfaces/index.ts";
+import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
+import { lineBox } from "../../src/stages/regions/assign-lines.ts";
 import { diffLevel, deriveTextAreas, median3x3 } from "../ground-truth/textless-diff.ts";
 import { matchByCoverage } from "../metrics/ocr-metrics.ts";
 import { regionPrecision, regionRecall } from "../metrics/vision-metrics.ts";
@@ -14,19 +15,12 @@ export const damageHaloRadiusPx = 4;
 /** A cleaned pixel this far from the original text page, per channel, counts as damage or as removed. */
 export const damageLevel = 24;
 
+/** The name runVisionPage gives the whole-page line pass in timingsMs. */
+const pageLineTiming = "page_lines";
+
 const mean = (values: readonly number[]) => (values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length);
 
-const meanMaskedLuma = (image: RgbImage, mask: Uint8Array) => {
-  const gray = rgbToGray(image);
-  let sum = 0;
-  let count = 0;
-  for (let index = 0; index < mask.length; index += 1) {
-    if (!mask[index]) continue;
-    sum += gray.data[index]!;
-    count += 1;
-  }
-  return count === 0 ? null : sum / count;
-};
+const share = (part: number, whole: number) => (whole === 0 ? 0 : part / whole);
 
 /**
  * Mask pixels where the text page is darker than the textless page by at least diffLevel.
@@ -40,28 +34,6 @@ export const textStrokeMask = (text: RgbImage, textless: RgbImage, areaMask: Uin
     if (areaMask[index] && lighter.data[index]! - darker.data[index]! >= diffLevel) stroke[index] = 1;
   }
   return stroke;
-};
-
-/**
- * The text page is the darker image inside the pair difference. classifyPages instead calls the later
- * page the variant; `orderAgrees` is false when that rule picks the page that still has the ink.
- * The textless page is not a cleaning target: these variants remove the box or bubble with the text.
- */
-export const orientTextlessPair = (earlier: RgbImage, later: RgbImage) => {
-  const areas = deriveTextAreas(earlier, later);
-  const earlierLuma = meanMaskedLuma(earlier, areas.mask);
-  const laterLuma = meanMaskedLuma(later, areas.mask);
-  const laterIsText = earlierLuma !== null && laterLuma !== null && laterLuma < earlierLuma;
-  const text = laterIsText ? later : earlier;
-  const textless = laterIsText ? earlier : later;
-  return {
-    text,
-    textless,
-    mask: areas.mask,
-    boxes: areas.boxes,
-    orderAgrees: !laterIsText,
-    strokes: textStrokeMask(text, textless, areas.mask),
-  };
 };
 
 const channelGap = (left: Uint8Array, right: Uint8Array, offset: number) => Math.max(
@@ -115,28 +87,57 @@ export const residualStrokeShare = (original: RgbImage, cleaned: RgbImage, strok
   return { strokePixels: text, residualStrokeShare: text === 0 ? 0 : remaining / text };
 };
 
+/**
+ * Recall of the reference boxes by the regions together with the lines outside every region, and by the
+ * page lines alone, plus how many page lines overlap a reference box. A page line is a line inside a region
+ * or an uncovered one.
+ */
+const lineScores = (reference: readonly Box[], regionBoxes: readonly Box[], vision: Pick<PageVisionResult, "regions" | "uncovered">) => {
+  const uncoveredLines = vision.uncovered.map(lineBox);
+  const lineBoxes = [...vision.regions.flatMap((region) => region.lines.map(lineBox)), ...uncoveredLines];
+  const touching = lineBoxes.filter((box) => reference.some((target) => intersectionArea(box, target) > 0));
+  return {
+    lineBoxes,
+    // A region box is grown to hold its own lines (assignLines, orientRegions) and regionRecall adds up
+    // overlaps, so adding those lines to the regions would count the same pixels twice.
+    regionLineRecall: regionRecall(reference, [...regionBoxes, ...uncoveredLines]),
+    lineRecall: regionRecall(reference, lineBoxes),
+    lineCount: lineBoxes.length,
+    touchingLineCount: touching.length,
+    lineTouchShare: share(touching.length, lineBoxes.length),
+  };
+};
+
+/**
+ * Scores one confirmed pair: the vision result for the text page against the areas where it differs from
+ * the textless page. The textless page is not a cleaning target: these variants remove the box or bubble
+ * together with the text, so it only marks where text was.
+ */
 export const scoreRealPair = (
-  identity: Pick<RealPairScore, "id" | "textOrdinal" | "textlessOrdinal" | "textSha256" | "textlessSha256" | "orderAgrees">,
+  identity: Pick<RealPairScore, "id" | "textOrdinal" | "textlessOrdinal" | "textSha256" | "textlessSha256">,
   text: RgbImage,
+  textless: RgbImage,
   cleaned: RgbImage,
-  areas: { mask: Uint8Array; boxes: Box[] },
-  strokes: Uint8Array,
-  regions: readonly RegionResult[],
+  vision: Pick<PageVisionResult, "regions" | "uncovered" | "timingsMs">,
 ): RealPairScore => {
-  const predicted = regions.map((region) => region.box);
-  const translating = regions.filter((region) => region.classification.policy !== "keep").map((region) => region.box);
+  const areas = deriveTextAreas(text, textless);
+  const predicted = vision.regions.map((region) => region.box);
+  const translating = vision.regions.filter((region) => region.classification.policy !== "keep").map((region) => region.box);
   const matches = matchByCoverage(areas.boxes, predicted);
   const missed = areas.boxes.filter((_box, index) => matches[index]!.matchType === "missed");
   const referenceArea = areas.boxes.reduce((sum, box) => sum + boxArea(box), 0);
   const damage = damageAgainstOriginal(text, cleaned, areas.mask, predicted);
-  const residual = residualStrokeShare(text, cleaned, strokes);
+  const residual = residualStrokeShare(text, cleaned, textStrokeMask(text, textless, areas.mask));
   return {
     ...identity,
+    orderAgrees: identity.textlessOrdinal > identity.textOrdinal,
     width: text.width,
     height: text.height,
     referenceBoxes: areas.boxes,
     predictedBoxes: predicted,
     detectionRecall: regionRecall(areas.boxes, predicted),
+    ...lineScores(areas.boxes, predicted, vision),
+    pageLineMs: vision.timingsMs[pageLineTiming] ?? 0,
     detectionPrecision: regionPrecision(areas.boxes, predicted),
     detectionPrecisionExcludingKeep: regionPrecision(areas.boxes, translating),
     missedCount: missed.length,
@@ -146,21 +147,33 @@ export const scoreRealPair = (
   };
 };
 
-export const buildRealReport = (gpu: boolean, pairs: readonly RealPairScore[]): RealEvalReport => ({
-  gpu,
-  pairCount: pairs.length,
-  orderDisagreements: pairs.filter((pair) => !pair.orderAgrees).length,
-  summary: {
-    detectionRecall: mean(pairs.map((pair) => pair.detectionRecall)),
-    detectionPrecision: mean(pairs.map((pair) => pair.detectionPrecision)),
-    detectionPrecisionExcludingKeep: mean(pairs.map((pair) => pair.detectionPrecisionExcludingKeep)),
-    missedCount: pairs.reduce((sum, pair) => sum + pair.missedCount, 0),
-    missedAreaShare: mean(pairs.map((pair) => pair.missedAreaShare)),
-    damageCount: mean(pairs.map((pair) => pair.damageCount)),
-    damageShare: mean(pairs.map((pair) => pair.damageShare)),
-    damageInsideRegion: mean(pairs.map((pair) => pair.damageInsideRegion)),
-    damageOutsideRegion: mean(pairs.map((pair) => pair.damageOutsideRegion)),
-    residualStrokeShare: mean(pairs.map((pair) => pair.residualStrokeShare)),
-  },
-  pairs: [...pairs],
-});
+export const buildRealReport = (
+  run: Pick<RealEvalReport, "gpu" | "lines" | "groundTruth">,
+  pairs: readonly RealPairScore[],
+): RealEvalReport => {
+  const lineCount = pairs.reduce((sum, pair) => sum + pair.lineCount, 0);
+  const touchingLineCount = pairs.reduce((sum, pair) => sum + pair.touchingLineCount, 0);
+  return {
+    ...run,
+    pairCount: pairs.length,
+    orderDisagreements: pairs.filter((pair) => !pair.orderAgrees).length,
+    summary: {
+      detectionRecall: mean(pairs.map((pair) => pair.detectionRecall)),
+      regionLineRecall: mean(pairs.map((pair) => pair.regionLineRecall)),
+      lineRecall: mean(pairs.map((pair) => pair.lineRecall)),
+      lineCount,
+      lineTouchShare: share(touchingLineCount, lineCount),
+      pageLineMs: mean(pairs.map((pair) => pair.pageLineMs)),
+      detectionPrecision: mean(pairs.map((pair) => pair.detectionPrecision)),
+      detectionPrecisionExcludingKeep: mean(pairs.map((pair) => pair.detectionPrecisionExcludingKeep)),
+      missedCount: pairs.reduce((sum, pair) => sum + pair.missedCount, 0),
+      missedAreaShare: mean(pairs.map((pair) => pair.missedAreaShare)),
+      damageCount: mean(pairs.map((pair) => pair.damageCount)),
+      damageShare: mean(pairs.map((pair) => pair.damageShare)),
+      damageInsideRegion: mean(pairs.map((pair) => pair.damageInsideRegion)),
+      damageOutsideRegion: mean(pairs.map((pair) => pair.damageOutsideRegion)),
+      residualStrokeShare: mean(pairs.map((pair) => pair.residualStrokeShare)),
+    },
+    pairs: [...pairs],
+  };
+};

@@ -28,25 +28,37 @@ describe("ocr eval options", () => {
     expect(parsed.options.out).toBeNull();
     expect(parsed.options.seed).toBe(defaultSeed);
     expect(parsed.options.pages).toBe(defaultPageCount);
+    expect(parsed.options.lines).toBe("mobile");
     expect(parsed.options.gpu).toBe(false);
   });
 
   it("does not treat the value of a present option as a positional", () => {
-    const parsed = parseOcrEvalArgs(["--seed", "4", "kept.png", "--pages", "2", "--out", "D:\\eval-out", "--gpu"]);
+    const parsed = parseOcrEvalArgs(["--seed", "4", "kept.png", "--lines", "server", "--pages", "2", "--out", "D:\\eval-out", "--gpu"]);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.options).toEqual({
       out: "D:\\eval-out",
       seed: 4,
       pages: 2,
+      lines: "server",
       gpu: true,
       positionals: ["kept.png"],
     });
   });
 
-  it("rejects a missing value, zero pages and an unknown flag", () => {
+  it("keeps the positional that follows --lines", () => {
+    const parsed = parseOcrEvalArgs(["--lines", "mobile", "kept.png"]);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.options).toMatchObject({ lines: "mobile", positionals: ["kept.png"] });
+  });
+
+  it("rejects a missing value, zero pages, an unknown line model and an unknown flag", () => {
     expect(parseOcrEvalArgs(["--pages"]).ok).toBe(false);
     expect(parseOcrEvalArgs(["--seed"]).ok).toBe(false);
+    expect(parseOcrEvalArgs(["--lines"]).ok).toBe(false);
+    expect(parseOcrEvalArgs(["--lines", "--gpu"]).ok).toBe(false);
+    expect(parseOcrEvalArgs(["--lines", "tiny"]).ok).toBe(false);
     expect(parseOcrEvalArgs(["--pages", "0"]).ok).toBe(false);
     expect(parseOcrEvalArgs(["--seed", "-1"]).ok).toBe(false);
     expect(parseOcrEvalArgs(["--gpu", "--pages"]).ok).toBe(false);

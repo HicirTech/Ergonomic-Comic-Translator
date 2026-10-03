@@ -1,8 +1,15 @@
 import { describe, expect, it } from "bun:test";
+import type { Box } from "../../src/geometry/interfaces/index.ts";
 import type { RgbImage } from "../../src/imaging/interfaces/index.ts";
-import { damageAgainstOriginal, damageLevel, orientTextlessPair, residualStrokeShare, textStrokeMask } from "../../eval/cli/real-score.ts";
+import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
+import type { TextLine } from "../../src/stages/lines/interfaces/index.ts";
+import { formatRealSummaryZh } from "../../eval/cli/format-real-summary-zh.ts";
+import { buildRealReport, damageAgainstOriginal, damageLevel, residualStrokeShare, scoreRealPair, textStrokeMask } from "../../eval/cli/real-score.ts";
+import { defaultLineModel, parseLineModel } from "../../eval/cli/parse-line-model.ts";
 import { parseRealEvalArgs } from "../../eval/cli/parse-real-eval-options.ts";
+import { summarizeGroundTruth } from "../../eval/ground-truth/summarize-ground-truth.ts";
 import { deriveTextAreas } from "../../eval/ground-truth/textless-diff.ts";
+import { line } from "../stages/fixtures.ts";
 
 const blank = (width: number, height: number, value: number): RgbImage => {
   const data = new Uint8Array(width * height * 3);
@@ -15,22 +22,6 @@ const paint = (image: RgbImage, x0: number, y0: number, x1: number, y1: number, 
     for (let x = x0; x < x1; x += 1) image.data.fill(value, (y * image.width + x) * 3, (y * image.width + x) * 3 + 3);
   }
 };
-
-describe("textless pair orientation", () => {
-  const textPage = blank(80, 80, 255);
-  paint(textPage, 10, 10, 50, 50, 0);
-  const barePage = blank(80, 80, 255);
-
-  it("finds the text page by ink when the file order is swapped", () => {
-    const forward = orientTextlessPair(textPage, barePage);
-    const backward = orientTextlessPair(barePage, textPage);
-    expect(forward.orderAgrees).toBe(true);
-    expect(forward.text).toBe(textPage);
-    expect(backward.orderAgrees).toBe(false);
-    expect(backward.text).toBe(textPage);
-    expect(backward.textless).toBe(barePage);
-  });
-});
 
 describe("text stroke pixels", () => {
   it("keeps mask pixels where the text page is darker by at least diffLevel", () => {
@@ -75,24 +66,169 @@ describe("damage against the original text page", () => {
 });
 
 describe("real eval options", () => {
-  it("keeps a positional when no option is present", () => {
+  it("keeps a positional when no option is present, with the mobile line model", () => {
     const parsed = parseRealEvalArgs(["volume.cbz"]);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.options).toEqual({ out: null, pages: null, gpu: false, positionals: ["volume.cbz"] });
+    expect(parsed.options).toEqual({ out: null, pages: null, lines: "mobile", gpu: false, positionals: ["volume.cbz"] });
   });
 
   it("does not treat the value of a present option as a positional", () => {
-    const parsed = parseRealEvalArgs(["--pages", "2", "a.cbz", "--out", "D:\\real-out", "b.zip", "--gpu"]);
+    const parsed = parseRealEvalArgs(["--pages", "2", "a.cbz", "--lines", "server", "--out", "D:\\real-out", "b.zip", "--gpu"]);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.options).toEqual({ out: "D:\\real-out", pages: 2, gpu: true, positionals: ["a.cbz", "b.zip"] });
+    expect(parsed.options).toEqual({ out: "D:\\real-out", pages: 2, lines: "server", gpu: true, positionals: ["a.cbz", "b.zip"] });
   });
 
-  it("rejects a missing value, zero pages and an unknown flag", () => {
+  it("keeps the positional that follows --lines", () => {
+    const parsed = parseRealEvalArgs(["--lines", "mobile", "volume.cbz"]);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.options).toMatchObject({ lines: "mobile", positionals: ["volume.cbz"] });
+  });
+
+  it("rejects a missing value, zero pages, an unknown line model and an unknown flag", () => {
     expect(parseRealEvalArgs(["--pages"]).ok).toBe(false);
     expect(parseRealEvalArgs(["--out"]).ok).toBe(false);
+    expect(parseRealEvalArgs(["--lines"]).ok).toBe(false);
+    expect(parseRealEvalArgs(["--lines", "--gpu"]).ok).toBe(false);
+    expect(parseRealEvalArgs(["--lines", "tiny"]).ok).toBe(false);
     expect(parseRealEvalArgs(["--pages", "0"]).ok).toBe(false);
     expect(parseRealEvalArgs(["--gpu", "--seed"]).ok).toBe(false);
+  });
+});
+
+describe("line model flag", () => {
+  it("accepts the two model names and nothing else, not even inherited property names", () => {
+    expect(defaultLineModel).toBe("mobile");
+    expect(parseLineModel("mobile")).toBe("mobile");
+    expect(parseLineModel("server")).toBe("server");
+    for (const value of ["", "Server", "mobile ", "toString", "__proto__", "constructor"]) {
+      expect(parseLineModel(value)).toBeNull();
+    }
+  });
+});
+
+/** Text page with three dark squares; the textless page is bare, so each square becomes a reference box. */
+const pageWithThreeSquares = () => {
+  const text = blank(600, 200, 200);
+  for (const x of [0, 200, 400]) paint(text, x, 0, x + 100, 100, 0);
+  return { text, textless: blank(600, 200, 200) };
+};
+
+const boxLine = (box: Box): TextLine => line((box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2, box.x1 - box.x0, box.y1 - box.y0, 0);
+
+const regionWith = (box: Box, lines: Box[]): PageVisionResult["regions"][number] => ({
+  box,
+  cls: null,
+  bubble: null,
+  lines: lines.map(boxLine),
+  orientation: { tilt: 0, consistency: 1, writingMode: "h", ambiguous: false, frame: { cx: 0, cy: 0, w: 1, h: 1, angle: 0 } },
+  classification: { layout: "text_free", kind: "free_text", policy: "translate" },
+  clean: "flat",
+  utterances: [],
+});
+
+const identity = { id: "p0001", textOrdinal: 1, textlessOrdinal: 2, textSha256: "a", textlessSha256: "b" };
+
+describe("page line recall", () => {
+  const { text, textless } = pageWithThreeSquares();
+  /**
+   * Square 1: a region covers 30% and holds a line over 25% of it, so regions plus their own lines
+   * must stay below half. Square 2: only an uncovered line covers it. Square 3: only a region covers it.
+   */
+  const vision: Pick<PageVisionResult, "regions" | "uncovered" | "timingsMs"> = {
+    regions: [
+      regionWith({ x0: 0, y0: 0, x1: 100, y1: 30 }, [{ x0: 0, y0: 0, x1: 100, y1: 25 }]),
+      regionWith({ x0: 400, y0: 0, x1: 500, y1: 100 }, [{ x0: 400, y0: 0, x1: 450, y1: 20 }]),
+    ],
+    uncovered: [boxLine({ x0: 200, y0: 0, x1: 300, y1: 80 }), boxLine({ x0: 500, y0: 150, x1: 550, y1: 170 })],
+    timingsMs: { lines: 99, page_lines: 12.5 },
+  };
+
+  it("measures regions alone, regions with uncovered lines, and lines alone without counting a region's lines twice", () => {
+    const scored = scoreRealPair(identity, text, textless, textless, vision);
+    expect(scored.referenceBoxes).toHaveLength(3);
+    expect(scored.detectionRecall).toBeCloseTo(1 / 3, 10);
+    expect(scored.regionLineRecall).toBeCloseTo(2 / 3, 10);
+    expect(scored.lineRecall).toBeCloseTo(1 / 3, 10);
+  });
+
+  it("counts the page lines, the ones that touch a reference box, and the page-wide pass time", () => {
+    const scored = scoreRealPair(identity, text, textless, textless, vision);
+    expect(scored.lineBoxes).toHaveLength(4);
+    expect(scored.lineCount).toBe(4);
+    expect(scored.touchingLineCount).toBe(3);
+    expect(scored.lineTouchShare).toBe(0.75);
+    expect(scored.pageLineMs).toBe(12.5);
+  });
+
+  it("scores a page with no line as zero lines and no time", () => {
+    const scored = scoreRealPair(identity, text, textless, textless, { regions: [], uncovered: [], timingsMs: {} });
+    expect(scored).toMatchObject({ lineCount: 0, touchingLineCount: 0, lineTouchShare: 0, pageLineMs: 0, lineRecall: 0, detectionRecall: 0 });
+  });
+
+  it("derives the order rule from the ordinals", () => {
+    expect(scoreRealPair(identity, text, textless, textless, vision).orderAgrees).toBe(true);
+    expect(scoreRealPair({ ...identity, textOrdinal: 5, textlessOrdinal: 3 }, text, textless, textless, vision).orderAgrees).toBe(false);
+  });
+});
+
+describe("real eval report", () => {
+  const { text, textless } = pageWithThreeSquares();
+  const groundTruth = summarizeGroundTruth(9, [[1, 2], [3, 4, 5]], [
+    {
+      members: [{ ordinal: 1, readBoxCount: 3, readableBoxCount: 3 }, { ordinal: 2, readBoxCount: 3, readableBoxCount: 0 }],
+      textlessOrdinal: 2,
+      pairs: [{ textOrdinal: 1, textlessOrdinal: 2 }],
+      excluded: [],
+    },
+    {
+      members: [
+        { ordinal: 3, readBoxCount: 2, readableBoxCount: 2 },
+        { ordinal: 4, readBoxCount: 2, readableBoxCount: 2 },
+        { ordinal: 5, readBoxCount: 2, readableBoxCount: 1 },
+      ],
+      textlessOrdinal: null,
+      pairs: [],
+      excluded: [{ reason: "no_textless_member", ordinals: [3, 4, 5], pairCount: 2 }],
+    },
+  ]);
+
+  it("counts clusters, confirmed pairs and what each reason removed", () => {
+    expect(groundTruth).toMatchObject({
+      pageCount: 9,
+      clusterCount: 2,
+      clusteredPageCount: 5,
+      checkedClusterCount: 2,
+      confirmedPairCount: 1,
+      excluded: {
+        no_textless_member: { clusters: 1, members: 3, pairs: 2 },
+        too_few_readable_boxes: { clusters: 0, members: 0, pairs: 0 },
+      },
+    });
+    expect(groundTruth.clusters).toHaveLength(2);
+  });
+
+  it("pools the touching lines over all pairs and averages the page-wide pass time", () => {
+    const vision = { regions: [], uncovered: [boxLine({ x0: 0, y0: 0, x1: 100, y1: 100 })], timingsMs: { page_lines: 10 } };
+    const first = scoreRealPair(identity, text, textless, textless, vision);
+    const second = { ...first, id: "p0002", lineCount: 9, touchingLineCount: 3, lineTouchShare: 1 / 3, pageLineMs: 30 };
+    const report = buildRealReport({ gpu: false, lines: "server", groundTruth }, [first, second]);
+    expect(report).toMatchObject({ gpu: false, lines: "server", pairCount: 2, orderDisagreements: 0 });
+    expect(report.summary.lineCount).toBe(10);
+    expect(report.summary.lineTouchShare).toBe(0.4);
+    expect(report.summary.pageLineMs).toBe(20);
+  });
+
+  it("prints the model, the ground-truth counts and the line metrics", () => {
+    const report = buildRealReport({ gpu: false, lines: "server", groundTruth }, []);
+    const printed = formatRealSummaryZh(report);
+    expect(printed).toContain("行检测模型 server");
+    expect(printed).toContain("相似页簇 2（共 5 页，已核对 2 簇）  OCR 确认配对 1");
+    expect(printed).toContain("簇内没有无字页 1 簇 3 页 2 对");
+    expect(printed).toContain("可读框不足 0 页 0 对");
+    expect(printed).toContain("区域加行召回");
+    expect(printed).toContain("整页行检测均耗时 0 ms/页");
   });
 });

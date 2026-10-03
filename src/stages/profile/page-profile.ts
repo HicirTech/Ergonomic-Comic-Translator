@@ -3,12 +3,12 @@ import type { PageKind, PageThumbnail } from "./interfaces/index.ts";
 /** A page this uniform (luma standard deviation) carries no text. */
 const blankMaxStd = 3;
 /** dHash bits that may differ between a page and its textless variant (text is a small part of a page). */
-const pairMaxHashDistance = 10;
+export const pairMaxHashDistance = 10;
 /** Thumbnail pixels that differ by more than this count as changed. */
 const pixelChangeLevel = 24;
 /** A textless variant changes some, but not most, of the page. */
-const pairMinChangedShare = 0.001;
-const pairMaxChangedShare = 0.3;
+export const pairMinChangedShare = 0.001;
+export const pairMaxChangedShare = 0.3;
 
 /**
  * 64-bit difference hash: shrink to 9 x 8, compare each pixel with its right neighbour.
@@ -44,7 +44,7 @@ export const isBlank = (thumbnail: PageThumbnail) => {
   return Math.sqrt(variance / pixels.length) <= blankMaxStd;
 };
 
-const changedShare = (a: PageThumbnail, b: PageThumbnail) => {
+export const changedShare = (a: PageThumbnail, b: PageThumbnail) => {
   let changed = 0;
   for (let index = 0; index < a.gray.length; index += 1) {
     if (Math.abs(a.gray[index]! - b.gray[index]!) > pixelChangeLevel) changed += 1;
