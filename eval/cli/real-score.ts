@@ -228,7 +228,7 @@ export const scoreRealPair = (
 };
 
 export const buildRealReport = (
-  run: Pick<RealEvalReport, "gpu" | "lines" | "groundTruth">,
+  run: Pick<RealEvalReport, "gpu" | "groundTruth">,
   pairs: readonly RealPairScore[],
 ): RealEvalReport => {
   const total = (pick: (pair: RealPairScore) => number) => pairs.reduce((sum, pair) => sum + pick(pair), 0);

@@ -9,4 +9,3 @@ export type { VisionClient } from "./vision-client.ts";
 export type { VolumeGlossary } from "./volume-glossary.ts";
 export type { VolumePageText } from "./volume-page-text.ts";
 export type { VolumeTranslationContext } from "./volume-translation-context.ts";
-export type { WorkerVisionClientOptions } from "./worker-vision-client-options.ts";

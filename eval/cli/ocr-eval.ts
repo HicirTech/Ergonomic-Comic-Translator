@@ -1,5 +1,5 @@
 // Synthetic OCR and text-removal eval. Loads vision models; run only with the owner's go-ahead.
-// usage: bun run eval:ocr [--out <dir>] [--seed <n>] [--pages <n>] [--lines mobile|server] [--gpu]
+// usage: bun run eval:ocr [--out <dir>] [--seed <n>] [--pages <n>] [--gpu]
 import { isAbsolute, join, relative, resolve } from "path";
 import { writeFileAtomically } from "../../src/core/atomic-write.ts";
 import { dataPaths, resolveDataRoot } from "../../src/core/data-paths.ts";
@@ -76,7 +76,7 @@ console.log(`已生成 ${pages.length} 页（种子 ${parsed.options.seed}）：
 const probe = openResourceProbe();
 const monitor = new ResourceMonitor(probe);
 monitor.start();
-const opening = await openVisionSession(paths, monitor, !parsed.options.gpu, "ocr eval", { lineModel: parsed.options.lines });
+const opening = await openVisionSession(paths, monitor, !parsed.options.gpu, "ocr eval");
 if (!opening.ok) {
   monitor.stop();
   probe.close();

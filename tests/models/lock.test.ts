@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { join } from "path";
 import { dataPaths } from "../../src/core/data-paths.ts";
 import { huggingFaceEndpoint, modelDownloadItems, parseModelsLock, readModelsLock, readRuntimesLock } from "../../src/models/lock.ts";
+import { modelPacks } from "../../src/models/packs.ts";
 
 const validModel = {
   role: "test",
@@ -21,9 +22,14 @@ describe("models.lock.json", () => {
 
   it("covers the week-1 vision pack", () => {
     const lock = readModelsLock();
-    for (const id of ["detector", "ppocr-det-mobile", "ppocr-rec-server", "textline-ori", "manga-ocr", "manga-ocr-vocab", "baberu-ocr", "lama-manga", "migan"]) {
+    for (const id of ["detector", "ppocr-det-server", "ppocr-rec-server", "textline-ori", "manga-ocr", "manga-ocr-vocab", "baberu-ocr", "lama-manga", "migan"]) {
       expect(lock.models[id]).toBeDefined();
     }
+  });
+
+  it("puts every model of the vision pack in the lock", () => {
+    const lock = readModelsLock();
+    for (const id of modelPacks.vision!) expect(lock.models[id]).toBeDefined();
   });
 
   it("rejects unpinned or unsafe entries", () => {

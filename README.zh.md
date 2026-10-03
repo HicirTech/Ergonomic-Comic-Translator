@@ -149,7 +149,7 @@ bun run dev:frontend   # Vite 跑在 5173 端口，把 /api 转发给 3000 端�
 | 模型 | 许可 | 用途 |
 |---|---|---|
 | [ogkalu/comic-text-and-bubble-detector](https://huggingface.co/ogkalu/comic-text-and-bubble-detector) | Apache-2.0 | 文字和气泡检测（RT-DETR-v2） |
-| [PP-OCRv5 mobile det](https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det_onnx) | Apache-2.0 | 文字行几何 |
+| [PP-OCRv5 server det](https://huggingface.co/PaddlePaddle/PP-OCRv5_server_det_onnx) | Apache-2.0 | 文字行几何 |
 | [PP-OCRv5 server rec](https://huggingface.co/PaddlePaddle/PP-OCRv5_server_rec_onnx) | Apache-2.0 | 用于拆分气泡的文字行识别 |
 | [PP-LCNet textline orientation](https://huggingface.co/PaddlePaddle/PP-LCNet_x1_0_textline_ori_onnx) | Apache-2.0 | 文字行 0/180 度方向 |
 | [Baberu OCR](https://huggingface.co/genshiai-daichi/baberu-ocr) | Apache-2.0 | 主 OCR（日文、中文、英文） |

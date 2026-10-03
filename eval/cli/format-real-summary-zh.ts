@@ -17,7 +17,6 @@ export const formatGroundTruthZh = (groundTruth: RealGroundTruth) => {
 export const formatRealSummaryZh = (report: RealEvalReport) => {
   const { summary, groundTruth } = report;
   const lines = [
-    `行检测模型 ${report.lines}`,
     formatGroundTruthZh(groundTruth),
     `配对数 ${report.pairCount}  顺序不一致 ${report.orderDisagreements}`,
     `检测召回 ${ratio(summary.detectionRecall)}  检测精度 ${ratio(summary.detectionPrecision)}  不含保留精度 ${ratio(summary.detectionPrecisionExcludingKeep)}`,

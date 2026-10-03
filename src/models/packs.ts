@@ -2,7 +2,7 @@
 export const modelPacks: Record<string, readonly string[]> = {
   vision: [
     "detector",
-    "ppocr-det-mobile",
+    "ppocr-det-server",
     "ppocr-rec-server",
     "textline-ori",
     "manga-ocr",

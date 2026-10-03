@@ -5,7 +5,7 @@
 // one by one, so --pages n stops the OCR check too: the ground-truth counts then cover the clusters read.
 // Each cluster's readings are cached by page content (ground-truth/reading-cache.ts); --ground-truth-only
 // fills that cache on the CPU without scoring, so later scoring runs only pay for the vision pass.
-// usage: bun run eval:real [--out <dir>] [--pages <n>] [--lines mobile|server] [--gpu] [--ground-truth-only] <zip|cbz|folder> [...]
+// usage: bun run eval:real [--out <dir>] [--pages <n>] [--gpu] [--ground-truth-only] <zip|cbz|folder> [...]
 import { isAbsolute, join, relative, resolve } from "path";
 import { writeFileAtomically } from "../../src/core/atomic-write.ts";
 import { dataPaths, resolveDataRoot } from "../../src/core/data-paths.ts";
@@ -83,7 +83,7 @@ const probe = openResourceProbe();
 const monitor = new ResourceMonitor(probe);
 monitor.start();
 const purpose = parsed.options.groundTruthOnly ? "real eval ground truth" : "real eval";
-const opening = await openVisionSession(paths, monitor, !parsed.options.gpu, purpose, { lineModel: parsed.options.lines });
+const opening = await openVisionSession(paths, monitor, !parsed.options.gpu, purpose);
 if (!opening.ok) {
   monitor.stop();
   probe.close();
@@ -172,7 +172,7 @@ if (parsed.options.groundTruthOnly) {
   console.log(`真值：${join(out, "ground-truth.json")}`);
   process.exit(0);
 }
-const report = buildRealReport({ gpu: parsed.options.gpu, lines: parsed.options.lines, groundTruth }, scores);
+const report = buildRealReport({ gpu: parsed.options.gpu, groundTruth }, scores);
 writeFileAtomically(join(out, "report.json"), JSON.stringify(report, null, 1));
 console.log(formatRealSummaryZh(report));
 console.log(`报告：${join(out, "report.json")}`);

@@ -1,12 +1,9 @@
-import type { LineModel } from "../../../src/stages/lines/interfaces/index.ts";
 import type { RealGroundTruth } from "../../ground-truth/interfaces/index.ts";
 import type { RealPairScore } from "./real-pair-score.ts";
 
 /** Aggregates for one real-volume run. A finished run is recorded, not judged. */
 export interface RealEvalReport {
   gpu: boolean;
-  /** The DB line detector this run used, so reports of the two models can be told apart. */
-  lines: LineModel;
   /** How the textless pairs were found and confirmed, and what was left out. */
   groundTruth: RealGroundTruth;
   /** Confirmed pairs that were scored. */

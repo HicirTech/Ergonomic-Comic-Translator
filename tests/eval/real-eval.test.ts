@@ -5,7 +5,6 @@ import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
 import type { TextLine } from "../../src/stages/lines/interfaces/index.ts";
 import { formatRealSummaryZh } from "../../eval/cli/format-real-summary-zh.ts";
 import { buildRealReport, damageAgainstOriginal, damageLevel, residualStrokeShare, scoreRealPair, strokeRecall, textStrokeMask } from "../../eval/cli/real-score.ts";
-import { defaultLineModel, parseLineModel } from "../../eval/cli/parse-line-model.ts";
 import { parseRealEvalArgs } from "../../eval/cli/parse-real-eval-options.ts";
 import { summarizeGroundTruth } from "../../eval/ground-truth/summarize-ground-truth.ts";
 import { deriveTextAreas } from "../../eval/ground-truth/textless-diff.ts";
@@ -84,18 +83,18 @@ describe("damage against the original text page", () => {
 });
 
 describe("real eval options", () => {
-  it("keeps a positional when no option is present, with the mobile line model", () => {
+  it("keeps a positional when no option is present", () => {
     const parsed = parseRealEvalArgs(["volume.cbz"]);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.options).toEqual({ out: null, pages: null, lines: "mobile", gpu: false, groundTruthOnly: false, positionals: ["volume.cbz"] });
+    expect(parsed.options).toEqual({ out: null, pages: null, gpu: false, groundTruthOnly: false, positionals: ["volume.cbz"] });
   });
 
   it("does not treat the value of a present option as a positional", () => {
-    const parsed = parseRealEvalArgs(["--pages", "2", "a.cbz", "--lines", "server", "--out", "D:\\real-out", "b.zip", "--gpu"]);
+    const parsed = parseRealEvalArgs(["--pages", "2", "a.cbz", "--out", "D:\\real-out", "b.zip", "--gpu"]);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.options).toEqual({ out: "D:\\real-out", pages: 2, lines: "server", gpu: true, groundTruthOnly: false, positionals: ["a.cbz", "b.zip"] });
+    expect(parsed.options).toEqual({ out: "D:\\real-out", pages: 2, gpu: true, groundTruthOnly: false, positionals: ["a.cbz", "b.zip"] });
   });
 
   it("builds the ground truth alone on the CPU, so it refuses --gpu", () => {
@@ -106,32 +105,13 @@ describe("real eval options", () => {
     expect(parseRealEvalArgs(["--ground-truth-only", "--gpu", "volume.cbz"]).ok).toBe(false);
   });
 
-  it("keeps the positional that follows --lines", () => {
-    const parsed = parseRealEvalArgs(["--lines", "mobile", "volume.cbz"]);
-    expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
-    expect(parsed.options).toMatchObject({ lines: "mobile", positionals: ["volume.cbz"] });
-  });
-
-  it("rejects a missing value, zero pages, an unknown line model and an unknown flag", () => {
+  it("rejects a missing value, zero pages and an unknown flag", () => {
     expect(parseRealEvalArgs(["--pages"]).ok).toBe(false);
     expect(parseRealEvalArgs(["--out"]).ok).toBe(false);
-    expect(parseRealEvalArgs(["--lines"]).ok).toBe(false);
-    expect(parseRealEvalArgs(["--lines", "--gpu"]).ok).toBe(false);
-    expect(parseRealEvalArgs(["--lines", "tiny"]).ok).toBe(false);
+    expect(parseRealEvalArgs(["--pages", "--gpu"]).ok).toBe(false);
+    expect(parseRealEvalArgs(["--lines", "server"]).ok).toBe(false);
     expect(parseRealEvalArgs(["--pages", "0"]).ok).toBe(false);
     expect(parseRealEvalArgs(["--gpu", "--seed"]).ok).toBe(false);
-  });
-});
-
-describe("line model flag", () => {
-  it("accepts the two model names and nothing else, not even inherited property names", () => {
-    expect(defaultLineModel).toBe("mobile");
-    expect(parseLineModel("mobile")).toBe("mobile");
-    expect(parseLineModel("server")).toBe("server");
-    for (const value of ["", "Server", "mobile ", "toString", "__proto__", "constructor"]) {
-      expect(parseLineModel(value)).toBeNull();
-    }
   });
 });
 
@@ -237,7 +217,7 @@ describe("translation policy against the textless page", () => {
   it("adds the counts over the pairs and prints them", () => {
     const scored = scoreRealPair(identity, text, textless, textless, vision);
     const report = buildRealReport(
-      { gpu: true, lines: "server", groundTruth: summarizeGroundTruth(2, [[1, 2]], []) },
+      { gpu: true, groundTruth: summarizeGroundTruth(2, [[1, 2]], []) },
       [scored, { ...scored, id: "p0003" }],
     );
     expect(report.summary).toMatchObject({ translatedRegionCount: 4, translatedOffReference: 2, keptOnReference: 2, uncoveredOnReference: 2 });
@@ -292,17 +272,16 @@ describe("real eval report", () => {
     const vision = { regions: [], uncovered: [boxLine({ x0: 0, y0: 0, x1: 100, y1: 100 })], timingsMs: { page_lines: 10 } };
     const first = scoreRealPair(identity, text, textless, textless, vision);
     const second = { ...first, id: "p0002", lineCount: 9, touchingLineCount: 3, lineTouchShare: 1 / 3, pageLineMs: 30 };
-    const report = buildRealReport({ gpu: false, lines: "server", groundTruth }, [first, second]);
-    expect(report).toMatchObject({ gpu: false, lines: "server", pairCount: 2, orderDisagreements: 0 });
+    const report = buildRealReport({ gpu: false, groundTruth }, [first, second]);
+    expect(report).toMatchObject({ gpu: false, pairCount: 2, orderDisagreements: 0 });
     expect(report.summary.lineCount).toBe(10);
     expect(report.summary.lineTouchShare).toBe(0.4);
     expect(report.summary.pageLineMs).toBe(20);
   });
 
-  it("prints the model, the ground-truth counts and the line metrics", () => {
-    const report = buildRealReport({ gpu: false, lines: "server", groundTruth }, []);
+  it("prints the ground-truth counts and the line metrics", () => {
+    const report = buildRealReport({ gpu: false, groundTruth }, []);
     const printed = formatRealSummaryZh(report);
-    expect(printed).toContain("行检测模型 server");
     expect(printed).toContain("相似页簇 2（共 6 页，已核对 2 簇）  OCR 确认配对 1");
     expect(printed).toContain("排除有字页：簇内没有无字页 1 簇 3 页；最近的无字页画面也不同 1 页");
     expect(printed).toContain("区域加行召回");

@@ -1,9 +1,8 @@
 import type { RealEvalOptions } from "./interfaces/index.ts";
-import { defaultLineModel, parseLineModel } from "./parse-line-model.ts";
 
-const valueOptions = new Set(["--out", "--pages", "--lines"]);
+const valueOptions = new Set(["--out", "--pages"]);
 
-const usage = "用法：bun run eval:real [--out 目录] [--pages 正整数] [--lines mobile|server] [--gpu] [--ground-truth-only] <zip|cbz|文件夹> [...]\n--ground-truth-only 只核对无字页并写入缓存，只用 CPU，不打分";
+const usage = "用法：bun run eval:real [--out 目录] [--pages 正整数] [--gpu] [--ground-truth-only] <zip|cbz|文件夹> [...]\n--ground-truth-only 只核对无字页并写入缓存，只用 CPU，不打分";
 
 export const realEvalUsage = usage;
 
@@ -19,7 +18,6 @@ export const parseRealEvalArgs = (args: readonly string[]): RealEvalParse => {
   const positionals: string[] = [];
   let out: string | null = null;
   let pages: number | null = null;
-  let lines = defaultLineModel;
   let gpu = false;
   let groundTruthOnly = false;
   for (let index = 0; index < args.length; index += 1) {
@@ -30,14 +28,10 @@ export const parseRealEvalArgs = (args: readonly string[]): RealEvalParse => {
       index += 1;
       if (arg === "--out") {
         out = value;
-      } else if (arg === "--pages") {
+      } else {
         const parsed = parseWhole(value);
         if (parsed === null || parsed < 1) return { ok: false, error: `${usage}\n--pages 需要正整数` };
         pages = parsed;
-      } else {
-        const model = parseLineModel(value);
-        if (model === null) return { ok: false, error: `${usage}\n--lines 需要 mobile 或 server` };
-        lines = model;
       }
     } else if (arg === "--gpu") {
       gpu = true;
@@ -50,5 +44,5 @@ export const parseRealEvalArgs = (args: readonly string[]): RealEvalParse => {
     }
   }
   if (gpu && groundTruthOnly) return { ok: false, error: `${usage}\n--ground-truth-only 只用 CPU，不能与 --gpu 同用` };
-  return { ok: true, options: { out, pages, lines, gpu, groundTruthOnly, positionals } };
+  return { ok: true, options: { out, pages, gpu, groundTruthOnly, positionals } };
 };

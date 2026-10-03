@@ -8,11 +8,10 @@ import { dbMapToPage, planDbCrop, planDbPage } from "./db-input.ts";
 import { extractTextLines } from "./db-postprocess.ts";
 import type { DbCropPlan, LineTask, TextLine } from "./interfaces/index.ts";
 
-/**
- * S2b: text-line geometry with a PP-OCRv5 DB detector, per region crop or over the whole page.
- * The mobile and server models share one pipeline: their inference.yml files differ only in the model name.
- */
-export const createLineEngine = (modelId: "ppocr-det-mobile" | "ppocr-det-server"): VisionEngine => {
+const modelId = "ppocr-det-server";
+
+/** S2b: text-line geometry with the PP-OCRv5 server DB detector, per region crop or over the whole page. */
+export const createLineEngine = (): VisionEngine => {
   let ort: typeof Ort | null = null;
   let session: Ort.InferenceSession | null = null;
   const pages = createPageCache();

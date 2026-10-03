@@ -17,24 +17,19 @@ const fakeRuntime = () => {
   return { runtime, created };
 };
 
-type LineEngineCase = [engine: string, modelId: string];
+describe("line engine", () => {
+  it("loads the server line detector and nothing else", async () => {
+    const { runtime, created } = fakeRuntime();
+    const engine = visionEngineFactories.lines!();
 
-describe("line engines", () => {
-  const cases: LineEngineCase[] = [
-    ["lines", "ppocr-det-mobile"],
-    ["lines-server", "ppocr-det-server"],
-  ];
+    const io = await engine.load(runtime, "models-root", {});
 
-  for (const [engineName, modelId] of cases) {
-    it(`loads ${modelId} for the ${engineName} engine and nothing else`, async () => {
-      const { runtime, created } = fakeRuntime();
-      const engine = visionEngineFactories[engineName]!();
+    expect(created).toEqual([modelFilePath("models-root", "ppocr-det-server", "inference.onnx")]);
+    expect(io).toEqual({ inputNames: ["x"], outputNames: ["probability"] });
+    await engine.release();
+  });
 
-      const io = await engine.load(runtime, "models-root", {});
-
-      expect(created).toEqual([modelFilePath("models-root", modelId, "inference.onnx")]);
-      expect(io).toEqual({ inputNames: ["x"], outputNames: ["probability"] });
-      await engine.release();
-    });
-  }
+  it("is the only line engine a worker hosts", () => {
+    expect(Object.keys(visionEngineFactories).filter((name) => name.startsWith("lines"))).toEqual(["lines"]);
+  });
 });

@@ -24,26 +24,8 @@
         }
       ]
     },
-    "ppocr-det-mobile": {
-      "role": "text line geometry (DB, PP-OCRv5 mobile)",
-      "repo": "PaddlePaddle/PP-OCRv5_mobile_det_onnx",
-      "revision": "e6f4fa85f00e168c862bc462aebca69eef9b3d3d",
-      "license": "apache-2.0",
-      "files": [
-        {
-          "path": "inference.onnx",
-          "size": 4826518,
-          "sha256": "a431985659dc921974177a95adcfbb90fd9e51989a5e04d70d0b75f597b6e61d"
-        },
-        {
-          "path": "inference.yml",
-          "size": 903,
-          "sha256": "98069072e1b6b37d727fd9d9f11725faa46d6ea0de012f2ed26caea011c37699"
-        }
-      ]
-    },
     "ppocr-det-server": {
-      "role": "text line geometry (DB, PP-OCRv5 server); candidate for page-wide text detection",
+      "role": "text line geometry (DB, PP-OCRv5 server)",
       "repo": "PaddlePaddle/PP-OCRv5_server_det_onnx",
       "revision": "dcf248c4dcc064c6d030db241255f9e8fbc6733a",
       "license": "apache-2.0",

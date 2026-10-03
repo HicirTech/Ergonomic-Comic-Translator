@@ -170,7 +170,7 @@ Rules for contributions:
 | Model | Licence | Role |
 |---|---|---|
 | [ogkalu/comic-text-and-bubble-detector](https://huggingface.co/ogkalu/comic-text-and-bubble-detector) | Apache-2.0 | text and bubble detection (RT-DETR-v2) |
-| [PP-OCRv5 mobile det](https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det_onnx) | Apache-2.0 | text line geometry |
+| [PP-OCRv5 server det](https://huggingface.co/PaddlePaddle/PP-OCRv5_server_det_onnx) | Apache-2.0 | text line geometry |
 | [PP-OCRv5 server rec](https://huggingface.co/PaddlePaddle/PP-OCRv5_server_rec_onnx) | Apache-2.0 | line recognition used to split bubbles |
 | [PP-LCNet textline orientation](https://huggingface.co/PaddlePaddle/PP-LCNet_x1_0_textline_ori_onnx) | Apache-2.0 | 0/180 degree line orientation |
 | [Baberu OCR](https://huggingface.co/genshiai-daichi/baberu-ocr) | Apache-2.0 | main OCR (Japanese, Chinese, English) |

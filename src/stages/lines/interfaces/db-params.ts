@@ -1,4 +1,4 @@
-/** DB post-processing thresholds; defaults from PP-OCRv5_mobile_det inference.yml. */
+/** DB post-processing thresholds; defaults from PP-OCRv5_server_det inference.yml. */
 export interface DbParams {
   threshold: number;
   boxThreshold: number;
