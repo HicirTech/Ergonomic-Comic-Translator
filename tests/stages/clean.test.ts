@@ -45,6 +45,28 @@ describe("regionTextMask", () => {
     expect(pageMask[10 * 200 + 10]).toBe(0);
   });
 
+  it("masks each line against its own paper when one region holds dark and light text", () => {
+    // Left half: light paper with a dark bar. Right half: a dark box with a light bar.
+    const width = 400;
+    const height = 120;
+    const data = new Uint8Array(width * height * 3).fill(245);
+    const set = (x0: number, y0: number, x1: number, y1: number, value: number) => {
+      for (let y = y0; y < y1; y += 1) data.fill(value, (y * width + x0) * 3, (y * width + x1) * 3);
+    };
+    set(200, 0, 400, 120, 25);
+    set(40, 54, 160, 66, 15);
+    set(240, 54, 360, 66, 235);
+    const rgb = { data, width, height };
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 60, 150, 36, 0), line(300, 60, 150, 36, 0)])!;
+    const pageMask = new Uint8Array(width * height);
+    addToPageMask(pageMask, width, region);
+    expect(pageMask[60 * width + 100]).toBe(1);
+    expect(pageMask[60 * width + 300]).toBe(1);
+    // Paper inside each line polygon stays: light on the left, dark on the right.
+    expect(pageMask[46 * width + 100]).toBe(0);
+    expect(pageMask[46 * width + 300]).toBe(0);
+  });
+
   it("sends textured paper to inpainting instead of a flat fill", () => {
     const rgb = page(200, 160, 128, 0, { cx: 100, cy: 80, long: 100, short: 12, angle: 0 }, 30);
     expect(canFlatFill(regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 130, 36, 0)])!)).toBe(false);

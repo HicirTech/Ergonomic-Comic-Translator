@@ -18,9 +18,10 @@ const median = (values: number[]) => {
 };
 
 /**
- * S5: text strokes of one region. Inside the unclipped (possibly rotated) line polygons, Otsu separates
- * ink from paper; the side away from the surrounding paper tone is the text, so dark-on-light and
- * light-on-dark both work. The grown mask never leaves the polygons' own neighbourhood.
+ * S5: text strokes of one region. Inside each unclipped (possibly rotated) line polygon, Otsu separates
+ * ink from paper; the side away from the paper tone around that line is the text, so dark-on-light and
+ * light-on-dark both work, also when one region holds both. The grown mask never leaves the polygons'
+ * own neighbourhood.
  */
 export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly TextLine[]): RegionMask | null => {
   if (lines.length === 0) {
@@ -36,35 +37,51 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     return null;
   }
 
+  const linePolygons = lines.map((line) => {
+    const mask = new Uint8Array(width * height);
+    rasterizeConvexQuad(mask, width, height, line.quad.map((point) => ({ x: point.x - window.x0, y: point.y - window.y0 })));
+    return mask;
+  });
   const polygon = new Uint8Array(width * height);
-  for (const line of lines) {
-    rasterizeConvexQuad(polygon, width, height, line.quad.map((point) => ({ x: point.x - window.x0, y: point.y - window.y0 })));
+  for (const linePolygon of linePolygons) {
+    for (let index = 0; index < polygon.length; index += 1) polygon[index] = polygon[index]! | linePolygon[index]!;
   }
   const around = dilateSquare(polygon, width, height, ring);
   const at = (index: number) => gray.data[(window.y0 + Math.floor(index / width)) * gray.width + window.x0 + (index % width)]!;
 
-  const inside: number[] = [];
   const ringLuma: number[] = [];
   const ringRgb: [number[], number[], number[]] = [[], [], []];
+  let polygonPixels = 0;
   for (let index = 0; index < polygon.length; index += 1) {
     if (polygon[index]) {
-      inside.push(at(index));
+      polygonPixels += 1;
     } else if (around[index]) {
       ringLuma.push(at(index));
       const offset = ((window.y0 + Math.floor(index / width)) * rgb.width + window.x0 + (index % width)) * 3;
       for (let channel = 0; channel < 3; channel += 1) ringRgb[channel]!.push(rgb.data[offset + channel]!);
     }
   }
-  if (inside.length === 0) {
+  if (polygonPixels === 0) {
     return null;
   }
 
-  const threshold = otsuThreshold({ data: Uint8Array.from(inside), width: inside.length, height: 1 });
-  const paper = median(ringLuma.length > 0 ? ringLuma : inside);
-  const darkText = paper > threshold;
   const ink = new Uint8Array(width * height);
-  for (let index = 0; index < polygon.length; index += 1) {
-    if (polygon[index] && (darkText ? at(index) <= threshold : at(index) > threshold)) ink[index] = 1;
+  for (const linePolygon of linePolygons) {
+    const near = dilateSquare(linePolygon, width, height, ring);
+    const inside: number[] = [];
+    const paperLuma: number[] = [];
+    for (let index = 0; index < linePolygon.length; index += 1) {
+      if (linePolygon[index]) inside.push(at(index));
+      else if (near[index] && !polygon[index]) paperLuma.push(at(index));
+    }
+    if (inside.length === 0) continue;
+    const threshold = otsuThreshold({ data: Uint8Array.from(inside), width: inside.length, height: 1 });
+    // A line hemmed in by other lines has no ring of its own; text covers less than half of its polygon.
+    const paper = median(paperLuma.length > 0 ? paperLuma : inside);
+    const darkText = paper > threshold;
+    for (let index = 0; index < linePolygon.length; index += 1) {
+      if (linePolygon[index] && (darkText ? at(index) <= threshold : at(index) > threshold)) ink[index] = 1;
+    }
   }
   const grown = dilateSquare(ink, width, height, grow);
   const limit = dilateSquare(polygon, width, height, grow);
