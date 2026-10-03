@@ -173,6 +173,13 @@ describe("typesetPage", () => {
     expect(box.y1).toBeCloseTo(593.6, 1);
   });
 
+  it("sets the text no larger than the text it replaces", () => {
+    const region = vision.regions[0]!;
+    const withLines: PageVisionResult = { ...vision, regions: [{ ...region, lines: [line(200, 180, 150, 40, 0), line(200, 230, 150, 40, 0)] }] };
+    // A 40 px line rectangle holds text of about 0.74 * 40 = 29.6 px, and two characters would fit far larger.
+    expect(placedBox(typesetPage(fakeShaper, withLines, text, translation).svg).fontSize).toBe(29);
+  });
+
   it("never leaves a cleaned bubble empty when the translation failed", () => {
     const { svg } = typesetPage(fakeShaper, vision, text, { page: 1, units: text.units, targets: {}, flags: { "1": ["G1_REFUSAL"] }, requests: 4 });
     expect(svg.match(/<path /gu)).toHaveLength([...untranslatedPlaceholderZh].length);

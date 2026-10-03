@@ -17,8 +17,12 @@ const verticalAspect = 1.3;
 const uprightBelowDegrees = 3;
 const minFontSize = 12;
 const maxFontSize = 72;
-/** Unclipped DB rectangles are about this much thicker than the glyphs they hold. */
-const glyphShareOfLine = 0.9;
+/**
+ * Font size of the text in a DB line rectangle, as a share of the rectangle's thickness. Measured on the
+ * synthetic pages (known font sizes): the rectangle is 1.38 times the font size at the median, 1.30 for
+ * plain text of 40 px and more.
+ */
+const glyphShareOfLine = 0.74;
 const fallbackFontSize = 20;
 /** Shown where a translation failed every retry, so a cleaned bubble is never left empty. */
 export const untranslatedPlaceholderZh = "（这句没能翻译）";
@@ -37,8 +41,9 @@ const clipTo = (box: Box, limit: Box): Box => {
 /**
  * S10 for one page: every translated utterance is laid out in its box (the region frame, or its own
  * slot when a bubble was split), rotated back to the original angle, outlined when it sits on art.
- * An upright box never leaves its bubble or the page. Units without a translation get a Chinese
- * placeholder. Returns the overlay SVG and the ids that overflowed at the minimum size.
+ * An upright box never leaves its bubble or the page, and the text is never set larger than the text it
+ * replaces. Units without a translation get a Chinese placeholder. Returns the overlay SVG and the ids
+ * that overflowed at the minimum size.
  */
 export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: VolumePageText, translation: PageTranslationResult) => {
   const blocks: string[] = [];
@@ -66,7 +71,7 @@ export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: Volu
     const height = boxHeight(box);
     const direction = height > verticalAspect * width ? "v" : "h";
     const sourceSize = median(region.lines.map((line) => line.rect.short * glyphShareOfLine)) ?? fallbackFontSize;
-    const layout = layoutText(shaper, target, direction, width, height, minFontSize, Math.min(maxFontSize, Math.max(minFontSize, sourceSize * 1.1)));
+    const layout = layoutText(shaper, target, direction, width, height, minFontSize, Math.min(maxFontSize, Math.max(minFontSize, sourceSize)));
     if (layout.overflow) overflow.push(unit.id);
     blocks.push(placedBlockSvg(shaper, layout, { cx: (box.x0 + box.x1) / 2, cy: (box.y0 + box.y1) / 2, width, height, angle }, region.bubble === null));
   }
