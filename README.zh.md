@@ -5,8 +5,9 @@
 
 > **[English](README.md)**
 
-> **状态：v2 正在开发中（`v2` 分支）。** 完整流水线、作业调度、本地服务和网页界面都已实现并有单元测试，但还没有用真实
-> 模型从头到尾跑过一本书。在基准测试跑完之前，质量和速度都还没有测量。见[尚未完成](#尚未完成)。
+> **状态：v2 正在开发中（`v2` 分支）。** 完整流水线、作业调度、本地服务和网页界面都已实现并有单元测试。命令行流水线
+> 已在 RTX 5090 上完整跑过一本 146 页的日文本子：识别和清字约 4.5 分钟，翻译约 1.5 分钟，嵌字几秒。其他语言和画风
+> 还没有测量。见[尚未完成](#尚未完成)。
 
 ---
 
@@ -15,7 +16,7 @@
 1. **读入。** zip 或 CBZ 压缩包、整个文件夹、零散图片（JPG、PNG、WebP、AVIF、GIF）按自然顺序、逐章节排成页面。
    相同的图片只保留一张；空白页原样保留，其余每一页都会识别，没有文字的页面原样返回。不支持 PDF 输入。
 2. **识别**（ONNX Runtime，显卡或 CPU）。检测文字和气泡，找出文字行（包括斜排文字），判断方向，把一个气泡里
-   不同人说的话分开，做 OCR，生成文字遮罩并清字（普通气泡直接平涂，画面上的字用 LaMa 修补）。
+   不同人说的话分开，做 OCR，生成文字遮罩并清字（普通气泡直接平涂，画面上的字用 MI-GAN 修补）。
    横向的宽对话框如果整句识别漏了字，改为逐行识别；检测器漏掉的文字行，只要能读出五个字以上的排版文字，
    也会照常翻译。
 3. **先定人名和名词。** 收集全书的人名和反复出现的名词，结合全书上下文翻译后固定下来，保证每一页用同一个中文名。
@@ -36,8 +37,8 @@
 | 系统 | Windows 10/11 x64。Linux x64 为实验性支持，只用 CPU。 |
 | 运行时 | [Bun](https://bun.sh) 1.4 或更新 |
 | 显卡 | NVIDIA 或 AMD，需要 DirectX 12（识别，通过 DirectML）和 Vulkan（翻译，通过 llama.cpp）。AMD 核显（如 Radeon 780M）需要至少 2 GB 的 UMA 显存划分。不支持 Intel 显卡，会改用 CPU。 |
-| 显存 | 默认翻译模型大约需要 7-10 GB 空闲显存（估算值，尚未实测）；8 GB 显卡和核显有更小的档位。 |
-| 硬盘 | 默认下载约 14 GB（识别模型 1.1 GB、翻译模型 12.2 GB、llama.cpp 50 MB），小显卡模型另需 8 GB。 |
+| 显存 | 默认翻译模型需要约 10 GB 空闲显存，识别模型约 1.5 GB（RTX 5090 实测；两者不会同时加载）；8 GB 显卡和核显有更小的档位。 |
+| 硬盘 | 默认下载约 14 GB（识别模型 1.2 GB、翻译模型 12.2 GB、llama.cpp 50 MB），小显卡模型另需 8 GB。 |
 
 本程序会礼让其他程序：加载任何东西之前先检查空闲显存、内存和提交量；内存紧张时暂停（黄灯），快耗尽时卸载自己的
 模型（红灯），之后自动继续。同一时间只加载一组模型，由一把全机共享的锁保证，命令行工具也遵守这把锁。
@@ -92,8 +93,10 @@ bun run start                           # 然后打开 http://127.0.0.1:3000
 | `bun run translate <结果文件夹> [--lang ja\|ko\|zh-Hant\|en] [--ltr] [--history 2000]` | 对识别结果做人名、名词和翻译 |
 | `bun run render <结果文件夹> [--ltr] [--title 书名]` | 对翻译结果嵌字并导出 CBZ 和 PDF（只用 CPU） |
 | `bun run gt:d1 <zip 或文件夹> [--out 目录]` | 评测用：从页面和无字版推出文字区域真值（只用 CPU） |
+| `bun run eval:ocr [--out 目录] [--seed N] [--pages N] [--gpu]` | 评测用：识别自动生成的、文字已知的页面，给识别、方向、行序和清字打分 |
+| `bun run eval:real [--out 目录] [--pages N] [--gpu] [--ground-truth-only] <zip、cbz 或文件夹>` | 评测用：在带无字版的真实页面上给检测和清字打分 |
 
-`vision`、`translate` 和 `start`（有作业在跑时）会加载模型并占用显卡锁；其他命令不会。
+`vision`、`translate`、`eval:ocr`、`eval:real` 和 `start`（有作业在跑时）会加载模型并占用显卡锁；其他命令不会。
 
 ## 架构
 
@@ -120,11 +123,12 @@ bun run start                           # 然后打开 http://127.0.0.1:3000
 
 ## 尚未完成
 
-- 在基准本子上第一次完整运行，并测量速度和质量。
+- 更多本子的实测：目前只完整跑过一本日文本子，韩语、繁体中文、英语原文和其他画风都还没有测量。
 - 韩语：韩语文字行识别模型可以下载（`korean` 组合），但流水线还没用上，所以韩语页面目前由偏日语的识别模型来读。
 - 主模型反复拒答或失败时换用其他模型重译（目前只有同一个模型的重试）。
 - 重新运行一本书会从头算一遍，已完成的步骤还不能复用。
-- 小显卡翻译档位（8 GB 显卡、核显）尚未测试；MI-GAN 修补模型已可下载但还没用上。
+- 小显卡翻译档位（8 GB 显卡、核显）尚未测试。
+- LaMa 修补模型已可下载但还没用上：DirectML 在测试用的显卡上拒绝运行它，所以修补全部由 MI-GAN 完成。
 - 便携安装包、ONNX 执行后端的显卡自检、Linux 上的显卡支持。
 
 ## 开发
@@ -154,8 +158,8 @@ bun run dev:frontend   # Vite 跑在 5173 端口，把 /api 转发给 3000 端�
 | [PP-LCNet textline orientation](https://huggingface.co/PaddlePaddle/PP-LCNet_x1_0_textline_ori_onnx) | Apache-2.0 | 文字行 0/180 度方向 |
 | [Baberu OCR](https://huggingface.co/genshiai-daichi/baberu-ocr) | Apache-2.0 | 主 OCR（日文、中文、英文） |
 | [manga-ocr](https://huggingface.co/onnx-community/manga-ocr-base-ONNX) | Apache-2.0 | 日文短句 |
-| [LaMa manga](https://huggingface.co/mayocream/lama-manga-onnx) | Apache-2.0 | 修补 |
-| [MI-GAN](https://huggingface.co/andraniksargsyan/migan) | MIT | 小显卡用的轻量修补（尚未使用） |
+| [MI-GAN](https://huggingface.co/andraniksargsyan/migan) | MIT | 修补 |
+| [LaMa manga](https://huggingface.co/mayocream/lama-manga-onnx) | Apache-2.0 | 修补（尚未使用） |
 | [Qwen3.5-9B GGUF](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF) | Apache-2.0 | 翻译（Q6_K、Q4_K_M、IQ3_XXS 档位） |
 | [Hy-MT2-7B GGUF](https://huggingface.co/tencent/Hy-MT2-7B-GGUF) | Apache-2.0 | 核显用的翻译档位 |
 | [Noto Sans SC Bold](https://github.com/notofonts/noto-cjk) | OFL-1.1 | 中文嵌字字体 |
