@@ -68,6 +68,25 @@ describe("assignLines", () => {
     expect(regions[0]!.lines).toEqual(expect.arrayContaining([...slanted, ...separated]));
   });
 
+  it("drops a text box left without a line when its text lies under another region's lines", () => {
+    const owner = { box: { x0: 0, y0: 0, x1: 300, y1: 100 }, cls: "text_bubble" as const, score: 0.9, bubbles: [] };
+    const nested = { box: { x0: 250, y0: 20, x1: 340, y1: 80 }, cls: "text_free" as const, score: 0.8, bubbles: [] };
+    const apart = { box: { x0: 500, y0: 500, x1: 600, y1: 560 }, cls: "text_free" as const, score: 0.8, bubbles: [] };
+    const wide = line(180, 50, 340, 70, 0);
+    const { regions, uncovered } = assignLines([owner, nested, apart], [], [[wide], [], []], []);
+    expect(regions.map((region) => region.lines)).toEqual([[wide], []]);
+    // A box without lines that no other region's text covers stays, to be read whole.
+    expect(regions[1]!.box).toEqual(apart.box);
+    expect(uncovered).toEqual([]);
+  });
+
+  it("keeps a text box without a line that only touches another region's lines", () => {
+    const owner = { box: { x0: 0, y0: 0, x1: 300, y1: 100 }, cls: "text_bubble" as const, score: 0.9, bubbles: [] };
+    const beside = { box: { x0: 280, y0: 20, x1: 480, y1: 80 }, cls: "text_free" as const, score: 0.8, bubbles: [] };
+    const { regions } = assignLines([owner, beside], [], [[line(150, 50, 300, 60, 0)], []], []);
+    expect(regions.map((region) => region.box)).toEqual([owner.box, beside.box]);
+  });
+
   it("splits a text box spanning two bubbles by the bubble each line sits in", () => {
     const bubbles = [{ x0: 0, y0: 0, x1: 200, y1: 200 }, { x0: 210, y0: 0, x1: 400, y1: 200 }];
     const candidate = { box: { x0: 50, y0: 20, x1: 350, y1: 180 }, cls: "text_bubble" as const, score: 0.9, bubbles: [0, 1] };

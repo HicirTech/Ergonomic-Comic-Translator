@@ -6,6 +6,8 @@ import type { CandidateRegion, PageRegion } from "./interfaces/index.ts";
 
 /** A line belongs to the region holding at least this share of its box. */
 const lineOwnershipShare = 0.4;
+/** A text box left without a line shows text of other regions when this share of it lies under their lines. */
+const duplicateTextShare = 0.5;
 
 export const lineBox = (line: TextLine) => boundingBoxOfPoints(line.quad);
 
@@ -22,6 +24,8 @@ const regionFrom = (candidate: CandidateRegion, bubble: Box | null, lines: TextL
  * bubbles into one region per bubble, and returns lines outside all regions as candidates the detector
  * missed. `cropLines[i]` are the lines found in candidate i's crop; `pageLines` come from the whole-page
  * scan (may be empty). Uncovered candidates are only promoted to regions after the OCR gate.
+ * A text box whose lines all went to other regions is the same text detected twice and gives no region:
+ * as a region it would be read and lettered a second time, on top of the first.
  */
 export const assignLines = (
   candidates: readonly CandidateRegion[],
@@ -49,9 +53,19 @@ export const assignLines = (
     }
   }
 
+  /** Share of a candidate's box under the lines of the other candidates. */
+  const underOtherLines = (index: number) => {
+    let share = 0;
+    for (const [owner, lines] of owned) {
+      if (owner !== index) for (const line of lines) share += coverage(candidates[index]!.box, lineBox(line));
+    }
+    return share;
+  };
+
   const regions: PageRegion[] = [];
   candidates.forEach((candidate, index) => {
     const lines = owned.get(index) ?? [];
+    if (lines.length === 0 && underOtherLines(index) >= duplicateTextShare) return;
     if (candidate.bubbles.length <= 1) {
       regions.push(regionFrom(candidate, candidate.bubbles.length === 1 ? bubbles[candidate.bubbles[0]!]! : null, lines));
       return;
