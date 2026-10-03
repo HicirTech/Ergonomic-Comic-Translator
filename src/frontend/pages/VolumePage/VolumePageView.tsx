@@ -113,7 +113,7 @@ const VolumePageView: React.FC<VolumePageViewProps> = ({
               borderColor: thumbIndex === index
                 ? "primary.main"
                 : thumb.openFlags.error > 0 ? "error.main" : thumb.openFlags.warn > 0 ? "warning.main" : thumb.translated ? "success.dark" : "transparent",
-              opacity: thumb.translated || thumb.kind !== "main" ? 1 : 0.5,
+              opacity: thumb.translated || thumb.kind === "blank" ? 1 : 0.5,
             }}
           />
         ))}

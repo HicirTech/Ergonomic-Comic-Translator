@@ -16,8 +16,8 @@ checking are automatic.
 ## What happens to a volume
 
 1. **Import.** Zip or CBZ archives, whole folders and loose images (JPG, PNG, WebP, AVIF, GIF) become pages in
-   natural order, chapter by chapter. Duplicate images are kept once; blank pages and textless variants are
-   recognised and kept as they are. PDF input is not supported.
+   natural order, chapter by chapter. Duplicate images are kept once; blank pages are kept as they are, every
+   other page is read, and a page without text comes back unchanged. PDF input is not supported.
 2. **Read** (ONNX Runtime, GPU or CPU). Text and bubble detection, text line geometry including slanted text,
    orientation, splitting one bubble into several speakers' lines, OCR, text masks and cleaning (flat fill for
    plain bubbles, LaMa inpainting on artwork).
@@ -64,7 +64,7 @@ after download. Set `HF_ENDPOINT` to use a Hugging Face mirror.
 
 In the web UI:
 
-- Drop files or a folder (or use the buttons), check the one-line summary (pages, blank pages, textless pages),
+- Drop files or a folder (or use the buttons), check the one-line summary (pages, blank pages, skipped files),
   and start.
 - The volume page shows progress, the current step and resource messages. The reader switches between the
   translated and the original page; in a right-to-left book the left arrow key turns to the next page.

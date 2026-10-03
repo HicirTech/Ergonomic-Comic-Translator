@@ -115,7 +115,6 @@ export const createApp = (deps: ServerDeps) => {
         title,
         pages: result.pages,
         blank: result.blank,
-        textless: result.textless,
         skipped: result.skipped.length,
       };
       return Response.json(body, { status: 201 });

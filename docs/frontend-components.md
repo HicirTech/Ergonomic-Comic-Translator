@@ -39,7 +39,7 @@ Components without state have only `index.tsx` and a View.
 | Component | Role |
 |---|---|
 | `DropZone` | Drag and drop of files or folders, plus file and folder pickers; uploads and reports the import result |
-| `ImportConfirmDialog` | The one-line confirmation after import: pages, blank pages, textless pages, skipped files; start or later |
+| `ImportConfirmDialog` | The one-line confirmation after import: pages, blank pages, skipped files; start or later |
 | `StatusCard` | Governor light and reasons, loaded models, room left on each usable GPU, and missing downloads |
 | `VolumeCard` | Cover, title, page count, job state and progress; open, and delete with confirmation |
 

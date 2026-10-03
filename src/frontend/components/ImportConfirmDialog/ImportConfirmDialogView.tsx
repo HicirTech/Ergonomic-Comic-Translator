@@ -21,7 +21,6 @@ const ImportConfirmDialogView: React.FC<ImportConfirmDialogViewProps> = ({ resul
           <DialogContent>
             <Typography>{t("import.pages", { count: result.pages })}</Typography>
             {result.blank > 0 && <Typography color="text.secondary">{t("import.blank", { count: result.blank })}</Typography>}
-            {result.textless > 0 && <Typography color="text.secondary">{t("import.textless", { count: result.textless })}</Typography>}
             {result.skipped > 0 && <Typography color="text.secondary">{t("import.skipped", { count: result.skipped })}</Typography>}
           </DialogContent>
           <DialogActions>

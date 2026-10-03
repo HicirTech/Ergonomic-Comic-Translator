@@ -92,7 +92,7 @@ describe("request guard", () => {
 describe("volumes API", () => {
   it("imports dropped images in natural order and serves both page images", async () => {
     const result = await upload();
-    expect(result).toMatchObject({ title: "chapter", pages: 2, blank: 0, textless: 0, skipped: 0 });
+    expect(result).toEqual({ volumeId: expect.any(String), title: "chapter", pages: 2, blank: 0, skipped: 0 });
     const list = (await (await fetch(`${base}/api/volumes`)).json()) as VolumeSummary[];
     expect(list.map((volume) => [volume.title, volume.pageCount, volume.job])).toEqual([["chapter", 2, null]]);
 

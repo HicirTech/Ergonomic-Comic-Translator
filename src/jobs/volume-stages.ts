@@ -20,6 +20,7 @@ import { freezeGlossary } from "../terms/freeze.ts";
 import { composePage } from "../typeset/compose-page.ts";
 import type { Shaper } from "../typeset/interfaces/index.ts";
 import type { ModelHost, StageContext, StageRun, VolumeStage, VolumeText } from "./interfaces/index.ts";
+import { needsReading } from "./plan-volume-tasks.ts";
 import { volumeFiles } from "./volume-files.ts";
 
 /** Source tokens of earlier pages carried as translation history. */
@@ -69,7 +70,7 @@ export const createVolumeStages = (
     glossary: async ({ volume, pages }) => {
       const files = volumeFiles(paths, volume.id);
       const read = pages
-        .filter((page) => page.kind === "main")
+        .filter(needsReading)
         .map((page) => ({ page, result: readJsonIfExists<PageVisionResult>(files.vision(page.ordinal)) }))
         .filter((entry): entry is { page: PageRecord; result: PageVisionResult } => entry.result !== null);
       const detected = volume.source_lang === null
@@ -116,7 +117,7 @@ export const createVolumeStages = (
     render: async (context) => {
       const page = pageOf(context);
       const files = volumeFiles(paths, context.volume.id);
-      const vision = page.kind === "main" ? readJsonIfExists<PageVisionResult>(files.vision(page.ordinal)) : null;
+      const vision = needsReading(page) ? readJsonIfExists<PageVisionResult>(files.vision(page.ordinal)) : null;
       const translation = vision ? readJsonIfExists<PageTranslationResult>(files.translation(page.ordinal)) : null;
       const text = translation ? readJson<VolumeText>(files.text).pages.find((entry) => entry.page === page.ordinal) : undefined;
       let png: Uint8Array;
@@ -130,7 +131,7 @@ export const createVolumeStages = (
           evidence: { unit },
         })));
       } else {
-        // Blank pages, textless variants and pages the pipeline could not read keep their original image.
+        // Blank pages and pages the pipeline could not read keep their original image.
         png = await originalAsPng(page);
       }
       writeFileAtomically(files.output(page.ordinal), png);

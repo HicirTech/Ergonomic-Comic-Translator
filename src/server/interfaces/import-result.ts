@@ -4,6 +4,5 @@ export interface ImportResult {
   title: string;
   pages: number;
   blank: number;
-  textless: number;
   skipped: number;
 }

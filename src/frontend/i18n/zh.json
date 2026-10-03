@@ -21,7 +21,6 @@
     "title": "读入完成：《{{title}}》",
     "pages": "共 {{count}} 页",
     "blank": "其中 {{count}} 页是空白页",
-    "textless": "{{count}} 页是无字版，会原样保留",
     "skipped": "跳过了 {{count}} 个不是图片的文件",
     "start": "开始翻译",
     "later": "稍后再说"

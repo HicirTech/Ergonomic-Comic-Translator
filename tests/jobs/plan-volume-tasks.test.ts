@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { TaskState } from "../../src/db/interfaces/index.ts";
-import { expectedVolumeTasks, planVolumeTasks } from "../../src/jobs/plan-volume-tasks.ts";
+import { expectedVolumeTasks, needsReading, planVolumeTasks } from "../../src/jobs/plan-volume-tasks.ts";
 
 const pages = [
   { id: "p1", kind: "main" as const },
@@ -55,5 +55,31 @@ describe("planVolumeTasks", () => {
     }
     expect(tasks).toHaveLength(expectedVolumeTasks(pages));
     expect(expectedVolumeTasks([{ kind: "blank" }])).toBe(2);
+  });
+
+  it("reads a page an older import stored as a textless variant exactly like a main page, and still renders blank pages directly", () => {
+    const older = pages.map((page) => (page.id === "p1" ? { ...page, kind: "textless_variant" as const } : page));
+    expect(planVolumeTasks("j", older, []).map((next) => [next.stage, next.pageId, next.lane])).toEqual([
+      ["vision", "p1", "gpu"],
+      ["vision", "p3", "gpu"],
+      ["render", "p2", "cpu"],
+    ]);
+
+    // Every step of a successful run plans what it plans when the page is a main page.
+    const tasks: ReturnType<typeof task>[] = [];
+    for (let next = planVolumeTasks("j", older, tasks); next.length > 0; next = planVolumeTasks("j", older, tasks)) {
+      expect(next).toEqual(planVolumeTasks("j", pages, tasks));
+      tasks.push(...next.map((planned) => task(planned.stage, planned.pageId, "done")));
+    }
+    expect(tasks.filter((entry) => entry.stage === "translate").map((entry) => entry.page_id)).toEqual(["p1", "p3"]);
+    expect(tasks.at(-1)).toEqual(task("export", null, "done"));
+    expect(tasks).toHaveLength(expectedVolumeTasks(older));
+    expect(expectedVolumeTasks(older)).toBe(expectedVolumeTasks(pages));
+  });
+});
+
+describe("needsReading", () => {
+  it("is true for every page except blank ones, so no page is skipped on a guess", () => {
+    expect((["main", "textless_variant", "blank"] as const).map((kind) => needsReading({ kind }))).toEqual([true, true, false]);
   });
 });
