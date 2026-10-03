@@ -28,6 +28,14 @@ export interface RealEvalReport {
     detectionPrecisionExcludingKeep: number;
     missedCount: number;
     missedAreaShare: number;
+    /** Totals over all pairs; see RealPairScore for each count. */
+    translatedRegionCount: number;
+    translatedOffReference: number;
+    translatedUncleaned: number;
+    keptRegionCount: number;
+    keptOnReference: number;
+    uncoveredCount: number;
+    uncoveredOnReference: number;
     damageCount: number;
     damageShare: number;
     damageInsideRegion: number;

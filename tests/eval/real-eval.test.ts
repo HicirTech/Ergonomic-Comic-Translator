@@ -182,6 +182,53 @@ describe("page line recall", () => {
   });
 });
 
+describe("translation policy against the textless page", () => {
+  const { text, textless } = pageWithThreeSquares();
+  const withPolicy = (box: Box, policy: "translate" | "keep", clean: "flat" | "none" | "kept") => ({
+    ...regionWith(box, []),
+    classification: policy === "keep"
+      ? { layout: "text_free" as const, kind: "sfx" as const, policy }
+      : { layout: "text_free" as const, kind: "free_text" as const, policy },
+    clean,
+  });
+  /** Squares at x 0, 200 and 400 are text the textless page removed; the rest of the page is art it kept. */
+  const vision: Pick<PageVisionResult, "regions" | "uncovered" | "timingsMs"> = {
+    regions: [
+      withPolicy({ x0: 0, y0: 0, x1: 100, y1: 100 }, "translate", "flat"),
+      withPolicy({ x0: 520, y0: 120, x1: 580, y1: 180 }, "translate", "none"),
+      withPolicy({ x0: 400, y0: 0, x1: 500, y1: 100 }, "keep", "kept"),
+      withPolicy({ x0: 250, y0: 150, x1: 300, y1: 190 }, "keep", "kept"),
+    ],
+    uncovered: [boxLine({ x0: 200, y0: 0, x1: 300, y1: 100 }), boxLine({ x0: 500, y0: 150, x1: 550, y1: 170 })],
+    timingsMs: {},
+  };
+
+  it("counts translated art, translations without a mask, kept dialogue and dropped dialogue lines", () => {
+    expect(scoreRealPair(identity, text, textless, textless, vision)).toMatchObject({
+      translatedRegionCount: 2,
+      translatedOffReference: 1,
+      translatedUncleaned: 1,
+      keptRegionCount: 2,
+      keptOnReference: 1,
+      uncoveredCount: 2,
+      uncoveredOnReference: 1,
+    });
+  });
+
+  it("adds the counts over the pairs and prints them", () => {
+    const scored = scoreRealPair(identity, text, textless, textless, vision);
+    const report = buildRealReport(
+      { gpu: true, lines: "server", groundTruth: summarizeGroundTruth(2, [[1, 2]], []) },
+      [scored, { ...scored, id: "p0003" }],
+    );
+    expect(report.summary).toMatchObject({ translatedRegionCount: 4, translatedOffReference: 2, keptOnReference: 2, uncoveredOnReference: 2 });
+    const printed = formatRealSummaryZh(report);
+    expect(printed).toContain("送译区域 4：落在无字差分外 2（艺术字或误检被翻）  没有擦字掩码 2");
+    expect(printed).toContain("保留区域 4：落在无字差分内 2（对白被当成艺术字）");
+    expect(printed).toContain("丢弃的行 4 条：落在无字差分内 2（可能漏翻）");
+  });
+});
+
 describe("real eval report", () => {
   const { text, textless } = pageWithThreeSquares();
   const groundTruth = summarizeGroundTruth(9, [[1, 2], [3, 4, 5]], [

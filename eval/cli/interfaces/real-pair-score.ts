@@ -34,6 +34,20 @@ export interface RealPairScore {
   missedCount: number;
   /** Area of missed reference boxes over the area of every reference box. */
   missedAreaShare: number;
+  /** Regions whose policy is translate. */
+  translatedRegionCount: number;
+  /** Translated regions with under offReferenceShare of their box on the reference areas: art text or no text. */
+  translatedOffReference: number;
+  /** Translated regions that got no cleaning mask, so the source text stays under the translation. */
+  translatedUncleaned: number;
+  /** Regions whose policy is keep. */
+  keptRegionCount: number;
+  /** Kept regions with at least onReferenceShare of their box on the reference areas: dialogue taken for art. */
+  keptOnReference: number;
+  /** Lines outside every region, which the product drops. */
+  uncoveredCount: number;
+  /** Dropped lines with at least onReferenceShare of their box on the reference areas: dialogue left untranslated. */
+  uncoveredOnReference: number;
   damageCount: number;
   damageShare: number;
   damageInsideRegion: number;

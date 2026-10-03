@@ -15,6 +15,14 @@ export const damageHaloRadiusPx = 4;
 /** A cleaned pixel this far from the original text page, per channel, counts as damage or as removed. */
 export const damageLevel = 24;
 
+/**
+ * A translated region with less than this share of its box on the reference areas sits on something the
+ * textless variant kept: art lettering the owner wants left alone, or no text at all.
+ */
+export const offReferenceShare = 0.1;
+/** A kept region or a dropped line with at least this share of its box on the reference areas sits on removed text. */
+export const onReferenceShare = 0.5;
+
 /** The name runVisionPage gives the whole-page line pass in timingsMs. */
 const pageLineTiming = "page_lines";
 
@@ -87,6 +95,39 @@ export const residualStrokeShare = (original: RgbImage, cleaned: RgbImage, strok
   return { strokePixels: text, residualStrokeShare: text === 0 ? 0 : remaining / text };
 };
 
+/** Share of the pixels under `box` that `mask` marks; 0 for a box that holds no pixel. */
+const maskShareInBox = (mask: Uint8Array, width: number, height: number, box: Box) => {
+  const x0 = Math.max(0, Math.floor(box.x0));
+  const y0 = Math.max(0, Math.floor(box.y0));
+  const x1 = Math.min(width, Math.ceil(box.x1));
+  const y1 = Math.min(height, Math.ceil(box.y1));
+  let marked = 0;
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) marked += mask[y * width + x]!;
+  }
+  const pixels = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
+  return pixels === 0 ? 0 : marked / pixels;
+};
+
+/**
+ * The owner's rule on the textless pairs, which remove dialogue and narration but keep the art: translated
+ * regions should sit on removed text, kept regions and dropped lines should not.
+ */
+const policyScores = (mask: Uint8Array, width: number, height: number, vision: Pick<PageVisionResult, "regions" | "uncovered">) => {
+  const onReference = (box: Box) => maskShareInBox(mask, width, height, box);
+  const translated = vision.regions.filter((region) => region.classification.policy !== "keep");
+  const kept = vision.regions.filter((region) => region.classification.policy === "keep");
+  return {
+    translatedRegionCount: translated.length,
+    translatedOffReference: translated.filter((region) => onReference(region.box) < offReferenceShare).length,
+    translatedUncleaned: translated.filter((region) => region.clean === "none").length,
+    keptRegionCount: kept.length,
+    keptOnReference: kept.filter((region) => onReference(region.box) >= onReferenceShare).length,
+    uncoveredCount: vision.uncovered.length,
+    uncoveredOnReference: vision.uncovered.filter((line) => onReference(lineBox(line)) >= onReferenceShare).length,
+  };
+};
+
 /**
  * Recall of the reference boxes by the regions together with the lines outside every region, and by the
  * page lines alone, plus how many page lines overlap a reference box. A page line is a line inside a region
@@ -142,6 +183,7 @@ export const scoreRealPair = (
     detectionPrecisionExcludingKeep: regionPrecision(areas.boxes, translating),
     missedCount: missed.length,
     missedAreaShare: referenceArea === 0 ? 0 : missed.reduce((sum, box) => sum + boxArea(box), 0) / referenceArea,
+    ...policyScores(areas.mask, text.width, text.height, vision),
     ...damage,
     ...residual,
   };
@@ -151,8 +193,9 @@ export const buildRealReport = (
   run: Pick<RealEvalReport, "gpu" | "lines" | "groundTruth">,
   pairs: readonly RealPairScore[],
 ): RealEvalReport => {
-  const lineCount = pairs.reduce((sum, pair) => sum + pair.lineCount, 0);
-  const touchingLineCount = pairs.reduce((sum, pair) => sum + pair.touchingLineCount, 0);
+  const total = (pick: (pair: RealPairScore) => number) => pairs.reduce((sum, pair) => sum + pick(pair), 0);
+  const lineCount = total((pair) => pair.lineCount);
+  const touchingLineCount = total((pair) => pair.touchingLineCount);
   return {
     ...run,
     pairCount: pairs.length,
@@ -166,8 +209,15 @@ export const buildRealReport = (
       pageLineMs: mean(pairs.map((pair) => pair.pageLineMs)),
       detectionPrecision: mean(pairs.map((pair) => pair.detectionPrecision)),
       detectionPrecisionExcludingKeep: mean(pairs.map((pair) => pair.detectionPrecisionExcludingKeep)),
-      missedCount: pairs.reduce((sum, pair) => sum + pair.missedCount, 0),
+      missedCount: total((pair) => pair.missedCount),
       missedAreaShare: mean(pairs.map((pair) => pair.missedAreaShare)),
+      translatedRegionCount: total((pair) => pair.translatedRegionCount),
+      translatedOffReference: total((pair) => pair.translatedOffReference),
+      translatedUncleaned: total((pair) => pair.translatedUncleaned),
+      keptRegionCount: total((pair) => pair.keptRegionCount),
+      keptOnReference: total((pair) => pair.keptOnReference),
+      uncoveredCount: total((pair) => pair.uncoveredCount),
+      uncoveredOnReference: total((pair) => pair.uncoveredOnReference),
       damageCount: mean(pairs.map((pair) => pair.damageCount)),
       damageShare: mean(pairs.map((pair) => pair.damageShare)),
       damageInsideRegion: mean(pairs.map((pair) => pair.damageInsideRegion)),
