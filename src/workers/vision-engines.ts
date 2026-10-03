@@ -10,7 +10,8 @@ import type { VisionEngine } from "./interfaces/index.ts";
 /** Engines a vision worker can host, keyed by the name used in load/task requests. */
 export const visionEngineFactories: Record<string, () => VisionEngine> = {
   detector: createDetectorEngine,
-  lines: createLineEngine,
+  lines: () => createLineEngine("ppocr-det-mobile"),
+  "lines-server": () => createLineEngine("ppocr-det-server"),
   baberu: createBaberuEngine,
   "manga-ocr": createMangaOcrEngine,
   "text-rec": () => createTextRecEngine("ppocr-rec-server"),

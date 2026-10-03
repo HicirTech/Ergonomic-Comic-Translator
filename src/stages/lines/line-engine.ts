@@ -8,8 +8,11 @@ import { dbMapToPage, planDbCrop, planDbPage } from "./db-input.ts";
 import { extractTextLines } from "./db-postprocess.ts";
 import type { DbCropPlan, LineTask, TextLine } from "./interfaces/index.ts";
 
-/** S2b: text-line geometry with PP-OCRv5_mobile_det, per region crop or over the whole page. */
-export const createLineEngine = (): VisionEngine => {
+/**
+ * S2b: text-line geometry with a PP-OCRv5 DB detector, per region crop or over the whole page.
+ * The mobile and server models share one pipeline: their inference.yml files differ only in the model name.
+ */
+export const createLineEngine = (modelId: "ppocr-det-mobile" | "ppocr-det-server"): VisionEngine => {
   let ort: typeof Ort | null = null;
   let session: Ort.InferenceSession | null = null;
   const pages = createPageCache();
@@ -29,7 +32,7 @@ export const createLineEngine = (): VisionEngine => {
   return {
     load: async (runtime, modelsRoot, options) => {
       ort = runtime;
-      session = await runtime.InferenceSession.create(modelFilePath(modelsRoot, "ppocr-det-mobile", "inference.onnx"), options);
+      session = await runtime.InferenceSession.create(modelFilePath(modelsRoot, modelId, "inference.onnx"), options);
       return { inputNames: [...session.inputNames], outputNames: [...session.outputNames] };
     },
     run: async (input) => {
