@@ -20,11 +20,13 @@ checking are automatic.
    natural order, chapter by chapter. Duplicate images are kept once; blank pages are kept as they are, every
    other page is read, and a page without text comes back unchanged. PDF input is not supported.
 2. **Read** (ONNX Runtime, GPU or CPU). Text and bubble detection, text line geometry including slanted text,
-   orientation, splitting one bubble into several speakers' lines, OCR, text masks and cleaning (flat fill for
-   plain bubbles, MI-GAN inpainting on artwork). A wide dialogue box is read line by line when the sentence
-   reader drops part of it, and a line the detector missed is still translated when it reads as typeset text
-   of five characters or more. A detected text box in which no text line is found cannot be cleaned, so it
-   is left as it is instead of being lettered over.
+   orientation, splitting one bubble into several speakers' lines, OCR, text masks and cleaning. The mask
+   takes the strokes, an outline drawn around them, and dot leaders and other small marks that continue a
+   line, and nothing of the paper beside them; the strokes are filled from the paper around them, and MI-GAN
+   inpaints only finely patterned paper such as screentone. A wide dialogue box is read line by line when the sentence reader drops part of
+   it. A line the detector missed is still translated when it stands in a bubble and can be read, or reads
+   as typeset text. A detected text box in which no text line is found cannot be cleaned, so it is left as
+   it is instead of being lettered over.
 3. **Names and terms first.** Names and recurring terms of the whole volume are collected, translated with
    context from across the volume, and frozen so every page uses the same Chinese names.
 4. **Translate** (llama.cpp). Page by page in reading order, with earlier pages as rolling context. Every answer
@@ -34,8 +36,8 @@ checking are automatic.
    review.
 5. **Letter.** Chinese text is set horizontally or vertically in the original box at the original angle, with
    Chinese line-breaking rules, in Noto Sans SC Bold. It stays inside its bubble and the page, is at most a
-   tenth larger than the text it replaces, uses light ink on dark boxes, and gets an outline unless the bubble
-   is plain paper. A line without a usable translation shows "（这句没能翻译）" instead of an empty bubble.
+   tenth larger than the text it replaces, and takes that text's ink colour and its outline when it had one.
+   A line without a usable translation shows "（这句没能翻译）" instead of an empty bubble.
 6. **Export.** CBZ (PNG pages with `ComicInfo.xml`) and PDF (right to left for manga).
 
 The source language (Japanese, Korean, Traditional Chinese or English) is detected from the recognised text,
@@ -149,8 +151,9 @@ Lettering and export run on the CPU alongside.
   same model exist today).
 - Re-running a volume recomputes every step; finished steps are not reused yet.
 - The small-GPU translation tiers (8 GB cards, integrated graphics) are untested.
-- LaMa is downloaded but not used: DirectML rejects the model on the tested GPU, so MI-GAN does all the
-  inpainting.
+- LaMa is downloaded but not used: DirectML rejects the model on the tested GPU, so MI-GAN is the
+  inpainting model.
+- A row of dots set as a line of its own is erased but not translated: the line detector does not find it.
 - A portable installer, a GPU self-check of the ONNX execution providers, and GPU support on Linux.
 
 ## Development
@@ -182,7 +185,7 @@ Rules for contributions:
 | [PP-LCNet textline orientation](https://huggingface.co/PaddlePaddle/PP-LCNet_x1_0_textline_ori_onnx) | Apache-2.0 | 0/180 degree line orientation |
 | [Baberu OCR](https://huggingface.co/genshiai-daichi/baberu-ocr) | Apache-2.0 | main OCR (Japanese, Chinese, English) |
 | [manga-ocr](https://huggingface.co/onnx-community/manga-ocr-base-ONNX) | Apache-2.0 | short Japanese text |
-| [MI-GAN](https://huggingface.co/andraniksargsyan/migan) | MIT | inpainting |
+| [MI-GAN](https://huggingface.co/andraniksargsyan/migan) | MIT | inpainting of finely patterned paper |
 | [LaMa manga](https://huggingface.co/mayocream/lama-manga-onnx) | Apache-2.0 | inpainting (not used yet) |
 | [Qwen3.5-9B GGUF](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF) | Apache-2.0 | translation (Q6_K, Q4_K_M, IQ3_XXS tiers) |
 | [Hy-MT2-7B GGUF](https://huggingface.co/tencent/Hy-MT2-7B-GGUF) | Apache-2.0 | translation tier for integrated graphics |
