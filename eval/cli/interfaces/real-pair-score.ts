@@ -42,7 +42,7 @@ export interface RealPairScore {
   translatedRegionCount: number;
   /** Translated regions with under offReferenceShare of their box on the reference areas: art text or no text. */
   translatedOffReference: number;
-  /** Translated regions that got no cleaning mask, so the source text stays under the translation. */
+  /** Regions meant for translation without a cleaning mask. They stay as they are, with no lettering on top. */
   translatedUncleaned: number;
   /** Regions whose policy is keep. */
   keptRegionCount: number;

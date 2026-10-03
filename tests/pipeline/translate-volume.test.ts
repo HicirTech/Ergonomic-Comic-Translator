@@ -65,6 +65,13 @@ describe("pageText", () => {
     expect(text.refs["1b"]).toEqual({ regionIndex: 1, utteranceIndex: 1 });
     expect(text.lines.map((line) => line.id)).toEqual(["4.1.0", "4.1.1", "4.2.0"]);
   });
+
+  it("leaves out a region whose text could not be removed, so nothing is lettered over it", () => {
+    const text = pageText(1, [region(0, 0, ["セリフ"]), { ...region(300, 0, ["消せない字"]), clean: "none" }], "rtl");
+    expect(text.units).toEqual([{ id: "2", kind: "dialogue", source: "セリフ" }]);
+    expect(Object.keys(text.refs)).toEqual(["2"]);
+    expect(text.lines.map((line) => line.id)).toEqual(["1.2.0"]);
+  });
 });
 
 describe("isRetryableLlmError", () => {

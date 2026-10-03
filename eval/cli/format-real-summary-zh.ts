@@ -24,7 +24,7 @@ export const formatRealSummaryZh = (report: RealEvalReport) => {
     `区域加行召回 ${ratio(summary.regionLineRecall)}  仅行召回 ${ratio(summary.lineRecall)}`,
     `页面行 ${summary.lineCount} 条  触及真值框占比 ${ratio(summary.lineTouchShare)}  整页行检测均耗时 ${summary.pageLineMs.toFixed(0)} ms/页`,
     `漏检区域 ${summary.missedCount}  漏检面积占比 ${ratio(summary.missedAreaShare)}`,
-    `送译区域 ${summary.translatedRegionCount}：落在无字差分外 ${summary.translatedOffReference}（艺术字或误检被翻）  没有擦字掩码 ${summary.translatedUncleaned}`,
+    `送译区域 ${summary.translatedRegionCount}：落在无字差分外 ${summary.translatedOffReference}（艺术字或误检被翻）  没有擦字掩码 ${summary.translatedUncleaned}（保持原样，不嵌字）`,
     `保留区域 ${summary.keptRegionCount}：落在无字差分内 ${summary.keptOnReference}（对白被当成艺术字）`,
     `丢弃的行 ${summary.uncoveredCount} 条：落在无字差分内 ${summary.uncoveredOnReference}（可能漏翻）`,
     `损伤像素 ${summary.damageCount.toFixed(1)}  占页 ${ratio(summary.damageShare)}  区域内 ${summary.damageInsideRegion.toFixed(1)}  区域外 ${summary.damageOutsideRegion.toFixed(1)}`,

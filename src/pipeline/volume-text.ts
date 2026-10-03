@@ -13,7 +13,8 @@ const unitKind = (region: RegionResult, utterance: RegionResult["utterances"][nu
 
 /**
  * Turns one page's vision result into translation units: regions in reading order, one unit per utterance
- * with text, ids "12" or "12a"/"12b". Kept SFX and utterances without text are not translated.
+ * with text, ids "12" or "12a"/"12b". Kept SFX and utterances without text are not translated. Neither is
+ * a region whose text could not be removed: its translation would be lettered over the source text.
  */
 export const pageText = (page: number, regions: readonly RegionResult[], direction: "rtl" | "ltr"): VolumePageText => {
   const order = readingOrder(regions.map((region) => region.box), direction);
@@ -22,7 +23,7 @@ export const pageText = (page: number, regions: readonly RegionResult[], directi
   const refs: VolumePageText["refs"] = {};
   order.forEach((regionIndex, position) => {
     const region = regions[regionIndex]!;
-    if (region.classification.policy === "keep") return;
+    if (region.classification.policy === "keep" || region.clean === "none") return;
     const readable = region.utterances.map((utterance, utteranceIndex) => ({ utterance, utteranceIndex })).filter(({ utterance }) => utterance.text.trim() !== "");
     readable.forEach(({ utterance, utteranceIndex }, index) => {
       const id = unitId(position + 1, index, readable.length);

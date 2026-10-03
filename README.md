@@ -23,7 +23,8 @@ checking are automatic.
    orientation, splitting one bubble into several speakers' lines, OCR, text masks and cleaning (flat fill for
    plain bubbles, MI-GAN inpainting on artwork). A wide dialogue box is read line by line when the sentence
    reader drops part of it, and a line the detector missed is still translated when it reads as typeset text
-   of five characters or more.
+   of five characters or more. A detected text box in which no text line is found cannot be cleaned, so it
+   is left as it is instead of being lettered over.
 3. **Names and terms first.** Names and recurring terms of the whole volume are collected, translated with
    context from across the volume, and frozen so every page uses the same Chinese names.
 4. **Translate** (llama.cpp). Page by page in reading order, with earlier pages as rolling context. Every answer
