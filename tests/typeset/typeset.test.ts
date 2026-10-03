@@ -8,6 +8,7 @@ import type { Shaper } from "../../src/typeset/interfaces/index.ts";
 import { breakLines } from "../../src/typeset/kinsoku.ts";
 import { layoutText } from "../../src/typeset/layout.ts";
 import { layoutPaths, pageOverlaySvg, placedBlockSvg } from "../../src/typeset/svg.ts";
+import { line } from "../stages/fixtures.ts";
 
 /** Every character is one glyph: CJK 1 em wide, ASCII half; vertical advances are always 1 em. */
 const fakeShaper: Shaper = {
@@ -144,6 +145,32 @@ describe("typesetPage", () => {
     const { svg, overflow } = typesetPage(fakeShaper, vision, text, { page: 1, units: text.units, targets: { "1": "你好" }, flags: {}, requests: 1 });
     expect(svg.match(/<path /gu)).toHaveLength(2);
     expect(overflow).toEqual([]);
+  });
+
+  /** The placed box and the font size of the first block, read back from the SVG the page gets. */
+  const placedBox = (svg: string) => {
+    const [, cx, cy, halfWidth, halfHeight] = /translate\(([\d.]+) ([\d.]+)\) rotate\(0\) translate\(-([\d.]+) -([\d.]+)\)/u.exec(svg)!.map(Number);
+    const fontSize = Number(/scale\(([\d.]+) /u.exec(svg)![1]) * fakeShaper.upem;
+    return { x0: cx! - halfWidth!, y0: cy! - halfHeight!, x1: cx! + halfWidth!, y1: cy! + halfHeight!, fontSize };
+  };
+  const translation = { page: 1, units: text.units, targets: { "1": "你好" }, flags: {}, requests: 1 };
+
+  it("keeps the lettering box inside the bubble and the page", () => {
+    const region = vision.regions[0]!;
+    const wide: PageVisionResult = {
+      ...vision,
+      regions: [{
+        ...region,
+        bubble: { x0: 0, y0: 440, x1: 400, y1: 600 },
+        orientation: { ...region.orientation, frame: { cx: 200, cy: 520, w: 390, h: 150, angle: 0 } },
+      }],
+    };
+    const box = placedBox(typesetPage(fakeShaper, wide, text, translation).svg);
+    // Grown by 1.15 the frame would span x -24..424 and y 434..606: past the page and the bubble.
+    expect(box.x0).toBeCloseTo(6.4, 1);
+    expect(box.x1).toBeCloseTo(393.6, 1);
+    expect(box.y0).toBeCloseTo(446.4, 1);
+    expect(box.y1).toBeCloseTo(593.6, 1);
   });
 
   it("never leaves a cleaned bubble empty when the translation failed", () => {
