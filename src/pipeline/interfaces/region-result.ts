@@ -15,4 +15,8 @@ export interface RegionResult {
   clean: "membrane" | "inpaint" | "kept" | "none";
   /** Colour of the paper next to the removed text; null when the region was not cleaned. */
   paper: [number, number, number] | null;
+  /** Colour the removed text was set in; null when the region was not cleaned. */
+  ink: [number, number, number] | null;
+  /** Colour of the outline the removed text had; null when it had none or the region was not cleaned. */
+  outline: [number, number, number] | null;
 }

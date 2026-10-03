@@ -1,9 +1,16 @@
 import type { LetteringStyle } from "./interfaces/index.ts";
 
-const darkInk = "#111111";
-const lightInk = "#ffffff";
+type Rgb = readonly [number, number, number];
+
+const darkInk: Rgb = [17, 17, 17];
+const lightInk: Rgb = [255, 255, 255];
 /** Relative luminance at which white text and black text contrast equally with the paper (WCAG contrast ratio). */
 const equalContrastLuminance = 0.179;
+/**
+ * Ink closer than this to the paper on every channel is a measuring error, and the measured colour is not
+ * used. Kept low on purpose: black text on a night-scene box only 22 levels brighter is the author's choice.
+ */
+const minInkDistance = 12;
 
 const linear = (channel: number) => {
   const share = channel / 255;
@@ -11,15 +18,19 @@ const linear = (channel: number) => {
 };
 
 /** WCAG relative luminance of an sRGB colour, 0 (black) to 1 (white). */
-export const relativeLuminance = ([red, green, blue]: readonly [number, number, number]) =>
+export const relativeLuminance = ([red, green, blue]: Rgb) =>
   0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue);
 
+const hex = (colour: Rgb) => `#${colour.map((channel) => Math.round(channel).toString(16).padStart(2, "0")).join("")}`;
+
 /**
- * Ink for lettering on `paper` (the tone around the text that was removed): the one of dark and light that
- * contrasts more, so a dark dialogue box gets light text as it had before. Unknown paper gets dark ink.
- * `outlined` adds a stroke in the other tone, for text that sits on art rather than on plain paper.
+ * Colours of a lettered block: the ink of the text it replaces and that text's outline, when it had one, so
+ * the page keeps the look its author gave it. Without a measured ink, or with one that cannot be told from
+ * the paper, the ink is the one of dark and light that contrasts more with the paper; unknown paper gets
+ * dark ink.
  */
-export const letteringStyle = (paper: readonly [number, number, number] | null, outlined: boolean): LetteringStyle => {
-  const light = paper !== null && relativeLuminance(paper) < equalContrastLuminance;
-  return { fill: light ? lightInk : darkInk, outline: outlined ? (light ? darkInk : lightInk) : null };
+export const letteringStyle = (ink: Rgb | null, paper: Rgb | null, outline: Rgb | null): LetteringStyle => {
+  const readable = ink !== null && (paper === null || ink.some((channel, index) => Math.abs(channel - paper[index]!) >= minInkDistance));
+  const fill = readable ? ink : paper !== null && relativeLuminance(paper) < equalContrastLuminance ? lightInk : darkInk;
+  return { fill: hex(fill), outline: outline === null ? null : hex(outline) };
 };

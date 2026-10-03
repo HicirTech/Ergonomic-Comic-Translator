@@ -104,20 +104,25 @@ describe("SVG output", () => {
 });
 
 describe("lettering style", () => {
-  it("picks the ink that contrasts with the paper, and dark ink when the paper is unknown", () => {
-    expect(relativeLuminance([255, 255, 255])).toBeCloseTo(1, 6);
-    expect(relativeLuminance([0, 0, 0])).toBe(0);
-    expect(letteringStyle([250, 250, 250], false)).toEqual({ fill: "#111111", outline: null });
-    expect(letteringStyle([30, 32, 40], false)).toEqual({ fill: "#ffffff", outline: null });
-    expect(letteringStyle(null, false)).toEqual({ fill: "#111111", outline: null });
-    // Mid grey 118 has luminance 0.181, 117 has 0.178: the two inks contrast equally at 0.179.
-    expect(letteringStyle([118, 118, 118], false).fill).toBe("#111111");
-    expect(letteringStyle([117, 117, 117], false).fill).toBe("#ffffff");
+  it("letters in the ink of the text it replaces, with that text's outline", () => {
+    // Black text on a dim dialogue box stays black, also on a night-scene box that is nearly black itself.
+    expect(letteringStyle([24, 20, 22], [70, 72, 80], null)).toEqual({ fill: "#181416", outline: null });
+    expect(letteringStyle([0, 0, 1], [22, 22, 22], null)).toEqual({ fill: "#000001", outline: null });
+    expect(letteringStyle([250, 240, 200], [30, 32, 40], null)).toEqual({ fill: "#faf0c8", outline: null });
+    expect(letteringStyle([20, 20, 20], [120, 90, 60], [255, 255, 255])).toEqual({ fill: "#141414", outline: "#ffffff" });
   });
 
-  it("outlines in the other tone", () => {
-    expect(letteringStyle([250, 250, 250], true)).toEqual({ fill: "#111111", outline: "#ffffff" });
-    expect(letteringStyle([30, 32, 40], true)).toEqual({ fill: "#ffffff", outline: "#111111" });
+  it("falls back to the ink that contrasts with the paper when no ink was measured or it cannot be read", () => {
+    expect(relativeLuminance([255, 255, 255])).toBeCloseTo(1, 6);
+    expect(relativeLuminance([0, 0, 0])).toBe(0);
+    expect(letteringStyle(null, [250, 250, 250], null)).toEqual({ fill: "#111111", outline: null });
+    expect(letteringStyle(null, [30, 32, 40], null)).toEqual({ fill: "#ffffff", outline: null });
+    expect(letteringStyle(null, null, null)).toEqual({ fill: "#111111", outline: null });
+    // Mid grey 118 has luminance 0.181, 117 has 0.178: the two inks contrast equally at 0.179.
+    expect(letteringStyle(null, [118, 118, 118], null).fill).toBe("#111111");
+    expect(letteringStyle(null, [117, 117, 117], null).fill).toBe("#ffffff");
+    // An ink within 12 levels of the paper on every channel is a measuring error, not a choice.
+    expect(letteringStyle([36, 40, 48], [30, 32, 40], null).fill).toBe("#ffffff");
   });
 });
 
@@ -158,6 +163,8 @@ describe("typesetPage", () => {
       }],
       clean: "membrane",
       paper: null,
+      ink: null,
+      outline: null,
     }],
     uncovered: [],
     cleanedPath: "cleaned.png",
@@ -204,14 +211,13 @@ describe("typesetPage", () => {
     expect(placedBox(typesetPage(fakeShaper, withLines, text, translation).svg).fontSize).toBe(32);
   });
 
-  it("letters in light ink on dark paper, and outlines unless the bubble is plain paper", () => {
+  it("letters in the colours of the text it replaces", () => {
     const region = vision.regions[0]!;
     const svgOf = (changes: Partial<PageVisionResult["regions"][number]>) =>
       typesetPage(fakeShaper, { ...vision, regions: [{ ...region, ...changes }] }, text, translation).svg;
     expect(svgOf({})).toContain("fill=\"#111111\">");
-    expect(svgOf({ paper: [28, 30, 36] })).toContain("fill=\"#ffffff\">");
-    expect(svgOf({ paper: [28, 30, 36], clean: "inpaint" })).toContain("fill=\"#ffffff\" stroke=\"#111111\"");
-    expect(svgOf({ paper: [240, 240, 240], bubble: null })).toContain("fill=\"#111111\" stroke=\"#ffffff\"");
+    expect(svgOf({ ink: [24, 20, 22], paper: [70, 72, 80] })).toContain("fill=\"#181416\">");
+    expect(svgOf({ ink: [250, 250, 250], paper: [28, 30, 36], outline: [0, 0, 0] })).toContain("fill=\"#fafafa\" stroke=\"#000000\"");
   });
 
   it("never leaves a cleaned bubble empty when the translation failed", () => {

@@ -47,6 +47,8 @@ const region = (x0: number, y0: number, texts: string[], policy: "translate" | "
   utterances: texts.map((text) => utterance(text)),
   clean: "membrane",
   paper: null,
+  ink: null,
+  outline: null,
 });
 
 describe("pageText", () => {

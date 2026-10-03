@@ -42,6 +42,8 @@ export const kindDirection: Readonly<Record<LayoutKind, "h" | "v">> = {
 };
 
 export const outlinedKinds: ReadonlySet<LayoutKind> = new Set(["art-h", "art-v"]);
+/** Outline of the text of those kinds: dark ink edged in white, on a dark panel. */
+export const outlineRgb = [255, 255, 255] as const;
 
 /** Roles cycle in this order so a short run still pairs the same sentence horizontally and vertically. */
 export const pageRoles = ["h-line", "v-column", "h-block", "v-block", "art-h", "art-v", "slant-h", "slant-v", "mixed"] as const;

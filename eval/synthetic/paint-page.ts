@@ -14,6 +14,7 @@ import {
   darkNoiseAmp,
   darkRgb,
   outlinedKinds,
+  outlineRgb,
   pageHeightPx,
   noisePageStride,
   pageWidthPx,
@@ -118,7 +119,7 @@ const textSvg = (shaper: Shaper, page: SyntheticPage) => {
       shaper,
       layout,
       { cx: line.cx, cy: line.cy, width: line.width, height: line.height, angle: block.angle },
-      letteringStyle(null, outlinedKinds.has(block.kind)),
+      letteringStyle(null, null, outlinedKinds.has(block.kind) ? outlineRgb : null),
     );
   }));
   return pageOverlaySvg(page.width, page.height, blocks);

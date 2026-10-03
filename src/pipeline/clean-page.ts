@@ -45,12 +45,16 @@ export const cleanPage = async (
       const classification = classifyRegion(region, orientation, text, width, height, dialogueThickness);
       let clean: RegionResult["clean"] = "none";
       let paper: RegionResult["paper"] = null;
+      let ink: RegionResult["ink"] = null;
+      let outline: RegionResult["outline"] = null;
       if (classification.policy === "keep") {
         clean = "kept";
       } else {
         const mask = regionTextMask(rgb, gray, region.lines, region.bubble);
         if (mask && mask.strokePixels > 0) {
           paper = mask.ringMedian;
+          ink = mask.inkMedian;
+          outline = mask.outlineMedian;
           if (canMembraneFill(mask)) {
             addToPageMask(smooth, width, mask);
             smoothPixels += mask.strokePixels;
@@ -62,7 +66,7 @@ export const cleanPage = async (
           }
         }
       }
-      return { box: region.box, cls: region.cls, bubble: region.bubble, lines: region.lines, orientation, classification, utterances, clean, paper };
+      return { box: region.box, cls: region.cls, bubble: region.bubble, lines: region.lines, orientation, classification, utterances, clean, paper, ink, outline };
     });
     if (smoothPixels > 0) membraneFill(rgb, smooth);
     return results;

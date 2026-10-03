@@ -67,6 +67,8 @@ const region = (
   classification: { layout: "text_free", kind: policy === "keep" ? "sfx" : "dialogue", policy },
   clean,
   paper: null,
+  ink: null,
+  outline: null,
   utterances: [],
 });
 

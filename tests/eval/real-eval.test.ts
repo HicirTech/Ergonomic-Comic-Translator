@@ -133,6 +133,8 @@ const regionWith = (box: Box, lines: Box[]): PageVisionResult["regions"][number]
   classification: { layout: "text_free", kind: "free_text", policy: "translate" },
   clean: "membrane",
   paper: null,
+  ink: null,
+  outline: null,
   utterances: [],
 });
 

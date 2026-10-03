@@ -46,8 +46,8 @@ const clipTo = (box: Box, limit: Box): Box => {
 
 /**
  * S10 for one page: every translated utterance is laid out in its box (the region frame, or its own
- * slot when a bubble was split), rotated back to the original angle, in the ink that contrasts with the
- * paper under it, outlined unless that paper is plain.
+ * slot when a bubble was split), rotated back to the original angle, in the ink of the text it replaces
+ * and with that text's outline when it had one.
  * An upright box never leaves its bubble or the page, and the text is set at most a little larger than
  * the text it replaces. Units without a translation get a Chinese placeholder. Returns the overlay SVG
  * and the ids that overflowed at the minimum size.
@@ -80,8 +80,7 @@ export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: Volu
     const sourceSize = median(region.lines.map((line) => line.rect.short * glyphShareOfLine)) ?? fallbackFontSize;
     const layout = layoutText(shaper, target, direction, width, height, minFontSize, Math.min(maxFontSize, Math.max(minFontSize, sourceSize * sourceSizeHeadroom)));
     if (layout.overflow) overflow.push(unit.id);
-    // Outside a bubble the text sits on art, and a bubble that had to be inpainted is not plain paper either.
-    const style = letteringStyle(region.paper ?? null, region.bubble === null || region.clean !== "membrane");
+    const style = letteringStyle(region.ink ?? null, region.paper ?? null, region.outline ?? null);
     blocks.push(placedBlockSvg(shaper, layout, { cx: (box.x0 + box.x1) / 2, cy: (box.y0 + box.y1) / 2, width, height, angle }, style));
   }
   return { svg: pageOverlaySvg(vision.width, vision.height, blocks), overflow };
