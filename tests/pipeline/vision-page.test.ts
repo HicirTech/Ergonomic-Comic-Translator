@@ -138,6 +138,7 @@ const plannedUtterance = (writingMode: "h" | "v", lineCount: number): PlannedUtt
   writingMode,
   // Present even when the utterance must not be probed, so the guard is not just a null crop.
   lineCrop: lineProbe,
+  lineReading: null,
 });
 
 const timed: StageTimer = async (_name, work) => work();
@@ -200,5 +201,20 @@ describe("readPlannedUtterances", () => {
     expect(orientationCrops).toEqual([]);
     expect(result.quarterTurns).toBe(0);
     expect(result.text).toBe("plain");
+    expect(result.textFrom).toBe("sentence");
+  });
+
+  it("sends the joined lines to translation when the sentence reader lost text, without the orientation doubt", async () => {
+    const lineReading = { text: "一二三四五六七八九十", meanProb: 0.96, lowestLineProb: 0.93 };
+    const { result } = await readOne({ ...plannedUtterance("h", 3), lineReading }, 0.1, 0.1);
+
+    // The sentence reader returned "plain": 5 characters where the lines hold 10.
+    expect(result).toMatchObject({ text: lineReading.text, textFrom: "lines", meanProb: 0.96, minProb: 0.93, engine: "baberu", quarterTurns: 0, flags: [] });
+  });
+
+  it("keeps the sentence reading when it is as long as the lines", async () => {
+    const { result } = await readOne({ ...plannedUtterance("h", 3), lineReading: { text: "一二三四五", meanProb: 0.96, lowestLineProb: 0.93 } }, 0.1, 0.1);
+
+    expect(result).toMatchObject({ text: "plain", textFrom: "sentence", flags: ["ORIENT_UNSURE"] });
   });
 });

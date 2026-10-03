@@ -130,6 +130,7 @@ describe("typesetPage", () => {
         meanProb: 0.9,
         minProb: 0.9,
         engine: "baberu",
+        textFrom: "sentence",
         quarterTurns: 0,
         flags: [],
       }],

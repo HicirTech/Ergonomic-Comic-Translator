@@ -2,6 +2,7 @@ import { unionBox } from "../geometry/box.ts";
 import { readingCorners } from "../geometry/rotated-rect.ts";
 import type { TextLine } from "../stages/lines/interfaces/index.ts";
 import type { OcrCandidate, OcrCrop } from "../stages/ocr/interfaces/index.ts";
+import { joinLineReadings } from "../stages/ocr/line-reading.ts";
 import { canProbeUpsideDown, planQuarterTurns, utteranceCrop } from "../stages/ocr/ocr-plan.ts";
 import { lineBox } from "../stages/regions/assign-lines.ts";
 import type { PageRegion } from "../stages/regions/interfaces/index.ts";
@@ -48,7 +49,8 @@ export const orientRegions = (regions: readonly PageRegion[]): OrientedRegion[] 
 
 /**
  * Splits every region into utterances (using structure OCR for brackets and name tags) and plans one OCR
- * crop per utterance. Regions without lines are read whole, with the orientation search.
+ * crop per utterance. Regions without lines are read whole, with the orientation search. A horizontal
+ * utterance keeps the structure OCR of its own lines, joined, for when the sentence reader loses text.
  */
 export const planUtterances = (
   oriented: readonly OrientedRegion[],
@@ -63,7 +65,7 @@ export const planUtterances = (
       const { frame } = orientation;
       const box = { x0: frame.cx - frame.w / 2, y0: frame.cy - frame.h / 2, x1: frame.cx + frame.w / 2, y1: frame.cy + frame.h / 2 };
       const split = { lines: [], startReasons: [], styleBreaks: [], nameTag: false, thought: false };
-      return [{ regionIndex, split, box, crop: utteranceCrop(frame, box, turns), engine: "baberu", writingMode: mode, lineCrop: null }];
+      return [{ regionIndex, split, box, crop: utteranceCrop(frame, box, turns), engine: "baberu", writingMode: mode, lineCrop: null, lineReading: null }];
     }
     const text = (line: TextLine) => structureOf.get(line)?.text ?? "";
     const splits = splitUtterances(upright.map(({ line, box }) => ({ box, text: text(line), conf: structureOf.get(line)?.meanProb ?? 0 })), mode);
@@ -79,6 +81,8 @@ export const planUtterances = (
         engine: short ? "manga-ocr" : "baberu",
         writingMode: mode,
         lineCrop: upsideDownCrop(mode, upright, split.lines),
+        // Horizontal lines only: on vertical columns the line recognizer is the weaker reader.
+        lineReading: mode === "h" ? joinLineReadings(split.lines.map((index) => structureOf.get(upright[index]!.line))) : null,
       };
     });
   });

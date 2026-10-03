@@ -1,4 +1,5 @@
 import type { OcrCandidate, OcrCrop } from "../stages/ocr/interfaces/index.ts";
+import { preferLineReading } from "../stages/ocr/line-reading.ts";
 import { canProbeUpsideDown, chooseReading, isUpsideDown, preferFlippedReading } from "../stages/ocr/ocr-plan.ts";
 import type { PlannedUtterance, StageTimer, UtteranceResult, VisionClient } from "./interfaces/index.ts";
 
@@ -62,7 +63,11 @@ export const readPlannedUtterances = async (
   return chosen;
 };
 
-/** Result records of one region's utterances, with flag codes for unsure orientation and empty reads. */
+/**
+ * Result records of one region's utterances, with flag codes for unsure orientation and empty reads.
+ * The text is the sentence reader's, or the utterance's lines joined when that reader lost text
+ * (preferLineReading); the line recognizer reads along each line, so its text carries no orientation doubt.
+ */
 export const utteranceResults = (
   planned: readonly PlannedUtterance[],
   chosen: ReadonlyMap<PlannedUtterance, { reading: OcrCandidate; unsure: boolean }>,
@@ -70,20 +75,23 @@ export const utteranceResults = (
 ): UtteranceResult[] =>
   planned.filter((item) => item.regionIndex === regionIndex).map((item) => {
     const choice = chosen.get(item);
+    const lines = preferLineReading(choice?.reading ?? null, item.lineReading) ? item.lineReading : null;
+    const text = lines ? lines.text : choice?.reading.text ?? "";
     return {
       box: item.box,
       lineIndexes: item.split.lines,
       startReasons: item.split.startReasons,
       nameTag: item.split.nameTag,
       thought: item.split.thought,
-      text: choice?.reading.text ?? "",
-      meanProb: choice?.reading.meanProb ?? 0,
-      minProb: choice?.reading.minProb ?? 0,
+      text,
+      meanProb: lines ? lines.meanProb : choice?.reading.meanProb ?? 0,
+      minProb: lines ? lines.lowestLineProb : choice?.reading.minProb ?? 0,
       engine: item.engine,
+      textFrom: lines ? "lines" : "sentence",
       quarterTurns: choice?.reading.quarterTurns ?? 0,
       flags: [
-        ...(choice?.unsure ? ["ORIENT_UNSURE"] : []),
-        ...(!choice || choice.reading.text === "" ? ["OCR_EMPTY"] : []),
+        ...(choice?.unsure && !lines ? ["ORIENT_UNSURE"] : []),
+        ...(text === "" ? ["OCR_EMPTY"] : []),
       ],
     };
   });
