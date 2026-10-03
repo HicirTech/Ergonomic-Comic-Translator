@@ -4,6 +4,7 @@ import { boundingBoxOfPoints, expandBox } from "../../src/geometry/box.ts";
 import type { RgbImage } from "../../src/imaging/interfaces/index.ts";
 import type { Shaper } from "../../src/typeset/interfaces/index.ts";
 import { layoutText } from "../../src/typeset/layout.ts";
+import { letteringStyle } from "../../src/typeset/lettering-style.ts";
 import { layoutPaths, pageOverlaySvg, placedBlockSvg } from "../../src/typeset/svg.ts";
 import {
   bubbleFillRgb,
@@ -117,7 +118,7 @@ const textSvg = (shaper: Shaper, page: SyntheticPage) => {
       shaper,
       layout,
       { cx: line.cx, cy: line.cy, width: line.width, height: line.height, angle: block.angle },
-      outlinedKinds.has(block.kind),
+      letteringStyle(null, outlinedKinds.has(block.kind)),
     );
   }));
   return pageOverlaySvg(page.width, page.height, blocks);

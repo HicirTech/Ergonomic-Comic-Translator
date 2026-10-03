@@ -425,6 +425,7 @@ describe("ocr page score", () => {
         },
         classification: { layout: "text_free", kind: "sfx", policy: "keep" },
         clean: "kept",
+        paper: null,
         utterances: [{
           box: regionBox,
           lineIndexes: [],
@@ -492,6 +493,7 @@ describe("ocr page score", () => {
       orientation: { tilt: 0, consistency: 1, writingMode, ambiguous: false, frame: { cx: 0, cy: 0, w: 1, h: 1, angle: 0 } },
       classification: { layout: "text_free", kind: "free_text", policy: "translate" },
       clean: "flat",
+      paper: null,
       utterances: [{
         box,
         lineIndexes: [],
@@ -577,6 +579,7 @@ describe("planned search reads", () => {
     },
     classification: { layout: "text_free", kind: "free_text", policy: "translate" },
     clean: "flat",
+    paper: null,
     utterances: [{
       box: { x0: 2, y0: 2, x1: 38, y1: 14 },
       lineIndexes: [0],

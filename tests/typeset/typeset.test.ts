@@ -7,6 +7,7 @@ import { pageText } from "../../src/pipeline/volume-text.ts";
 import type { Shaper } from "../../src/typeset/interfaces/index.ts";
 import { breakLines } from "../../src/typeset/kinsoku.ts";
 import { layoutText } from "../../src/typeset/layout.ts";
+import { letteringStyle, relativeLuminance } from "../../src/typeset/lettering-style.ts";
 import { layoutPaths, pageOverlaySvg, placedBlockSvg } from "../../src/typeset/svg.ts";
 import { line } from "../stages/fixtures.ts";
 
@@ -92,10 +93,31 @@ describe("SVG output", () => {
   it("emits one path per glyph and wraps blocks in the original angle", () => {
     const layout = layoutText(fakeShaper, "你好", "h", 100, 40, 12, 20);
     expect(layoutPaths(fakeShaper, layout).match(/<path /gu)).toHaveLength(2);
-    const block = placedBlockSvg(fakeShaper, layout, { cx: 50, cy: 60, width: 100, height: 40, angle: 25 }, true);
+    const box = { cx: 50, cy: 60, width: 100, height: 40, angle: 25 };
+    const block = placedBlockSvg(fakeShaper, layout, box, { fill: "#111111", outline: "#ffffff" });
     expect(block).toContain("rotate(25)");
+    expect(block).toContain("fill=\"#111111\" stroke=\"#ffffff\"");
     expect(block).toContain("paint-order=\"stroke\"");
+    expect(placedBlockSvg(fakeShaper, layout, box, { fill: "#ffffff", outline: null })).not.toContain("stroke");
     expect(pageOverlaySvg(800, 1200, [block])).toStartWith("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"800\" height=\"1200\"");
+  });
+});
+
+describe("lettering style", () => {
+  it("picks the ink that contrasts with the paper, and dark ink when the paper is unknown", () => {
+    expect(relativeLuminance([255, 255, 255])).toBeCloseTo(1, 6);
+    expect(relativeLuminance([0, 0, 0])).toBe(0);
+    expect(letteringStyle([250, 250, 250], false)).toEqual({ fill: "#111111", outline: null });
+    expect(letteringStyle([30, 32, 40], false)).toEqual({ fill: "#ffffff", outline: null });
+    expect(letteringStyle(null, false)).toEqual({ fill: "#111111", outline: null });
+    // Mid grey 118 has luminance 0.181, 117 has 0.178: the two inks contrast equally at 0.179.
+    expect(letteringStyle([118, 118, 118], false).fill).toBe("#111111");
+    expect(letteringStyle([117, 117, 117], false).fill).toBe("#ffffff");
+  });
+
+  it("outlines in the other tone", () => {
+    expect(letteringStyle([250, 250, 250], true)).toEqual({ fill: "#111111", outline: "#ffffff" });
+    expect(letteringStyle([30, 32, 40], true)).toEqual({ fill: "#ffffff", outline: "#111111" });
   });
 });
 
@@ -135,6 +157,7 @@ describe("typesetPage", () => {
         flags: [],
       }],
       clean: "flat",
+      paper: null,
     }],
     uncovered: [],
     cleanedPath: "cleaned.png",
@@ -179,6 +202,16 @@ describe("typesetPage", () => {
     const withLines: PageVisionResult = { ...vision, regions: [{ ...region, lines: [line(200, 180, 150, 40, 0), line(200, 230, 150, 40, 0)] }] };
     // A 40 px line rectangle holds text of about 0.74 * 40 = 29.6 px, and two characters would fit far larger.
     expect(placedBox(typesetPage(fakeShaper, withLines, text, translation).svg).fontSize).toBe(29);
+  });
+
+  it("letters in light ink on dark paper, and outlines unless the bubble is plain paper", () => {
+    const region = vision.regions[0]!;
+    const svgOf = (changes: Partial<PageVisionResult["regions"][number]>) =>
+      typesetPage(fakeShaper, { ...vision, regions: [{ ...region, ...changes }] }, text, translation).svg;
+    expect(svgOf({})).toContain("fill=\"#111111\">");
+    expect(svgOf({ paper: [28, 30, 36] })).toContain("fill=\"#ffffff\">");
+    expect(svgOf({ paper: [28, 30, 36], clean: "inpaint" })).toContain("fill=\"#ffffff\" stroke=\"#111111\"");
+    expect(svgOf({ paper: [240, 240, 240], bubble: null })).toContain("fill=\"#111111\" stroke=\"#ffffff\"");
   });
 
   it("never leaves a cleaned bubble empty when the translation failed", () => {

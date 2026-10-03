@@ -46,6 +46,7 @@ const region = (x0: number, y0: number, texts: string[], policy: "translate" | "
   classification: policy === "keep" ? { layout: "text_free", kind: "sfx", policy } : { layout: "bubble", kind: "dialogue", policy },
   utterances: texts.map((text) => utterance(text)),
   clean: "flat",
+  paper: null,
 });
 
 describe("pageText", () => {

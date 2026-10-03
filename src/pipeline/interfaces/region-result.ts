@@ -13,4 +13,6 @@ export interface RegionResult {
   utterances: UtteranceResult[];
   /** How the region was cleaned: flat fill, model inpainting, kept (SFX), or nothing to remove. */
   clean: "flat" | "inpaint" | "kept" | "none";
+  /** Median colour of the paper around the removed text; null when the region was not cleaned. */
+  paper: [number, number, number] | null;
 }

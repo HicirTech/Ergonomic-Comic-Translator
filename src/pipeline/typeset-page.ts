@@ -3,6 +3,7 @@ import type { Box } from "../geometry/interfaces/index.ts";
 import { rotatePoint } from "../geometry/rotated-rect.ts";
 import type { Shaper } from "../typeset/interfaces/index.ts";
 import { layoutText } from "../typeset/layout.ts";
+import { letteringStyle } from "../typeset/lettering-style.ts";
 import { pageOverlaySvg, placedBlockSvg } from "../typeset/svg.ts";
 import type { PageTranslationResult, PageVisionResult, VolumePageText } from "./interfaces/index.ts";
 
@@ -40,7 +41,8 @@ const clipTo = (box: Box, limit: Box): Box => {
 
 /**
  * S10 for one page: every translated utterance is laid out in its box (the region frame, or its own
- * slot when a bubble was split), rotated back to the original angle, outlined when it sits on art.
+ * slot when a bubble was split), rotated back to the original angle, in the ink that contrasts with the
+ * paper under it, outlined unless that paper is plain.
  * An upright box never leaves its bubble or the page, and the text is never set larger than the text it
  * replaces. Units without a translation get a Chinese placeholder. Returns the overlay SVG and the ids
  * that overflowed at the minimum size.
@@ -73,7 +75,9 @@ export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: Volu
     const sourceSize = median(region.lines.map((line) => line.rect.short * glyphShareOfLine)) ?? fallbackFontSize;
     const layout = layoutText(shaper, target, direction, width, height, minFontSize, Math.min(maxFontSize, Math.max(minFontSize, sourceSize)));
     if (layout.overflow) overflow.push(unit.id);
-    blocks.push(placedBlockSvg(shaper, layout, { cx: (box.x0 + box.x1) / 2, cy: (box.y0 + box.y1) / 2, width, height, angle }, region.bubble === null));
+    // Outside a bubble the text sits on art, and a bubble that had to be inpainted is not plain paper either.
+    const style = letteringStyle(region.paper ?? null, region.bubble === null || region.clean !== "flat");
+    blocks.push(placedBlockSvg(shaper, layout, { cx: (box.x0 + box.x1) / 2, cy: (box.y0 + box.y1) / 2, width, height, angle }, style));
   }
   return { svg: pageOverlaySvg(vision.width, vision.height, blocks), overflow };
 };

@@ -41,11 +41,13 @@ export const cleanPage = async (
       const text = utterances.map((utterance) => utterance.text).join("");
       const classification = classifyRegion(region, orientation, text, width, height, dialogueThickness);
       let clean: RegionResult["clean"] = "none";
+      let paper: RegionResult["paper"] = null;
       if (classification.policy === "keep") {
         clean = "kept";
       } else {
         const mask = regionTextMask(rgb, gray, region.lines);
         if (mask && mask.strokePixels > 0) {
+          paper = mask.ringMedian;
           if (canFlatFill(mask)) {
             flatFill(rgb, mask);
             clean = "flat";
@@ -56,7 +58,7 @@ export const cleanPage = async (
           }
         }
       }
-      return { box: region.box, cls: region.cls, bubble: region.bubble, lines: region.lines, orientation, classification, utterances, clean };
+      return { box: region.box, cls: region.cls, bubble: region.bubble, lines: region.lines, orientation, classification, utterances, clean, paper };
     }));
 
   // sharp does not create the parent. The web job never mkdir'd volumes/<id>/work, so every page died here.

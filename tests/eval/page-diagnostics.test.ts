@@ -66,6 +66,7 @@ const region = (
   orientation: { tilt: 0, consistency: 1, writingMode: "h", ambiguous: false, frame: { cx: 1, cy: 1, w: 2, h: 2, angle: 0 } },
   classification: { layout: "text_free", kind: policy === "keep" ? "sfx" : "dialogue", policy },
   clean,
+  paper: null,
   utterances: [],
 });
 

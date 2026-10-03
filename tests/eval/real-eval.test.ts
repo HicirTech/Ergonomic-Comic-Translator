@@ -152,6 +152,7 @@ const regionWith = (box: Box, lines: Box[]): PageVisionResult["regions"][number]
   orientation: { tilt: 0, consistency: 1, writingMode: "h", ambiguous: false, frame: { cx: 0, cy: 0, w: 1, h: 1, angle: 0 } },
   classification: { layout: "text_free", kind: "free_text", policy: "translate" },
   clean: "flat",
+  paper: null,
   utterances: [],
 });
 
