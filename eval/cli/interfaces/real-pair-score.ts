@@ -19,6 +19,8 @@ export interface RealPairScore {
   lineBoxes: Box[];
   /** Reference boxes at least half covered by the predicted regions alone: what the product does today. */
   detectionRecall: number;
+  /** Share of the text ink (textStrokeMask) inside translated regions; whole removed boxes do not dilute it. */
+  strokeRecall: number;
   /** The same, covered by the predicted regions together with the uncovered lines. */
   regionLineRecall: number;
   /** The same, covered by the page lines alone. */

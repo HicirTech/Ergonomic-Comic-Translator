@@ -16,6 +16,7 @@ export interface RealEvalReport {
   summary: {
     /** Recall of the reference boxes by regions alone, by regions with uncovered lines, and by lines alone. */
     detectionRecall: number;
+    strokeRecall: number;
     regionLineRecall: number;
     lineRecall: number;
     /** All page lines of all scored pairs. */

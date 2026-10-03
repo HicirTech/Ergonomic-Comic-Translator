@@ -1,11 +1,10 @@
 import { boxArea, intersectionArea } from "../../src/geometry/box.ts";
 import type { Box } from "../../src/geometry/interfaces/index.ts";
-import { rgbToGray } from "../../src/imaging/gray.ts";
 import type { RgbImage } from "../../src/imaging/interfaces/index.ts";
 import { dilateSquare } from "../../src/imaging/morphology.ts";
 import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
 import { lineBox } from "../../src/stages/regions/assign-lines.ts";
-import { diffLevel, deriveTextAreas, median3x3 } from "../ground-truth/textless-diff.ts";
+import { deriveTextAreas, median3x3 } from "../ground-truth/textless-diff.ts";
 import { matchByCoverage } from "../metrics/ocr-metrics.ts";
 import { regionPrecision, regionRecall } from "../metrics/vision-metrics.ts";
 import type { RealEvalReport, RealPairScore } from "./interfaces/index.ts";
@@ -30,25 +29,62 @@ const mean = (values: readonly number[]) => (values.length === 0 ? 0 : values.re
 
 const share = (part: number, whole: number) => (whole === 0 ? 0 : part / whole);
 
-/**
- * Mask pixels where the text page is darker than the textless page by at least diffLevel.
- * Compared after the same 3x3 median deriveTextAreas uses, so compression specks are not strokes.
- */
-export const textStrokeMask = (text: RgbImage, textless: RgbImage, areaMask: Uint8Array) => {
-  const darker = rgbToGray(median3x3(text));
-  const lighter = rgbToGray(median3x3(textless));
-  const stroke = new Uint8Array(areaMask.length);
-  for (let index = 0; index < areaMask.length; index += 1) {
-    if (areaMask[index] && lighter.data[index]! - darker.data[index]! >= diffLevel) stroke[index] = 1;
-  }
-  return stroke;
-};
+/** A pixel this far from the fill of its reference area, on its largest channel, is text ink. */
+export const strokeDistance = 64;
 
 const channelGap = (left: Uint8Array, right: Uint8Array, offset: number) => Math.max(
   Math.abs(left[offset]! - right[offset]!),
   Math.abs(left[offset + 1]! - right[offset + 1]!),
   Math.abs(left[offset + 2]! - right[offset + 2]!),
 );
+
+const median = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[sorted.length >> 1] ?? 0;
+};
+
+/**
+ * Text ink inside the reference areas. The textless variants remove the box or bubble together with its
+ * text, so "differs from the textless page" counts the box as well; ink is what stands out from the fill of
+ * its own area on the text page: dark text in a light bubble, light text in a dark box. Measured after the
+ * 3x3 median deriveTextAreas uses, so compression specks are not ink.
+ */
+export const textStrokeMask = (text: RgbImage, areas: { mask: Uint8Array; boxes: readonly Box[] }) => {
+  const smoothed = median3x3(text);
+  const { width } = text;
+  const stroke = new Uint8Array(areas.mask.length);
+  for (const box of areas.boxes) {
+    const fill: [number[], number[], number[]] = [[], [], []];
+    const indexes: number[] = [];
+    for (let y = box.y0; y < box.y1; y += 1) {
+      for (let x = box.x0; x < box.x1; x += 1) {
+        const index = y * width + x;
+        if (!areas.mask[index]) continue;
+        indexes.push(index);
+        for (let channel = 0; channel < 3; channel += 1) fill[channel]!.push(smoothed.data[index * 3 + channel]!);
+      }
+    }
+    const tone = Uint8Array.from([median(fill[0]), median(fill[1]), median(fill[2])]);
+    for (const index of indexes) {
+      if (channelGap(smoothed.data.subarray(index * 3, index * 3 + 3), tone, 0) >= strokeDistance) stroke[index] = 1;
+    }
+  }
+  return stroke;
+};
+
+/** Share of the ink pixels that lie inside one of the boxes: the text a translated region holds. */
+export const strokeRecall = (strokes: Uint8Array, width: number, boxes: readonly Box[]) => {
+  let ink = 0;
+  let held = 0;
+  for (let index = 0; index < strokes.length; index += 1) {
+    if (!strokes[index]) continue;
+    ink += 1;
+    const x = index % width;
+    const y = Math.floor(index / width);
+    if (boxes.some((box) => pixelInBox(box, x, y))) held += 1;
+  }
+  return ink === 0 ? 0 : held / ink;
+};
 
 const pixelInBox = (box: Box, x: number, y: number) =>
   x + 0.5 >= box.x0 && x + 0.5 < box.x1 && y + 0.5 >= box.y0 && y + 0.5 < box.y1;
@@ -168,7 +204,8 @@ export const scoreRealPair = (
   const missed = areas.boxes.filter((_box, index) => matches[index]!.matchType === "missed");
   const referenceArea = areas.boxes.reduce((sum, box) => sum + boxArea(box), 0);
   const damage = damageAgainstOriginal(text, cleaned, areas.mask, predicted);
-  const residual = residualStrokeShare(text, cleaned, textStrokeMask(text, textless, areas.mask));
+  const strokes = textStrokeMask(text, areas);
+  const residual = residualStrokeShare(text, cleaned, strokes);
   return {
     ...identity,
     orderAgrees: identity.textlessOrdinal > identity.textOrdinal,
@@ -177,6 +214,7 @@ export const scoreRealPair = (
     referenceBoxes: areas.boxes,
     predictedBoxes: predicted,
     detectionRecall: regionRecall(areas.boxes, predicted),
+    strokeRecall: strokeRecall(strokes, text.width, translating),
     ...lineScores(areas.boxes, predicted, vision),
     pageLineMs: vision.timingsMs[pageLineTiming] ?? 0,
     detectionPrecision: regionPrecision(areas.boxes, predicted),
@@ -202,6 +240,7 @@ export const buildRealReport = (
     orderDisagreements: pairs.filter((pair) => !pair.orderAgrees).length,
     summary: {
       detectionRecall: mean(pairs.map((pair) => pair.detectionRecall)),
+      strokeRecall: mean(pairs.map((pair) => pair.strokeRecall)),
       regionLineRecall: mean(pairs.map((pair) => pair.regionLineRecall)),
       lineRecall: mean(pairs.map((pair) => pair.lineRecall)),
       lineCount,

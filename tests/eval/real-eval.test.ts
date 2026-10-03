@@ -4,7 +4,7 @@ import type { RgbImage } from "../../src/imaging/interfaces/index.ts";
 import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
 import type { TextLine } from "../../src/stages/lines/interfaces/index.ts";
 import { formatRealSummaryZh } from "../../eval/cli/format-real-summary-zh.ts";
-import { buildRealReport, damageAgainstOriginal, damageLevel, residualStrokeShare, scoreRealPair, textStrokeMask } from "../../eval/cli/real-score.ts";
+import { buildRealReport, damageAgainstOriginal, damageLevel, residualStrokeShare, scoreRealPair, strokeRecall, textStrokeMask } from "../../eval/cli/real-score.ts";
 import { defaultLineModel, parseLineModel } from "../../eval/cli/parse-line-model.ts";
 import { parseRealEvalArgs } from "../../eval/cli/parse-real-eval-options.ts";
 import { summarizeGroundTruth } from "../../eval/ground-truth/summarize-ground-truth.ts";
@@ -24,19 +24,37 @@ const paint = (image: RgbImage, x0: number, y0: number, x1: number, y1: number, 
 };
 
 describe("text stroke pixels", () => {
-  it("keeps mask pixels where the text page is darker by at least diffLevel", () => {
+  const at = (x: number, y: number) => y * 80 + x;
+
+  it("counts the ink that stands out from its box, not the box the textless page removed", () => {
     const text = blank(80, 80, 100);
     const textless = blank(80, 80, 100);
     paint(textless, 8, 8, 48, 48, 180);
     paint(text, 8, 8, 48, 48, 250);
     paint(text, 20, 20, 40, 40, 0);
-    const { mask } = deriveTextAreas(text, textless);
-    const strokes = textStrokeMask(text, textless, mask);
-    const at = (x: number, y: number) => y * 80 + x;
-    expect(mask[at(30, 30)]).toBe(1);
+    const areas = deriveTextAreas(text, textless);
+    const strokes = textStrokeMask(text, areas);
+    expect(areas.mask[at(30, 30)]).toBe(1);
     expect(strokes[at(30, 30)]).toBe(1);
-    expect(mask[at(12, 24)]).toBe(1);
+    expect(areas.mask[at(12, 24)]).toBe(1);
     expect(strokes[at(12, 24)]).toBe(0);
+  });
+
+  it("finds light text in a dark box, which is darker than the art the textless page shows", () => {
+    const text = blank(80, 80, 120);
+    const textless = blank(80, 80, 120);
+    paint(text, 8, 8, 48, 48, 30);
+    paint(text, 20, 20, 40, 40, 230);
+    const strokes = textStrokeMask(text, deriveTextAreas(text, textless));
+    expect(strokes[at(30, 30)]).toBe(1);
+    expect(strokes[at(12, 24)]).toBe(0);
+  });
+
+  it("measures the share of the ink inside the translated regions", () => {
+    const strokes = new Uint8Array(80 * 80);
+    for (const x of [10, 11, 50, 51]) strokes[at(x, 5)] = 1;
+    expect(strokeRecall(strokes, 80, [{ x0: 0, y0: 0, x1: 20, y1: 10 }])).toBe(0.5);
+    expect(strokeRecall(new Uint8Array(80 * 80), 80, [])).toBe(0);
   });
 });
 

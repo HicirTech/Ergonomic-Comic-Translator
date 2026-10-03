@@ -21,6 +21,7 @@ export const formatRealSummaryZh = (report: RealEvalReport) => {
     formatGroundTruthZh(groundTruth),
     `配对数 ${report.pairCount}  顺序不一致 ${report.orderDisagreements}`,
     `检测召回 ${ratio(summary.detectionRecall)}  检测精度 ${ratio(summary.detectionPrecision)}  不含保留精度 ${ratio(summary.detectionPrecisionExcludingKeep)}`,
+    `字墨召回 ${ratio(summary.strokeRecall)}（字的像素落在送译区域内的比例）`,
     `区域加行召回 ${ratio(summary.regionLineRecall)}  仅行召回 ${ratio(summary.lineRecall)}`,
     `页面行 ${summary.lineCount} 条  触及真值框占比 ${ratio(summary.lineTouchShare)}  整页行检测均耗时 ${summary.pageLineMs.toFixed(0)} ms/页`,
     `漏检区域 ${summary.missedCount}  漏检面积占比 ${ratio(summary.missedAreaShare)}`,
