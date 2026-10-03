@@ -137,7 +137,7 @@ const regionWith = (box: Box, lines: Box[]): PageVisionResult["regions"][number]
   utterances: [],
 });
 
-const identity = { id: "p0001", textOrdinal: 1, textlessOrdinal: 2, textSha256: "a", textlessSha256: "b" };
+const identity = { id: "p0001", textOrdinal: 1, textlessOrdinal: 2, textSha256: "a", textlessSha256: "b", differenceShare: 0.05 };
 
 describe("page line recall", () => {
   const { text, textless } = pageWithThreeSquares();
@@ -231,12 +231,16 @@ describe("translation policy against the textless page", () => {
 
 describe("real eval report", () => {
   const { text, textless } = pageWithThreeSquares();
-  const groundTruth = summarizeGroundTruth(9, [[1, 2], [3, 4, 5]], [
+  const groundTruth = summarizeGroundTruth(9, [[1, 2, 6], [3, 4, 5]], [
     {
-      members: [{ ordinal: 1, readBoxCount: 3, readableBoxCount: 3 }, { ordinal: 2, readBoxCount: 3, readableBoxCount: 0 }],
-      textlessOrdinal: 2,
-      pairs: [{ textOrdinal: 1, textlessOrdinal: 2 }],
-      excluded: [],
+      members: [
+        { ordinal: 1, readBoxCount: 3, readableBoxCount: 3 },
+        { ordinal: 2, readBoxCount: 3, readableBoxCount: 0 },
+        { ordinal: 6, readBoxCount: 3, readableBoxCount: 1 },
+      ],
+      textlessOrdinals: [2],
+      pairs: [{ textOrdinal: 1, textlessOrdinal: 2, differenceShare: 0.05 }],
+      excluded: [{ reason: "picture_differs", ordinals: [6], pairCount: 1 }],
     },
     {
       members: [
@@ -244,9 +248,9 @@ describe("real eval report", () => {
         { ordinal: 4, readBoxCount: 2, readableBoxCount: 2 },
         { ordinal: 5, readBoxCount: 2, readableBoxCount: 1 },
       ],
-      textlessOrdinal: null,
+      textlessOrdinals: [],
       pairs: [],
-      excluded: [{ reason: "no_textless_member", ordinals: [3, 4, 5], pairCount: 2 }],
+      excluded: [{ reason: "no_textless_member", ordinals: [3, 4, 5], pairCount: 3 }],
     },
   ]);
 
@@ -254,12 +258,12 @@ describe("real eval report", () => {
     expect(groundTruth).toMatchObject({
       pageCount: 9,
       clusterCount: 2,
-      clusteredPageCount: 5,
+      clusteredPageCount: 6,
       checkedClusterCount: 2,
       confirmedPairCount: 1,
       excluded: {
-        no_textless_member: { clusters: 1, members: 3, pairs: 2 },
-        too_few_readable_boxes: { clusters: 0, members: 0, pairs: 0 },
+        no_textless_member: { clusters: 1, members: 3, pairs: 3 },
+        picture_differs: { clusters: 1, members: 1, pairs: 1 },
       },
     });
     expect(groundTruth.clusters).toHaveLength(2);
@@ -280,9 +284,8 @@ describe("real eval report", () => {
     const report = buildRealReport({ gpu: false, lines: "server", groundTruth }, []);
     const printed = formatRealSummaryZh(report);
     expect(printed).toContain("行检测模型 server");
-    expect(printed).toContain("相似页簇 2（共 5 页，已核对 2 簇）  OCR 确认配对 1");
-    expect(printed).toContain("簇内没有无字页 1 簇 3 页 2 对");
-    expect(printed).toContain("可读框不足 0 页 0 对");
+    expect(printed).toContain("相似页簇 2（共 6 页，已核对 2 簇）  OCR 确认配对 1");
+    expect(printed).toContain("排除有字页：簇内没有无字页 1 簇 3 页；最近的无字页画面也不同 1 页");
     expect(printed).toContain("区域加行召回");
     expect(printed).toContain("整页行检测均耗时 0 ms/页");
   });

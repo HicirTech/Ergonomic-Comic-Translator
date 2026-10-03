@@ -112,6 +112,7 @@ const scorePair = async (pair: ConfirmedPair) => {
     textlessOrdinal: textlessPage.ordinal,
     textSha256: textPage.sha256,
     textlessSha256: textlessPage.sha256,
+    differenceShare: pair.differenceShare,
   }, await decodeRgb(textPage.storedPath), await decodeRgb(textlessPage.storedPath), await decodeRgb(vision.cleanedPath), vision);
 };
 

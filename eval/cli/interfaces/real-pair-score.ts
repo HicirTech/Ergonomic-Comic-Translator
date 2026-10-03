@@ -7,6 +7,8 @@ export interface RealPairScore {
   textlessOrdinal: number;
   textSha256: string;
   textlessSha256: string;
+  /** Share of the page in which the pair differs, from the ground truth. */
+  differenceShare: number;
   /** True when the later page is the textless one, which is the product's pairing rule. */
   orderAgrees: boolean;
   width: number;

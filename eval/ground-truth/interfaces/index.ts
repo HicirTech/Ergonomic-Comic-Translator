@@ -1,9 +1,13 @@
+export type { CachedCluster } from "./cached-cluster.ts";
+export type { CachedDifference } from "./cached-difference.ts";
 export type { CachedReading } from "./cached-reading.ts";
 export type { ClusterExclusion } from "./cluster-exclusion.ts";
 export type { ClusterMember } from "./cluster-member.ts";
 export type { ClusterPage } from "./cluster-page.ts";
+export type { ClusterReading } from "./cluster-reading.ts";
 export type { ConfirmedPair } from "./confirmed-pair.ts";
 export type { ExclusionReason } from "./exclusion-reason.ts";
 export type { MemberReading } from "./member-reading.ts";
+export type { PairDifference } from "./pair-difference.ts";
 export type { RealGroundTruth } from "./real-ground-truth.ts";
 export type { TextlessConfirmation } from "./textless-confirmation.ts";

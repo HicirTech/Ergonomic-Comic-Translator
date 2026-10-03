@@ -155,7 +155,7 @@ const lineScores = (reference: readonly Box[], regionBoxes: readonly Box[], visi
  * together with the text, so it only marks where text was.
  */
 export const scoreRealPair = (
-  identity: Pick<RealPairScore, "id" | "textOrdinal" | "textlessOrdinal" | "textSha256" | "textlessSha256">,
+  identity: Pick<RealPairScore, "id" | "textOrdinal" | "textlessOrdinal" | "textSha256" | "textlessSha256" | "differenceShare">,
   text: RgbImage,
   textless: RgbImage,
   cleaned: RgbImage,

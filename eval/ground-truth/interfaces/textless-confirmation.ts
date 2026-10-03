@@ -6,8 +6,8 @@ import type { MemberReading } from "./member-reading.ts";
 export interface TextlessConfirmation {
   /** Every member of the cluster, ascending by ordinal. */
   members: MemberReading[];
-  /** The member with no readable box, or null when every member has readable text. */
-  textlessOrdinal: number | null;
+  /** The members with no readable box, ascending; empty when every member has readable text. */
+  textlessOrdinals: number[];
   pairs: ConfirmedPair[];
   excluded: ClusterExclusion[];
 }

@@ -5,13 +5,13 @@ import { cacheKey } from "../../src/core/cache-key.ts";
 import type { ModelsLock } from "../../src/models/interfaces/index.ts";
 import { readModelsLock } from "../../src/models/lock.ts";
 import { readingParameters } from "./confirm-textless.ts";
-import type { CachedReading, ClusterPage, MemberReading } from "./interfaces/index.ts";
+import type { CachedCluster, ClusterPage, ClusterReading, MemberReading, PairDifference } from "./interfaces/index.ts";
 
 /** What readCluster reads with: the line recognizer of the text-rec engine, and manga-ocr with its vocabulary. */
 const recognizerModelIds = ["ppocr-rec-server", "manga-ocr", "manga-ocr-vocab"] as const;
 
-/** Raise when readCluster starts reading differently for a reason the key does not include. */
-const readingCacheVersion = 1;
+/** Raise when readCluster starts measuring differently for a reason the key does not include. */
+const readingCacheVersion = 2;
 
 /**
  * Key of one cluster's readings: its pages by content, the reading settings and the recognizer files.
@@ -29,35 +29,46 @@ export const readingCacheKey = (pages: readonly ClusterPage[], lock: ModelsLock 
 const entryPath = (directory: string, key: string) => join(directory, `${key}.json`);
 
 /**
- * The readings of a cluster read before with the same settings and models, under this ingest's ordinals
- * and ascending by ordinal; null when there is no such entry.
+ * The readings of a cluster measured before with the same settings and models, under this ingest's
+ * ordinals (members ascending by ordinal); null when there is no such entry.
  */
-export const loadReadings = (directory: string, pages: readonly ClusterPage[], key = readingCacheKey(pages)): MemberReading[] | null => {
+export const loadReadings = (directory: string, pages: readonly ClusterPage[], key = readingCacheKey(pages)): ClusterReading | null => {
   const path = entryPath(directory, key);
   if (!existsSync(path)) return null;
-  const bySha = new Map((JSON.parse(readFileSync(path, "utf8")) as CachedReading[]).map((reading) => [reading.sha256, reading]));
-  const readings: MemberReading[] = [];
+  const entry = JSON.parse(readFileSync(path, "utf8")) as CachedCluster;
+  const bySha = new Map(entry.members.map((reading) => [reading.sha256, reading]));
+  const ordinalOf = new Map(pages.map((page) => [page.sha256, page.ordinal]));
+  const members: MemberReading[] = [];
   for (const page of [...pages].sort((a, b) => a.ordinal - b.ordinal)) {
     const cached = bySha.get(page.sha256);
     if (!cached) return null;
-    readings.push({ ordinal: page.ordinal, readBoxCount: cached.readBoxCount, readableBoxCount: cached.readableBoxCount });
+    members.push({ ordinal: page.ordinal, readBoxCount: cached.readBoxCount, readableBoxCount: cached.readableBoxCount });
   }
-  return readings;
+  const differences: PairDifference[] = [];
+  for (const difference of entry.differences) {
+    const a = ordinalOf.get(difference.first);
+    const b = ordinalOf.get(difference.second);
+    if (a === undefined || b === undefined) return null;
+    differences.push({ first: Math.min(a, b), second: Math.max(a, b), share: difference.share });
+  }
+  return { members, differences };
 };
 
 /** Stores a cluster's readings by content. A cluster that holds the same page twice cannot be told apart and is not stored. */
-export const saveReadings = (
-  directory: string,
-  pages: readonly ClusterPage[],
-  readings: readonly MemberReading[],
-  key = readingCacheKey(pages),
-) => {
+export const saveReadings = (directory: string, pages: readonly ClusterPage[], reading: ClusterReading, key = readingCacheKey(pages)) => {
   const shaOf = new Map(pages.map((page) => [page.ordinal, page.sha256]));
   if (new Set(shaOf.values()).size !== pages.length) return;
-  const entries: CachedReading[] = readings.map((reading) => ({
-    sha256: shaOf.get(reading.ordinal)!,
-    readBoxCount: reading.readBoxCount,
-    readableBoxCount: reading.readableBoxCount,
-  }));
-  writeFileAtomically(entryPath(directory, key), JSON.stringify(entries));
+  const entry: CachedCluster = {
+    members: reading.members.map((member) => ({
+      sha256: shaOf.get(member.ordinal)!,
+      readBoxCount: member.readBoxCount,
+      readableBoxCount: member.readableBoxCount,
+    })),
+    differences: reading.differences.map((difference) => ({
+      first: shaOf.get(difference.first)!,
+      second: shaOf.get(difference.second)!,
+      share: difference.share,
+    })),
+  };
+  writeFileAtomically(entryPath(directory, key), JSON.stringify(entry));
 };

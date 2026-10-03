@@ -6,10 +6,10 @@ const ratio = (value: number) => value.toFixed(3);
 /** How the textless pairs were found; also printed alone by --ground-truth-only. */
 export const formatGroundTruthZh = (groundTruth: RealGroundTruth) => {
   const noTextless = groundTruth.excluded.no_textless_member;
-  const fewReadable = groundTruth.excluded.too_few_readable_boxes;
+  const pictureDiffers = groundTruth.excluded.picture_differs;
   return [
     `页数 ${groundTruth.pageCount}  相似页簇 ${groundTruth.clusterCount}（共 ${groundTruth.clusteredPageCount} 页，已核对 ${groundTruth.checkedClusterCount} 簇）  OCR 确认配对 ${groundTruth.confirmedPairCount}`,
-    `排除：簇内没有无字页 ${noTextless.clusters} 簇 ${noTextless.members} 页 ${noTextless.pairs} 对；可读框不足 ${fewReadable.members} 页 ${fewReadable.pairs} 对`,
+    `排除有字页：簇内没有无字页 ${noTextless.clusters} 簇 ${noTextless.members} 页；最近的无字页画面也不同 ${pictureDiffers.members} 页`,
   ].join("\n");
 };
 

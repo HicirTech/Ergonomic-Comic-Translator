@@ -4,17 +4,20 @@ import { tmpdir } from "os";
 import { join } from "path";
 import type { ModelsLock } from "../../src/models/interfaces/index.ts";
 import { readModelsLock } from "../../src/models/lock.ts";
-import type { ClusterPage, MemberReading } from "../../eval/ground-truth/interfaces/index.ts";
+import type { ClusterPage, ClusterReading } from "../../eval/ground-truth/interfaces/index.ts";
 import { loadReadings, readingCacheKey, saveReadings } from "../../eval/ground-truth/reading-cache.ts";
 
 const pages: ClusterPage[] = [
   { ordinal: 4, sha256: "a".repeat(64) },
   { ordinal: 9, sha256: "b".repeat(64) },
 ];
-const readings: MemberReading[] = [
-  { ordinal: 4, readBoxCount: 3, readableBoxCount: 3 },
-  { ordinal: 9, readBoxCount: 3, readableBoxCount: 0 },
-];
+const readings: ClusterReading = {
+  members: [
+    { ordinal: 4, readBoxCount: 3, readableBoxCount: 3 },
+    { ordinal: 9, readBoxCount: 3, readableBoxCount: 0 },
+  ],
+  differences: [{ first: 4, second: 9, share: 0.12 }],
+};
 
 const withDirectory = (test: (directory: string) => void) => {
   const directory = mkdtempSync(join(tmpdir(), "ct-readings-"));
@@ -35,10 +38,13 @@ describe("textless reading cache", () => {
       saveReadings(directory, pages, readings);
       expect(loadReadings(directory, pages)).toEqual(readings);
       const reingested: ClusterPage[] = [{ ordinal: 12, sha256: "b".repeat(64) }, { ordinal: 2, sha256: "a".repeat(64) }];
-      expect(loadReadings(directory, reingested)).toEqual([
-        { ordinal: 2, readBoxCount: 3, readableBoxCount: 3 },
-        { ordinal: 12, readBoxCount: 3, readableBoxCount: 0 },
-      ]);
+      expect(loadReadings(directory, reingested)).toEqual({
+        members: [
+          { ordinal: 2, readBoxCount: 3, readableBoxCount: 3 },
+          { ordinal: 12, readBoxCount: 3, readableBoxCount: 0 },
+        ],
+        differences: [{ first: 2, second: 12, share: 0.12 }],
+      });
     });
   });
 
@@ -52,10 +58,13 @@ describe("textless reading cache", () => {
   it("does not store a cluster that holds the same page twice", () => {
     withDirectory((directory) => {
       const twice: ClusterPage[] = [{ ordinal: 1, sha256: "a".repeat(64) }, { ordinal: 2, sha256: "a".repeat(64) }];
-      saveReadings(directory, twice, [
-        { ordinal: 1, readBoxCount: 1, readableBoxCount: 1 },
-        { ordinal: 2, readBoxCount: 1, readableBoxCount: 0 },
-      ]);
+      saveReadings(directory, twice, {
+        members: [
+          { ordinal: 1, readBoxCount: 1, readableBoxCount: 1 },
+          { ordinal: 2, readBoxCount: 1, readableBoxCount: 0 },
+        ],
+        differences: [{ first: 1, second: 2, share: 0.1 }],
+      });
       expect(loadReadings(directory, twice)).toBeNull();
     });
   });

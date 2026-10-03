@@ -1,6 +1,7 @@
 /**
- * Why pages left the ground truth:
+ * Why text pages left the ground truth:
  * - no_textless_member: every page of the cluster has readable text, so none can stand in for the clean picture;
- * - too_few_readable_boxes: next to a textless member, the page has fewer readable boxes than a text page needs.
+ * - picture_differs: even the closest textless page differs from the text page in more than text, as CG
+ *   variants with another expression or pose do, so the difference would count art as text.
  */
-export type ExclusionReason = "no_textless_member" | "too_few_readable_boxes";
+export type ExclusionReason = "no_textless_member" | "picture_differs";

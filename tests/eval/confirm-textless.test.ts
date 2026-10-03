@@ -8,13 +8,13 @@ import {
   decideTextless,
   isReadable,
   largestDistinctBoxes,
+  maxPairDifferenceShare,
   readBoxLimit,
   readableMinChars,
   readableMinProb,
-  textMinReadableBoxes,
   textlessMaxReadableBoxes,
 } from "../../eval/ground-truth/confirm-textless.ts";
-import type { ClusterMember, MemberReading } from "../../eval/ground-truth/interfaces/index.ts";
+import type { ClusterMember, ClusterReading, MemberReading } from "../../eval/ground-truth/interfaces/index.ts";
 
 const background = 200;
 const ink = 20;
@@ -75,6 +75,15 @@ const candidate = (text: string, meanProb: number): OcrCandidate => ({ quarterTu
 
 const reading = (ordinal: number, readableBoxCount: number): MemberReading => ({ ordinal, readBoxCount: readBoxLimit, readableBoxCount });
 
+/** Readings with the difference share of every listed pair; pairs not listed differ completely. */
+const clusterOf = (members: MemberReading[], shares: readonly (readonly [number, number, number])[]): ClusterReading => ({
+  members,
+  differences: shares.map(([first, second, share]) => ({ first, second, share })),
+});
+
+/** Two 40 x 40 blocks on a 240 x 120 page: the share of the page that differs from blank paper (median filtering rounds the corners). */
+const twoBlocksShare = (2 * 40 * 40) / (240 * 120);
+
 describe("readable text", () => {
   it("needs the mean probability and the character count at their limits, in one reading", () => {
     expect(isReadable([candidate(spokenText, readableMinProb)])).toBe(true);
@@ -113,40 +122,47 @@ describe("boxes to read", () => {
   });
 });
 
-describe("textless member decision", () => {
-  it("takes the member without a readable box as the textless page and pairs every text page with it", () => {
-    const decision = decideTextless([reading(1, textMinReadableBoxes), reading(2, textlessMaxReadableBoxes), reading(3, textMinReadableBoxes + 3)]);
+describe("textless pairing", () => {
+  it("pairs each text page, a single readable box included, with the textless page of the closest picture", () => {
+    const decision = decideTextless(clusterOf(
+      [reading(1, 2), reading(2, textlessMaxReadableBoxes), reading(3, 1), reading(4, textlessMaxReadableBoxes)],
+      [[1, 2, 0.05], [1, 4, 0.4], [2, 3, 0.5], [3, 4, 0.08], [2, 4, 0.3], [1, 3, 0.2]],
+    ));
 
     expect(decision).toEqual({
-      textlessOrdinal: 2,
-      pairs: [{ textOrdinal: 1, textlessOrdinal: 2 }, { textOrdinal: 3, textlessOrdinal: 2 }],
+      textlessOrdinals: [2, 4],
+      pairs: [
+        { textOrdinal: 1, textlessOrdinal: 2, differenceShare: 0.05 },
+        { textOrdinal: 3, textlessOrdinal: 4, differenceShare: 0.08 },
+      ],
       excluded: [],
     });
   });
 
-  it("excludes a page with fewer readable boxes than a text page needs, with its candidate pair", () => {
-    const decision = decideTextless([reading(1, textMinReadableBoxes - 1), reading(2, textlessMaxReadableBoxes), reading(3, textMinReadableBoxes)]);
+  it("excludes a text page whose closest textless page shows another picture, and keeps one at the limit", () => {
+    const tooFar = decideTextless(clusterOf([reading(1, 2), reading(2, 0)], [[1, 2, maxPairDifferenceShare + 0.01]]));
+    const atLimit = decideTextless(clusterOf([reading(1, 2), reading(2, 0)], [[1, 2, maxPairDifferenceShare]]));
 
-    expect(decision.pairs).toEqual([{ textOrdinal: 3, textlessOrdinal: 2 }]);
-    expect(decision.excluded).toEqual([{ reason: "too_few_readable_boxes", ordinals: [1], pairCount: 1 }]);
+    expect(tooFar.pairs).toEqual([]);
+    expect(tooFar.excluded).toEqual([{ reason: "picture_differs", ordinals: [1], pairCount: 1 }]);
+    expect(atLimit.pairs).toEqual([{ textOrdinal: 1, textlessOrdinal: 2, differenceShare: maxPairDifferenceShare }]);
   });
 
-  it("finds no textless member when every page has a readable box, and excludes the whole cluster", () => {
-    const decision = decideTextless([reading(4, textlessMaxReadableBoxes + 1), reading(2, textMinReadableBoxes), reading(3, textMinReadableBoxes + 1)]);
+  it("finds no textless member when every page has a readable box, and excludes every text page", () => {
+    const decision = decideTextless(clusterOf([reading(4, 1), reading(2, 2), reading(3, 3)], []));
 
     expect(decision).toEqual({
-      textlessOrdinal: null,
+      textlessOrdinals: [],
       pairs: [],
-      excluded: [{ reason: "no_textless_member", ordinals: [2, 3, 4], pairCount: 2 }],
+      excluded: [{ reason: "no_textless_member", ordinals: [2, 3, 4], pairCount: 3 }],
     });
   });
 
-  it("gives a tie for the fewest readable boxes to the later page, whatever the input order", () => {
-    const decision = decideTextless([reading(7, 0), reading(3, 0), reading(5, textMinReadableBoxes + 2)]);
+  it("gives a tie between two textless pages to the later one", () => {
+    const decision = decideTextless(clusterOf([reading(7, 0), reading(3, 0), reading(5, 2)], [[3, 5, 0.1], [5, 7, 0.1], [3, 7, 0.02]]));
 
-    expect(decision.textlessOrdinal).toBe(7);
-    expect(decision.pairs).toEqual([{ textOrdinal: 5, textlessOrdinal: 7 }]);
-    expect(decision.excluded).toEqual([{ reason: "too_few_readable_boxes", ordinals: [3], pairCount: 1 }]);
+    expect(decision.textlessOrdinals).toEqual([3, 7]);
+    expect(decision.pairs).toEqual([{ textOrdinal: 5, textlessOrdinal: 7, differenceShare: 0.1 }]);
   });
 });
 
@@ -162,16 +178,15 @@ describe("cluster confirmation", () => {
 
     const confirmation = await confirmCluster(client, [textB, clean, textA]);
 
-    expect(confirmation).toEqual({
-      members: [
-        { ordinal: 1, readBoxCount: 4, readableBoxCount: 0 },
-        { ordinal: 2, readBoxCount: 4, readableBoxCount: 2 },
-        { ordinal: 3, readBoxCount: 4, readableBoxCount: 2 },
-      ],
-      textlessOrdinal: 1,
-      pairs: [{ textOrdinal: 2, textlessOrdinal: 1 }, { textOrdinal: 3, textlessOrdinal: 1 }],
-      excluded: [],
-    });
+    expect(confirmation.members).toEqual([
+      { ordinal: 1, readBoxCount: 4, readableBoxCount: 0 },
+      { ordinal: 2, readBoxCount: 4, readableBoxCount: 2 },
+      { ordinal: 3, readBoxCount: 4, readableBoxCount: 2 },
+    ]);
+    expect(confirmation.textlessOrdinals).toEqual([1]);
+    expect(confirmation.pairs.map(({ textOrdinal, textlessOrdinal }) => [textOrdinal, textlessOrdinal])).toEqual([[2, 1], [3, 1]]);
+    for (const pair of confirmation.pairs) expect(pair.differenceShare).toBeCloseTo(twoBlocksShare, 3);
+    expect(confirmation.excluded).toEqual([]);
     expect(JSON.stringify(confirmation)).not.toContain(spokenText);
     expect(lineCalls.map((call) => call.imagePath)).toEqual(["clean.png", "a.png", "b.png"]);
     expect(mangaCalls.map((call) => call.imagePath)).toEqual(["clean.png", "a.png", "b.png"]);
@@ -197,15 +212,17 @@ describe("cluster confirmation", () => {
 
   it("reads a box that only manga-ocr can read, and counts nothing when neither can", async () => {
     const pages = () => [member(1, "clean.png", []), member(2, "a.png", first)];
+    const pairedOrdinals = (confirmation: Awaited<ReturnType<typeof confirmCluster>>) =>
+      confirmation.pairs.map(({ textOrdinal, textlessOrdinal }) => [textOrdinal, textlessOrdinal]);
 
     const byManga = await confirmCluster(fakeRecognizers({ "a.png": first }, { line: false, manga: true }).client, pages());
     const byLines = await confirmCluster(fakeRecognizers({ "a.png": first }, { line: true, manga: false }).client, pages());
     const byNeither = await confirmCluster(fakeRecognizers({ "a.png": first }, { line: false, manga: false }).client, pages());
 
-    expect(byManga.pairs).toEqual([{ textOrdinal: 2, textlessOrdinal: 1 }]);
-    expect(byLines.pairs).toEqual([{ textOrdinal: 2, textlessOrdinal: 1 }]);
+    expect(pairedOrdinals(byManga)).toEqual([[2, 1]]);
+    expect(pairedOrdinals(byLines)).toEqual([[2, 1]]);
     expect(byNeither.pairs).toEqual([]);
-    expect(byNeither.members.map((reading) => reading.readableBoxCount)).toEqual([0, 0]);
+    expect(byNeither.members.map((member) => member.readableBoxCount)).toEqual([0, 0]);
   });
 
   it("excludes both pages when each of them has readable text where they differ", async () => {
@@ -216,9 +233,9 @@ describe("cluster confirmation", () => {
 
     const confirmation = await confirmCluster(client, [member(1, "a.png", textA), member(2, "b.png", textB)]);
 
-    expect(confirmation.textlessOrdinal).toBeNull();
+    expect(confirmation.textlessOrdinals).toEqual([]);
     expect(confirmation.pairs).toEqual([]);
-    expect(confirmation.excluded).toEqual([{ reason: "no_textless_member", ordinals: [1, 2], pairCount: 1 }]);
+    expect(confirmation.excluded).toEqual([{ reason: "no_textless_member", ordinals: [1, 2], pairCount: 2 }]);
   });
 
   it("counts a text area once although several members show it, and breaks a tie with the later page", async () => {
@@ -231,9 +248,9 @@ describe("cluster confirmation", () => {
       { ordinal: 2, readBoxCount: 2, readableBoxCount: 0 },
       { ordinal: 3, readBoxCount: 2, readableBoxCount: 0 },
     ]);
-    expect(confirmation.textlessOrdinal).toBe(3);
-    expect(confirmation.pairs).toEqual([{ textOrdinal: 1, textlessOrdinal: 3 }]);
-    expect(confirmation.excluded).toEqual([{ reason: "too_few_readable_boxes", ordinals: [2], pairCount: 1 }]);
+    expect(confirmation.textlessOrdinals).toEqual([2, 3]);
+    expect(confirmation.pairs.map(({ textOrdinal, textlessOrdinal }) => [textOrdinal, textlessOrdinal])).toEqual([[1, 3]]);
+    expect(confirmation.excluded).toEqual([]);
   });
 
   it("reads only the largest distinct difference boxes of a page", async () => {

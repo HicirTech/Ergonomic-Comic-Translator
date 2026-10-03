@@ -8,7 +8,7 @@ export const summarizeGroundTruth = (
   clusters: readonly (readonly number[])[],
   confirmations: readonly TextlessConfirmation[],
 ): RealGroundTruth => {
-  const excluded: RealGroundTruth["excluded"] = { no_textless_member: emptyTotal(), too_few_readable_boxes: emptyTotal() };
+  const excluded: RealGroundTruth["excluded"] = { no_textless_member: emptyTotal(), picture_differs: emptyTotal() };
   for (const exclusion of confirmations.flatMap((confirmation) => confirmation.excluded)) {
     const total = excluded[exclusion.reason];
     total.clusters += 1;
