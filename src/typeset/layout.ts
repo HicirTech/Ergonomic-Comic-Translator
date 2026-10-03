@@ -69,8 +69,8 @@ const place = (
 
 /**
  * Fits text into a width x height box: largest font size in [minSize, maxSize] whose kinsoku-broken
- * lines (or columns) fit, centred in both directions. When nothing fits, lays out at minSize and marks
- * the result as overflowing (FIT_OVERFLOW) rather than cutting text.
+ * lines (or columns) fit, centred in both directions, the lines balanced in length. When nothing fits,
+ * lays out at minSize and marks the result as overflowing (FIT_OVERFLOW) rather than cutting text.
  */
 export const layoutText = (
   shaper: Shaper,
@@ -104,7 +104,22 @@ export const layoutText = (
     }
   }
   const fontSize = best ?? Math.ceil(minSize);
-  const starts = linesAt(fontSize);
+  const advances = metrics.advances.map((advance) => (advance * fontSize) / shaper.upem);
+  // Balance the lines: the shortest line length that still gives this number of lines, so the last line is
+  // not left with a character or two.
+  let starts = linesAt(fontSize);
+  let narrow = Math.max(...advances, 0);
+  let wide = along;
+  while (starts.length > 1 && wide - narrow > 1) {
+    const middle = (narrow + wide) / 2;
+    const attempt = breakLines(metrics.chars, advances, middle);
+    if (attempt.length === starts.length) {
+      starts = attempt;
+      wide = middle;
+    } else {
+      narrow = middle;
+    }
+  }
   return {
     direction,
     fontSize,

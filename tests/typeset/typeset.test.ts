@@ -72,6 +72,15 @@ describe("layoutText", () => {
     expect(firstLineX[0]).toBeCloseTo((200 - 4 * 44) / 2, 6);
   });
 
+  it("balances the lines instead of leaving a character or two on the last one", () => {
+    // Ten characters at 20 px in a box 170 px wide: eight fit on a line, which would leave two for the second.
+    const layout = layoutText(fakeShaper, "一二三四五六七八九十", "h", 170, 60, 12, 20);
+    expect(layout.fontSize).toBe(20);
+    expect(layout.lines).toBe(2);
+    const firstLineY = layout.glyphs[0]!.y;
+    expect(layout.glyphs.filter((glyph) => glyph.y === firstLineY)).toHaveLength(5);
+  });
+
   it("sets tall boxes as columns from right to left and turns dashes", () => {
     const layout = layoutText(fakeShaper, "你好——世界", "v", 60, 200, 12, 40);
     expect(layout.direction).toBe("v");
