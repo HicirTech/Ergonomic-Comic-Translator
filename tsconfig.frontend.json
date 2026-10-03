@@ -13,5 +13,6 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/frontend/**/*.ts", "src/frontend/**/*.tsx", "vite.config.ts"]
+  "include": ["src/frontend/**/*.ts", "src/frontend/**/*.tsx", "vite.config.ts"],
+  "exclude": []
 }
