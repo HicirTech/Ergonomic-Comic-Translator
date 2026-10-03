@@ -297,6 +297,16 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   };
 };
 
+/** The lines of one dialogue are set in one ink: their colours agree within this much on every channel. */
+const sameInkTolerance = 48;
+
+/** True when two groups of lines are set in the same ink, or the ink of one of them cannot be measured. */
+export const sameTextInk = (rgb: RgbImage, gray: GrayImage, first: readonly TextLine[], second: readonly TextLine[]) => {
+  const one = regionTextMask(rgb, gray, first)?.inkMedian;
+  const other = regionTextMask(rgb, gray, second)?.inkMedian;
+  return !one || !other || one.every((value, channel) => Math.abs(value - other[channel]!) <= sameInkTolerance);
+};
+
 /** ORs a region's strokes into a page-sized mask. */
 export const addToPageMask = (pageMask: Uint8Array, pageWidth: number, region: RegionMask) => {
   const width = region.window.x1 - region.window.x0;

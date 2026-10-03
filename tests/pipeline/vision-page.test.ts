@@ -128,8 +128,9 @@ describe("runVisionPage", () => {
 
   it("gives a region to a dialogue line the detector missed, and leaves a short fragment uncovered", async () => {
     // Both lie outside the detector's boxes; the fake recognizer reads the first gate crop as "「行くぞ。」".
+    // The fragment is short and the line detector is not sure of it, so the gate does not even read it.
     const caption = line(200, 282, 300, 24, 0);
-    const fragment = line(350, 30, 40, 24, 0);
+    const fragment = line(350, 30, 40, 24, 0, 0.5);
     const result = await runVisionPage(fakeClient([], [], [caption, fragment]), join(root, "page.png"), "p2", root, "v");
 
     expect(result.regions).toHaveLength(3);

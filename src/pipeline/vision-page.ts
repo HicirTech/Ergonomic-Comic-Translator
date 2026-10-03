@@ -1,4 +1,7 @@
+import { rgbToGray } from "../imaging/gray.ts";
+import { decodeRgb } from "../imaging/page-image.ts";
 import type { TextLine } from "../stages/lines/interfaces/index.ts";
+import { sameTextInk } from "../stages/mask/text-mask.ts";
 import type { OcrCandidate } from "../stages/ocr/interfaces/index.ts";
 import { assignLines } from "../stages/regions/assign-lines.ts";
 import { consolidateDetections } from "../stages/regions/consolidate.ts";
@@ -34,12 +37,19 @@ export const runVisionPage = async (
   const cropLines = candidates.length > 0 ? await timed("lines", () => client.lines(imagePath, candidates.map((candidate) => candidate.box))) : [];
   const [pageLines = []] = await timed("page_lines", () => client.lines(imagePath, null));
   const assigned = assignLines(candidates, bubbles, cropLines, pageLines);
-  const gateLines = assigned.uncovered.filter(worthReading);
+  const gateLines = assigned.uncovered.filter((line) => worthReading(line, bubbles));
   const gateReads = gateLines.length > 0 ? await timed("gate_ocr", () => client.recognizeLines(imagePath, gateLines.map(lineCrop))) : [];
   const gateReading = new Map(gateLines.map((line, index) => [line, gateReads[index]?.[0]]));
-  const promotion = promoteLines(assigned.uncovered, assigned.uncovered.map((line) => gateReading.get(line)));
-  const regions = [...assigned.regions, ...promotion.regions];
-  const { uncovered } = promotion;
+  // The gate compares the ink of a line it may take with the ink of the dialogue; pages without gate lines skip it.
+  const pixels = gateLines.length > 0 ? await timed("decode", () => decodeRgb(imagePath)) : null;
+  const gray = pixels ? rgbToGray(pixels) : null;
+  const { regions, uncovered } = promoteLines(
+    assigned.regions,
+    assigned.uncovered,
+    assigned.uncovered.map((line) => gateReading.get(line)),
+    bubbles,
+    (line, others) => pixels === null || gray === null || sameTextInk(pixels, gray, [line], others),
+  );
   const oriented = orientRegions(regions);
 
   const allLines = oriented.flatMap(({ region }) => region.lines);
