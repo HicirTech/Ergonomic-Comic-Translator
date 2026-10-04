@@ -8,6 +8,7 @@ import { dilateSquare, erodeSquare } from "../../imaging/morphology.ts";
 import { otsuThreshold } from "../../imaging/threshold.ts";
 import type { TextLine } from "../lines/interfaces/index.ts";
 import { textThickness } from "../lines/text-thickness.ts";
+import { sameInk } from "./ink.ts";
 import type { RegionMask } from "./interfaces/index.ts";
 import { keepLineMarks } from "./line-marks.ts";
 
@@ -297,14 +298,11 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   };
 };
 
-/** The lines of one dialogue are set in one ink: their colours agree within this much on every channel. */
-const sameInkTolerance = 48;
-
 /** True when two groups of lines are set in the same ink, or the ink of one of them cannot be measured. */
 export const sameTextInk = (rgb: RgbImage, gray: GrayImage, first: readonly TextLine[], second: readonly TextLine[]) => {
   const one = regionTextMask(rgb, gray, first)?.inkMedian;
   const other = regionTextMask(rgb, gray, second)?.inkMedian;
-  return !one || !other || one.every((value, channel) => Math.abs(value - other[channel]!) <= sameInkTolerance);
+  return !one || !other || sameInk(one, other);
 };
 
 /** ORs a region's strokes into a page-sized mask. */

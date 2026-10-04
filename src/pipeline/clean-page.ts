@@ -5,8 +5,10 @@ import { rgbToGray } from "../imaging/gray.ts";
 import { decodeRgb } from "../imaging/page-image.ts";
 import { planInpaintTiles } from "../stages/clean/inpaint-tiles.ts";
 import { canMembraneFill, membraneFill } from "../stages/clean/membrane-fill.ts";
+import { isColoured, sameInk } from "../stages/mask/ink.ts";
 import { addToPageMask, regionTextMask } from "../stages/mask/text-mask.ts";
 import { classifyRegion } from "../stages/regions/classify.ts";
+import type { LetteringCues } from "../stages/regions/interfaces/index.ts";
 import type { OrientedRegion, RegionResult, StageTimer, UtteranceResult, VisionClient } from "./interfaces/index.ts";
 
 const median = (values: number[]) => {
@@ -15,10 +17,11 @@ const median = (values: number[]) => {
 };
 
 /**
- * S5/S6 for one page: classify each region, build stroke masks, restore plain and smooth paper with the
- * membrane fill in this process and send strokes on finely textured paper to the inpainting engine. SFX are
- * kept. Writes `<pageKey>.filled.png` and, when inpainting ran, `<pageKey>.mask.bin` and
- * `<pageKey>.clean.png` into `workDirectory`.
+ * S5/S6 for one page: build the stroke mask of every region, classify the regions (how a text is drawn is
+ * one of the cues), restore plain and smooth paper with the membrane fill in this process and send strokes
+ * on finely textured paper to the inpainting engine. SFX and art lettering are kept. Writes
+ * `<pageKey>.filled.png` and, when inpainting ran, `<pageKey>.mask.bin` and `<pageKey>.clean.png` into
+ * `workDirectory`.
  */
 export const cleanPage = async (
   client: VisionClient,
@@ -39,10 +42,27 @@ export const cleanPage = async (
   let texturedPixels = 0;
 
   const regions = await timed("mask_fill", async () => {
+    const masks = oriented.map(({ region }) => regionTextMask(rgb, gray, region.lines, region.bubble));
+    const textLength = oriented.map(({ region }) => region.lines.reduce((sum, line) => sum + line.rect.long, 0));
+    // The dialogue of a bubble is the region in it with the most text.
+    const cuesOf = (regionIndex: number): LetteringCues | null => {
+      const mask = masks[regionIndex];
+      if (!mask) return null;
+      const { bubble } = oriented[regionIndex]!.region;
+      const dialogue = oriented.reduce<number | null>((best, other, index) => {
+        const longer = index !== regionIndex && bubble !== null && other.region.bubble === bubble && masks[index] && textLength[index]! > textLength[regionIndex]!;
+        return longer && (best === null || textLength[index]! > textLength[best]!) ? index : best;
+      }, null);
+      return {
+        coloured: isColoured(mask.inkMedian) || (mask.outlineMedian !== null && isColoured(mask.outlineMedian)),
+        outlined: mask.outlineMedian !== null,
+        otherInkThanBubble: dialogue !== null && !sameInk(mask.inkMedian, masks[dialogue]!.inkMedian),
+      };
+    };
     const results = oriented.map(({ region, orientation }, regionIndex): RegionResult => {
       const utterances = utterancesOf(regionIndex);
       const text = utterances.map((utterance) => utterance.text).join("");
-      const classification = classifyRegion(region, orientation, text, width, height, dialogueThickness);
+      const classification = classifyRegion(region, orientation, text, width, height, dialogueThickness, cuesOf(regionIndex));
       let clean: RegionResult["clean"] = "none";
       let paper: RegionResult["paper"] = null;
       let ink: RegionResult["ink"] = null;
@@ -50,7 +70,7 @@ export const cleanPage = async (
       if (classification.policy === "keep") {
         clean = "kept";
       } else {
-        const mask = regionTextMask(rgb, gray, region.lines, region.bubble);
+        const mask = masks[regionIndex];
         if (mask && mask.strokePixels > 0) {
           paper = mask.ringMedian;
           ink = mask.inkMedian;

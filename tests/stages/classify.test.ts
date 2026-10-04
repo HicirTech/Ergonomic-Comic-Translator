@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { classifyRegion } from "../../src/stages/regions/classify.ts";
-import type { PageRegion } from "../../src/stages/regions/interfaces/index.ts";
+import type { LetteringCues, PageRegion } from "../../src/stages/regions/interfaces/index.ts";
 import { estimateOrientation } from "../../src/stages/regions/orientation.ts";
 import { line } from "./fixtures.ts";
 
@@ -36,5 +36,25 @@ describe("classifyRegion", () => {
   it("does not call slanted dialogue-sized text SFX on tilt alone", () => {
     const sign = region({ lines: [line(150, 150, 200, 20, 30)] });
     expect(classify(sign, "営業中")).toEqual({ layout: "text_free", kind: "free_text", policy: "translate" });
+  });
+
+  it("keeps art lettering drawn across a bubble: not in the ink of the bubble's dialogue, and drawn", () => {
+    const inBubble = region({ cls: "text_bubble", bubble: { x0: 0, y0: 0, x1: 300, y1: 300 }, lines: [line(150, 150, 100, 20, 0)] });
+    const withCues = (lettering: LetteringCues, text = "ゆらり") =>
+      classifyRegion(inBubble, estimateOrientation(inBubble.lines, inBubble.box), text, 1000, 1400, 20, lettering);
+    expect(withCues({ coloured: false, outlined: true, otherInkThanBubble: true })).toEqual({ layout: "bubble", kind: "sfx", policy: "keep" });
+    expect(withCues({ coloured: false, outlined: false, otherInkThanBubble: true }, "ドドドッ").policy).toBe("keep");
+    // In the dialogue's own ink it is dialogue, however it is drawn; in another ink but typeset it may be a name tag.
+    expect(withCues({ coloured: true, outlined: true, otherInkThanBubble: false }).policy).toBe("translate");
+    expect(withCues({ coloured: false, outlined: false, otherInkThanBubble: true }).policy).toBe("translate");
+  });
+
+  it("counts coloured ink and an outline as cues for lettering outside bubbles", () => {
+    const upright = region({ lines: [line(150, 150, 200, 20, 0)] });
+    const withCues = (lettering: LetteringCues) =>
+      classifyRegion(upright, estimateOrientation(upright.lines, upright.box), "おわり", 1000, 1400, 20, lettering);
+    expect(withCues({ coloured: true, outlined: true, otherInkThanBubble: false })).toEqual({ layout: "text_free", kind: "sfx", policy: "keep" });
+    // Black text with a white outline is how captions are set on artwork.
+    expect(withCues({ coloured: false, outlined: true, otherInkThanBubble: false }).policy).toBe("translate");
   });
 });

@@ -1,6 +1,6 @@
 import { boxCenter, boxWidth } from "../../geometry/box.ts";
 import { lineAngleDistance } from "../../geometry/angle.ts";
-import type { PageRegion, RegionClass, RegionOrientation } from "./interfaces/index.ts";
+import type { LetteringCues, PageRegion, RegionClass, RegionOrientation } from "./interfaces/index.ts";
 
 /** Bottom narration bars span most of the page width and sit in its lower part (spike-multispeaker rule). */
 const bottomBoxWidthShare = 0.6;
@@ -23,7 +23,14 @@ export const soundLike = (text: string) => {
 
 /**
  * S3c-2 rule classifier. `dialogueThickness` is the median line thickness of bubble text on the page
- * (null when the page has none); `text` is the region's best OCR so far (may be empty).
+ * (null when the page has none); `text` is the region's best OCR so far (may be empty); `lettering` is how
+ * the text is drawn, when its ink could be measured.
+ *
+ * Art lettering is kept, also inside a bubble: there it is what is not set in the ink of the bubble's
+ * dialogue and is drawn rather than typeset (outlined, slanted or curved, or a sound). Outside bubbles a
+ * coloured ink is one more cue, and a coloured ink with an outline two. Measured on two volumes: this keeps
+ * the four pieces of art lettering an earlier translation had left alone, and none of the dialogue set in
+ * white or in colour in a bubble of its own, nor the captions set in black with a white outline.
  */
 export const classifyRegion = (
   region: PageRegion,
@@ -32,10 +39,15 @@ export const classifyRegion = (
   pageWidth: number,
   pageHeight: number,
   dialogueThickness: number | null,
+  lettering: LetteringCues | null = null,
 ): RegionClass => {
   const thought = /^[（(][\s\S]*[）)]$/u.test(text.trim());
+  const angles = region.lines.map((line) => line.rect.angle);
+  const spread = angles.length > 1 ? Math.max(...angles.map((angle) => lineAngleDistance(angle, angles[0]!))) : 0;
+  const drawn = Math.abs(orientation.tilt) > sfxTilt || spread > sfxAngleSpread || region.lines.some((line) => line.curved);
   if (region.bubble) {
-    return { layout: "bubble", kind: thought ? "thought" : "dialogue", policy: "translate" };
+    const art = lettering !== null && lettering.otherInkThanBubble && (lettering.outlined || drawn || soundLike(text));
+    return art ? { layout: "bubble", kind: "sfx", policy: "keep" } : { layout: "bubble", kind: thought ? "thought" : "dialogue", policy: "translate" };
   }
   const center = boxCenter(region.box);
   if (boxWidth(region.box) >= bottomBoxWidthShare * pageWidth && center.y >= bottomBoxCenterShare * pageHeight) {
@@ -43,12 +55,13 @@ export const classifyRegion = (
   }
 
   const thickness = region.lines.length > 0 ? Math.max(...region.lines.map((line) => line.rect.short)) : 0;
-  const angles = region.lines.map((line) => line.rect.angle);
-  const spread = angles.length > 1 ? Math.max(...angles.map((angle) => lineAngleDistance(angle, angles[0]!))) : 0;
+  // An outline alone is no cue: captions on artwork are typeset in black or white with one.
   const cues = [
     dialogueThickness !== null && thickness >= sfxSizeFactor * dialogueThickness,
-    Math.abs(orientation.tilt) > sfxTilt || spread > sfxAngleSpread || region.lines.some((line) => line.curved),
+    drawn,
     soundLike(text),
+    lettering?.coloured,
+    lettering?.coloured && lettering.outlined,
   ].filter(Boolean).length;
   return cues >= sfxMinCues
     ? { layout: "text_free", kind: "sfx", policy: "keep" }
