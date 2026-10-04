@@ -2,7 +2,7 @@ import type { Box } from "../../geometry/interfaces/index.ts";
 import { labelComponents } from "../../imaging/components.ts";
 
 /** A mark is at most this large, in line thicknesses: a dot, a dash, a small kana, not a line of text or art. */
-const markSideShare = 1.2;
+export const markSideShare = 1.2;
 /** A mark sits this close to a line or to a mark already taken, in line thicknesses. */
 const markGapShare = 1.2;
 

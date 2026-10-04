@@ -234,6 +234,28 @@ describe("regionTextMask", () => {
     expect(maskWith(null)[86 * 400 + 90]).toBe(0);
   });
 
+  it("leaves the frame of a bubble that the line rectangle reaches over, and takes the text", () => {
+    // A box of 320 x 100 px with a frame line of 3 px along its top edge, and a line rectangle taller than the box.
+    const rgb = page(400, 220, 250, 10, { cx: 200, cy: 110, long: 160, short: 14, angle: 0 });
+    for (let y = 60; y < 63; y += 1) rgb.data.fill(10, (y * 400 + 40) * 3, (y * 400 + 360) * 3);
+    const pageMask = new Uint8Array(400 * 220);
+    addToPageMask(pageMask, 400, regionTextMask(rgb, rgbToGray(rgb), [line(200, 100, 230, 110, 0)], { x0: 40, y0: 60, x1: 360, y1: 160 })!);
+    expect(pageMask[110 * 400 + 200]).toBe(1);
+    // The frame under the rectangle (x 85 to 314) is no more text than the frame beside it.
+    expect(pageMask[61 * 400 + 200]).toBe(0);
+    expect(pageMask[61 * 400 + 100]).toBe(0);
+  });
+
+  it("takes a mark beyond the bubble's box when it is no larger than a glyph", () => {
+    // The detector's box ends at x = 250, before the last mark of the line.
+    const rgb = page(400, 200, 250, 10, { cx: 150, cy: 100, long: 160, short: 14, angle: 0 });
+    for (let y = 90; y < 110; y += 1) rgb.data.fill(10, (y * 400 + 262) * 3, (y * 400 + 268) * 3);
+    const pageMask = new Uint8Array(400 * 200);
+    addToPageMask(pageMask, 400, regionTextMask(rgb, rgbToGray(rgb), [line(170, 100, 230, 40, 0)], { x0: 40, y0: 60, x1: 250, y1: 140 })!);
+    expect(pageMask[100 * 400 + 150]).toBe(1);
+    expect(pageMask[100 * 400 + 265]).toBe(1);
+  });
+
   it("takes the whole of a glyph that sticks out of its line, also when the region holds short stray lines", () => {
     // A 50 px line whose last glyph is set larger: it reaches 30 px past the rectangle's end and 5 px above it.
     const rgb = page(400, 200, 250, 10, { cx: 150, cy: 100, long: 200, short: 20, angle: 0 });

@@ -9,7 +9,7 @@ import type { TextLine } from "../lines/interfaces/index.ts";
 import { textThickness } from "../lines/text-thickness.ts";
 import { sameInk } from "./ink.ts";
 import type { RegionMask } from "./interfaces/index.ts";
-import { keepLineMarks } from "./line-marks.ts";
+import { keepLineMarks, markSideShare } from "./line-marks.ts";
 import { edgeBandOf, inkSide } from "./line-tone.ts";
 
 /**
@@ -73,7 +73,8 @@ const median = (values: number[]) => {
  * S5: text strokes of one region. Inside each unclipped (possibly rotated) line polygon, Otsu separates
  * ink from paper; the side away from that line's paper tone is the text, so dark-on-light and
  * light-on-dark both work, also when one region holds both. Small blobs of the same ink that continue a
- * line or sit beside it are text too (keepLineMarks); with a `bubble` they are only looked for inside it.
+ * line or sit beside it are text too (keepLineMarks); with a `bubble` they are only looked for inside it,
+ * and what a line rectangle holds of the bubble's frame, or of the picture beyond the bubble, is not text.
  * The grown mask never leaves the neighbourhood of the lines and their marks.
  */
 export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly TextLine[], bubble: Box | null = null): RegionMask | null => {
@@ -137,6 +138,10 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   const glyphFill = new Uint8Array(width * height);
   const candidate = new Uint8Array(width * height);
   const zone = new Uint8Array(width * height);
+  // Ink-toned pixels around the line rectangles, whatever their colour: what the ink in a rectangle runs on into.
+  const inkAround = new Uint8Array(width * height);
+  // Whether tone tells the ink from everything that is paper: in a box nearly as dark as its text it does not.
+  let inkStandsOut = true;
   linePolygons.forEach((linePolygon, lineIndex) => {
     const withEdge = dilateSquare(linePolygon, width, height, edgeBand);
     const inside: number[] = [];
@@ -147,6 +152,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     }
     if (inside.length === 0) return;
     const { threshold, paper, darkText } = inkSide(inside, own);
+    if (Math.abs(paper - threshold) < outlineContrast) inkStandsOut = false;
     const isInk = (index: number) => (darkText ? at(index) <= threshold : at(index) > threshold);
     const ownInk = linePolygon.map((value, index) => (value && isInk(index) ? 1 : 0));
 
@@ -183,7 +189,11 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     for (let index = 0; index < linePolygon.length; index += 1) {
       if (linePolygon[index]) {
         if (ownInk[index]) ink[index] = 1;
-      } else if (lineZone[index] && inBubble(index)) {
+        continue;
+      }
+      if (!lineZone[index]) continue;
+      if (!polygon[index] && isInk(index)) inkAround[index] = 1;
+      if (inBubble(index)) {
         zone[index] = 1;
         if (!polygon[index] && isInk(index) && sameInk(index)) candidate[index] = 1;
       }
@@ -206,6 +216,31 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     ink[index] = 0;
     glyphFill[index] = 0;
     candidate[index] = 0;
+  }
+  // The band along a bubble's edge holds its frame, and beyond the bubble lies another surface; a line
+  // rectangle larger than its text reaches over both. A shape larger than a glyph, counted with what it runs
+  // on into outside the rectangles, whose ink lies mostly there is the frame or the picture, all of it. Text
+  // that touches the frame has most of its ink inside the bubble and stays text, with the piece of frame it
+  // touches. Where the paper comes close to the ink's tone, darker paper passes for ink and joins the
+  // punctuation at a rectangle's edge to the band below it: there the rule is left out.
+  if (bubble && inkStandsOut) {
+    const shapes = labelComponents(ink.map((value, index) => value | inkAround[index]!), width, height);
+    const inkInside = new Int32Array(shapes.components.length);
+    const inkBeyond = new Int32Array(shapes.components.length);
+    for (let index = 0; index < ink.length; index += 1) {
+      const label = shapes.labels[index]!;
+      if (!label || !ink[index]) continue;
+      if (inBubble(index)) inkInside[label - 1]! += 1;
+      else inkBeyond[label - 1]! += 1;
+    }
+    const notText = shapes.components.map((component, index) =>
+      Math.max(component.box.x1 - component.box.x0, component.box.y1 - component.box.y0) > markSideShare * thickness && inkBeyond[index]! > inkInside[index]!);
+    for (let index = 0; index < ink.length; index += 1) {
+      const label = shapes.labels[index]!;
+      if (!label || !notText[label - 1]) continue;
+      ink[index] = 0;
+      glyphFill[index] = 0;
+    }
   }
   const lineInk = ink.slice();
 
