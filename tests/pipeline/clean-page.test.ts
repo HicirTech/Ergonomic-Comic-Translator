@@ -111,9 +111,9 @@ describe("cleanPage", () => {
       expect(calls).toHaveLength(1);
       expect(calls[0]!.imagePath).toBe(image);
       const mask = readFileSync(calls[0]!.maskPath);
-      // The bar covers rows 54 to 65; the stroke mask adds two rows, the model's mask a third.
-      expect(mask[51 * width + 100]).toBe(1);
-      expect(mask[50 * width + 100]).toBe(0);
+      // The model gets the stroke mask as it is: the bar covers rows 54 to 65 and the mask adds two rows.
+      expect(mask[52 * width + 100]).toBe(1);
+      expect(mask[51 * width + 100]).toBe(0);
       const cleaned = await sharp(result.cleanedPath).raw().toBuffer();
       // At the edge the model's fill, away from it the paper of either side, and no model tone around the strokes.
       expect(cleaned[(60 * width + 150) * 3]).toBe(77);

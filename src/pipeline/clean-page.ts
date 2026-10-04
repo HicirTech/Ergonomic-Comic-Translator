@@ -2,7 +2,6 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import sharp from "sharp";
 import { rgbToGray } from "../imaging/gray.ts";
-import { dilateSquare } from "../imaging/morphology.ts";
 import { decodeRgb } from "../imaging/page-image.ts";
 import { bubbleInside } from "../stages/clean/bubble-inside.ts";
 import { planInpaintTiles } from "../stages/clean/inpaint-tiles.ts";
@@ -14,13 +13,6 @@ import { addToPageMask, regionTextMask } from "../stages/mask/text-mask.ts";
 import { classifyRegion, unsureReadingBelow } from "../stages/regions/classify.ts";
 import type { LetteringCues } from "../stages/regions/interfaces/index.ts";
 import type { OrientedRegion, RegionResult, StageTimer, UtteranceResult, VisionClient } from "./interfaces/index.ts";
-
-/**
- * The model reads the rim of its holes, and the last trace of ink there darkens what it paints: its mask is
- * the stroke mask grown by this much. Measured on dialogue panels whose clean picture is known: the fill
- * error falls from 7.1 to 3.3 levels with one pixel and rises again with two.
- */
-const modelMaskGrowPixels = 1;
 
 const median = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
@@ -125,7 +117,7 @@ export const cleanPage = async (
     return { regions, cleanedPath: await write("filled") };
   }
   const maskPath = join(workDirectory, `${pageKey}.mask.bin`);
-  writeFileSync(maskPath, dilateSquare(strokes, width, height, modelMaskGrowPixels));
+  writeFileSync(maskPath, strokes);
   const modelPath = join(workDirectory, `${pageKey}.model.png`);
   // Only the 256 px cells in which the picture meets the text are worth a model call.
   const tiles = planInpaintTiles(meetsPictureAt, width, height);
