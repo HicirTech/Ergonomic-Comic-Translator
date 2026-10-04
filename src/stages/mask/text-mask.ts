@@ -253,22 +253,9 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     strokePixels += grown[index]!;
   }
 
-  // The paper next to the strokes: what a fill has to match, and whether it carries fine texture.
+  // The paper next to the strokes: the colour the lettering has to stand on.
   const around = dilateSquare(grown, width, height, paperBandPixels);
-  const band = new Uint8Array(width * height);
-  let detailSum = 0;
-  let detailCount = 0;
-  for (let index = 0; index < band.length; index += 1) {
-    if (grown[index] || !around[index]) continue;
-    band[index] = 1;
-    const x = index % width;
-    const y = Math.floor(index / width);
-    if (x === 0 || y === 0 || x === width - 1 || y === height - 1) continue;
-    if (grown[index - 1] || grown[index + 1] || grown[index - width] || grown[index + width]) continue;
-    detailSum += Math.abs(at(index) - (at(index - 1) + at(index + 1) + at(index - width) + at(index + width)) / 4);
-    detailCount += 1;
-  }
-  const ringMedian = rgbOf(band);
+  const ringMedian = rgbOf(around.map((value, index) => value & (grown[index]! ^ 1)));
 
   // The stroke colour comes from the half of the stroke pixels furthest from the paper: edge pixels are blends.
   const strokes = lineInk.map((value, index) => (value && !glyphFill[index] ? 1 : 0));
@@ -293,7 +280,6 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     inkMedian,
     outlineMedian,
     ringMedian,
-    ringDetail: detailCount === 0 ? 0 : detailSum / detailCount,
     strokePixels,
   };
 };

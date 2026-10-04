@@ -11,7 +11,5 @@ export interface RegionMask {
   outlineMedian: [number, number, number] | null;
   /** Median RGB of the paper band right next to the grown strokes. */
   ringMedian: [number, number, number];
-  /** Mean distance of a band pixel's luma from the mean of its four neighbours: fine texture such as screentone. */
-  ringDetail: number;
   strokePixels: number;
 }

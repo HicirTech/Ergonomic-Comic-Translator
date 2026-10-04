@@ -15,13 +15,13 @@ const height = 300;
 
 /**
  * White bubble (left) with two dark vertical columns; a panel (right) with a tilted dark bar. The panel is
- * finely patterned (halftone) or a smooth gradient.
+ * screentone (dots of two pixels on a pitch of four) or a smooth gradient.
  */
 const drawPage = async (path: string, panel: "halftone" | "gradient" = "halftone") => {
   const data = new Uint8Array(width * height * 3).fill(250);
   const set = (x: number, y: number, value: number) => data.fill(value, (y * width + x) * 3, (y * width + x) * 3 + 3);
   for (let y = 0; y < height; y += 1) {
-    for (let x = 200; x < width; x += 1) set(x, y, panel === "halftone" ? ((x + y) % 2 === 0 ? 90 : 170) : 110 + Math.round((x - 200) * 0.5));
+    for (let x = 200; x < width; x += 1) set(x, y, panel === "halftone" ? (x % 4 < 2 && y % 4 < 2 ? 90 : 170) : 110 + Math.round((x - 200) * 0.5));
   }
   for (const columnX of [120, 60]) {
     for (let y = 60; y < 220; y += 1) for (let x = columnX - 8; x < columnX + 8; x += 1) set(x, y, 15);

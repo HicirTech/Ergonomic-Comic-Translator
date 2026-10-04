@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { applyInpaint, inpaintTileSize, planInpaintTiles } from "../../src/stages/clean/inpaint-tiles.ts";
-import { canMembraneFill, membraneFill } from "../../src/stages/clean/membrane-fill.ts";
+import { membraneFill } from "../../src/stages/clean/membrane-fill.ts";
+import { pictureShare } from "../../src/stages/clean/picture-share.ts";
 import { rgbToGray } from "../../src/imaging/gray.ts";
 import { addToPageMask, regionTextMask } from "../../src/stages/mask/text-mask.ts";
 import { line } from "./fixtures.ts";
@@ -31,7 +32,6 @@ describe("regionTextMask", () => {
     expect(region.strokePixels).toBeGreaterThan(100 * 12 * 0.9);
     expect(region.strokePixels).toBeLessThan(130 * 36);
     expect(region.ringMedian).toEqual([250, 250, 250]);
-    expect(region.ringDetail).toBe(0);
     expect(region.outlineMedian).toBeNull();
   });
 
@@ -248,25 +248,46 @@ describe("regionTextMask", () => {
   });
 });
 
-describe("fill choice", () => {
-  const bar = { cx: 100, cy: 80, long: 100, short: 12, angle: 0 };
-  const maskOn = (paperAt: (x: number, y: number) => number) => {
-    const rgb = page(200, 160, 0, 10, bar);
-    for (let y = 0; y < 160; y += 1) {
-      for (let x = 0; x < 200; x += 1) {
-        if (rgb.data[(y * 200 + x) * 3] !== 10) rgb.data.fill(paperAt(x, y), (y * 200 + x) * 3, (y * 200 + x) * 3 + 3);
-      }
-    }
-    return regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 130, 36, 0)])!;
+describe("pictureShare", () => {
+  const width = 200;
+  const height = 60;
+  /** A stroke of 100 x 12 px (x 50 to 149, rows 24 to 35) on paper given per pixel: the share at the given columns of its middle row. */
+  const shareOn = (paperAt: (x: number, y: number) => number, columns: number[]) => {
+    const data = new Uint8Array(width * height);
+    for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) data[y * width + x] = paperAt(x, y);
+    const mask = new Uint8Array(width * height);
+    for (let y = 24; y < 36; y += 1) mask.fill(1, y * width + 50, y * width + 150);
+    const share = pictureShare({ data, width, height }, mask);
+    return columns.map((x) => share[30 * width + x]);
   };
 
-  it("sends plain paper and a gradient to the membrane fill, halftone dots to the model", () => {
-    expect(canMembraneFill(maskOn(() => 240))).toBe(true);
-    expect(canMembraneFill(maskOn((x) => 120 + Math.round(x * 0.6)))).toBe(true);
-    expect(canMembraneFill(maskOn((x, y) => ((x + y) % 2 === 0 ? 120 : 230)))).toBe(false);
+  it("finds no picture on plain paper, on a gradient and on paper grain", () => {
+    expect(shareOn(() => 240, [55, 100, 145])).toEqual([0, 0, 0]);
+    expect(shareOn((x) => 40 + x, [55, 100, 145])).toEqual([0, 0, 0]);
+    // Grain of 12 levels either way, without any shape in it.
+    expect(shareOn((x, y) => 200 + ((x * 7919 + y * 104729 + x * y * 31) % 25) - 12, [55, 100, 145])).toEqual([0, 0, 0]);
+  });
+
+  it("finds the picture where a line or an edge meets the stroke, and only there", () => {
+    // A dark line three pixels wide crosses the stroke near its left end.
+    expect(shareOn((x) => (Math.abs(x - 60) <= 1 ? 60 : 230), [60, 100, 145])).toEqual([1, 0, 0]);
+    // The paper changes tone along an edge that crosses the stroke near its right end.
+    expect(shareOn((x) => (x < 140 ? 150 : 210), [55, 100, 140])).toEqual([0, 0, 1]);
+  });
+
+  it("finds the picture all along a stroke on screentone", () => {
+    // Dots of two pixels on a pitch of four.
+    expect(shareOn((x, y) => (x % 4 < 2 && y % 4 < 2 ? 120 : 230), [55, 100, 145])).toEqual([1, 1, 1]);
+  });
+
+  it("is zero outside the mask", () => {
+    const data = new Uint8Array(width * height).map((_, index) => (index % 4 < 2 ? 120 : 230));
+    const mask = new Uint8Array(width * height);
+    mask[30 * width + 100] = 1;
+    const share = pictureShare({ data, width, height }, mask);
+    expect(share.filter((value) => value > 0)).toHaveLength(1);
   });
 });
-
 describe("membraneFill", () => {
   it("restores a gradient under the mask and touches nothing outside it", () => {
     const width = 60;
