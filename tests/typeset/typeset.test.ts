@@ -246,11 +246,19 @@ describe("typesetPage", () => {
     expect(box.x1).toBeCloseTo(301.2, 1);
   });
 
-  it("sets the text at most a tenth larger than the text it replaces", () => {
+  it("sets the text no larger than the ink of the text it replaces stands", () => {
     const region = vision.regions[0]!;
-    const withLines: PageVisionResult = { ...vision, regions: [{ ...region, lines: [line(200, 180, 150, 40, 0), line(200, 230, 150, 40, 0)] }] };
-    // A 40 px line rectangle holds text of about 0.74 * 40 = 29.6 px; two characters would fit far larger than 1.1 * 29.6.
-    expect(placedBox(typesetPage(fakeShaper, withLines, text, translation).svg).fontSize).toBe(32);
+    const lines = [line(200, 180, 150, 40, 0), line(200, 230, 150, 40, 0)];
+    const sizeOf = (changes: Partial<PageVisionResult["regions"][number]>) =>
+      placedBox(typesetPage(fakeShaper, { ...vision, regions: [{ ...region, lines, ...changes }] }, text, translation).svg).fontSize;
+    // The rectangles are 40 px thick, the type in them stands 22 px: two characters would fit far larger.
+    expect(sizeOf({ inkHeights: [22, 22.6] })).toBe(22);
+    // A line of dots as long as the line of type does not halve the size.
+    expect(sizeOf({ inkHeights: [22, 5] })).toBe(22);
+    // Without a measure of the ink a 40 px rectangle is taken to hold text of 0.74 * 40 = 29.6 px.
+    expect(sizeOf({ inkHeights: null })).toBe(29);
+    // So is text that holds no type: the ink of a row of dots is not the height of anything.
+    expect(sizeOf({ inkHeights: [5, 5], utterances: [{ ...region.utterances[0]!, text: "……" }] })).toBe(29);
   });
 
   it("letters in the colours of the text it replaces", () => {
@@ -268,10 +276,15 @@ describe("typesetPage", () => {
       ...vision,
       regions: [{ ...region, lines: [line(200, 150, 180, 30, 0), line(200, 250, 180, 80, 0)], utterances: [{ ...region.utterances[0]!, lineThickness: 80 }] }],
     };
-    // The region's median line is 80 px thick here too, but only because of this utterance: 0.74 * 80 * 1.1 = 65.
-    expect(placedBox(typesetPage(fakeShaper, big, text, translation).svg).fontSize).toBe(65);
+    // The region's median line is 80 px thick here too, but only because of this utterance: 0.74 * 80 = 59.
+    expect(placedBox(typesetPage(fakeShaper, big, text, translation).svg).fontSize).toBe(59);
     const small: PageVisionResult = { ...big, regions: [{ ...big.regions[0]!, utterances: [{ ...region.utterances[0]!, lineThickness: 30 }] }] };
-    expect(placedBox(typesetPage(fakeShaper, small, text, translation).svg).fontSize).toBe(24);
+    expect(placedBox(typesetPage(fakeShaper, small, text, translation).svg).fontSize).toBe(22);
+    // With the ink measured, the height of the utterance's own lines is its size.
+    const measured = (lineIndexes: number[]): PageVisionResult =>
+      ({ ...big, regions: [{ ...big.regions[0]!, inkHeights: [20, 50], utterances: [{ ...region.utterances[0]!, lineIndexes }] }] });
+    expect(placedBox(typesetPage(fakeShaper, measured([1]), text, translation).svg).fontSize).toBe(50);
+    expect(placedBox(typesetPage(fakeShaper, measured([0]), text, translation).svg).fontSize).toBe(20);
   });
 
   it("letters one ellipsis for a row of dots", () => {
