@@ -69,6 +69,7 @@ const region = (
   paper: null,
   ink: null,
   outline: null,
+  inside: null,
   utterances: [],
 });
 

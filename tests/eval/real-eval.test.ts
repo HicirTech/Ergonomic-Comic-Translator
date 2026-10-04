@@ -135,6 +135,7 @@ const regionWith = (box: Box, lines: Box[]): PageVisionResult["regions"][number]
   paper: null,
   ink: null,
   outline: null,
+  inside: null,
   utterances: [],
 });
 

@@ -195,6 +195,7 @@ describe("typesetPage", () => {
       paper: null,
       ink: null,
       outline: null,
+      inside: null,
     }],
     uncovered: [],
     cleanedPath: "cleaned.png",
@@ -232,6 +233,16 @@ describe("typesetPage", () => {
     expect(box.x1).toBeCloseTo(393.6, 1);
     expect(box.y0).toBeCloseTo(446.4, 1);
     expect(box.y1).toBeCloseTo(593.6, 1);
+  });
+
+  it("keeps the lettering box inside the frame the page shows around the text, not just inside the detector's box", () => {
+    const region = vision.regions[0]!;
+    // The bubble's box holds its tail on the left: the frame of the bubble itself stands at x = 95.
+    const tailed: PageVisionResult = { ...vision, regions: [{ ...region, bubble: { x0: 60, y0: 90, x1: 310, y1: 310 }, inside: { x0: 95, y0: 90, x1: 310, y1: 310 } }] };
+    const box = placedBox(typesetPage(fakeShaper, tailed, text, translation).svg);
+    // Grown by 1.15 the frame spans x 85..315; the inset is 4 % of the bubble's shorter side, 8.8 px.
+    expect(box.x0).toBeCloseTo(103.8, 1);
+    expect(box.x1).toBeCloseTo(301.2, 1);
   });
 
   it("sets the text at most a tenth larger than the text it replaces", () => {

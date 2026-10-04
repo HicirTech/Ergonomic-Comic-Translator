@@ -19,4 +19,9 @@ export interface RegionResult {
   ink: [number, number, number] | null;
   /** Colour of the outline the removed text had; null when it had none or the region was not cleaned. */
   outline: [number, number, number] | null;
+  /**
+   * The inside of the bubble around the text: the detector's bubble box cut back to the frame the page shows
+   * beside the text. Null without a bubble.
+   */
+  inside: Box | null;
 }

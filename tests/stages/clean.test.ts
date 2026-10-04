@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { bubbleInside } from "../../src/stages/clean/bubble-inside.ts";
 import { applyInpaint, inpaintTileSize, planInpaintTiles } from "../../src/stages/clean/inpaint-tiles.ts";
 import { membraneFill } from "../../src/stages/clean/membrane-fill.ts";
 import { pictureShare } from "../../src/stages/clean/picture-share.ts";
@@ -310,6 +311,39 @@ describe("pictureShare", () => {
     expect(share.filter((value) => value > 0)).toHaveLength(1);
   });
 });
+describe("bubbleInside", () => {
+  const width = 400;
+  const height = 200;
+  /** A box of paper from x 100 to 299 and y 40 to 159 on a page of tone 120, with a dark frame of 2 px when asked. */
+  const boxOn = (framed: boolean, paperAt: (x: number) => number = () => 230) => {
+    const data = new Uint8Array(width * height).fill(120);
+    for (let y = 40; y < 160; y += 1) {
+      for (let x = 100; x < 300; x += 1) data[y * width + x] = framed && (x < 102 || x >= 298 || y < 42 || y >= 158) ? 20 : paperAt(x);
+    }
+    return { data, width, height };
+  };
+  const text = { x0: 110, y0: 80, x1: 280, y1: 120 };
+
+  it("cuts the detector's box, which also holds the tail, back to the bubble's frame", () => {
+    expect(bubbleInside(boxOn(true), text, { x0: 70, y0: 40, x1: 300, y1: 160 })).toEqual({ x0: 102, y0: 42, x1: 298, y1: 158 });
+  });
+
+  it("ends where the paper ends when the bubble has no frame, and at the detector's box on plain paper", () => {
+    expect(bubbleInside(boxOn(false), text, { x0: 70, y0: 30, x1: 330, y1: 170 })).toEqual({ x0: 100, y0: 40, x1: 300, y1: 160 });
+    expect(bubbleInside(boxOn(false), text, { x0: 104, y0: 44, x1: 290, y1: 150 })).toEqual({ x0: 104, y0: 44, x1: 290, y1: 150 });
+  });
+
+  it("does not take artwork that shows through the box for its frame", () => {
+    // The paper darkens by 100 levels over 50 px beside the text: no edge, however far the tone moves.
+    const shaded = boxOn(false, (x) => (x < 110 ? 230 - 2 * (110 - x) : 230));
+    expect(bubbleInside(shaded, text, { x0: 104, y0: 44, x1: 290, y1: 150 }).x0).toBe(104);
+  });
+
+  it("keeps the detector's side where the text reaches past the box", () => {
+    expect(bubbleInside(boxOn(false), text, { x0: 104, y0: 44, x1: 260, y1: 150 }).x1).toBe(260);
+  });
+});
+
 describe("membraneFill", () => {
   it("restores a gradient under the mask and touches nothing outside it", () => {
     const width = 60;

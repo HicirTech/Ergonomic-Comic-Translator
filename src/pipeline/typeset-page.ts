@@ -68,7 +68,8 @@ export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: Volu
     const angle = Math.abs(frame.angle) < uprightBelowDegrees ? 0 : frame.angle;
     let box: Box = { x0: grownCenter.x - grownWidth / 2, y0: grownCenter.y - grownHeight / 2, x1: grownCenter.x + grownWidth / 2, y1: grownCenter.y + grownHeight / 2 };
     if (angle === 0) {
-      if (region.bubble) box = clipTo(box, expandBox(region.bubble, -bubbleInsetShare * Math.min(boxWidth(region.bubble), boxHeight(region.bubble))));
+      // Inside the bubble's frame where the page shows one beside the text; the detector's box also holds the tail.
+      if (region.bubble) box = clipTo(box, expandBox(region.inside ?? region.bubble, -bubbleInsetShare * Math.min(boxWidth(region.bubble), boxHeight(region.bubble))));
       box = clipTo(box, expandBox({ x0: 0, y0: 0, x1: vision.width, y1: vision.height }, -pageInsetPx));
     }
     const width = boxWidth(box);

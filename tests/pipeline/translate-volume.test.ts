@@ -50,6 +50,7 @@ const region = (x0: number, y0: number, texts: string[], policy: "translate" | "
   paper: null,
   ink: null,
   outline: null,
+  inside: null,
 });
 
 describe("pageText", () => {

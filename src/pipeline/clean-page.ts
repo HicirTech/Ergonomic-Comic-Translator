@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { rgbToGray } from "../imaging/gray.ts";
 import { dilateSquare } from "../imaging/morphology.ts";
 import { decodeRgb } from "../imaging/page-image.ts";
+import { bubbleInside } from "../stages/clean/bubble-inside.ts";
 import { planInpaintTiles } from "../stages/clean/inpaint-tiles.ts";
 import { membraneFill } from "../stages/clean/membrane-fill.ts";
 import { pictureShare } from "../stages/clean/picture-share.ts";
@@ -34,13 +35,14 @@ const meetsPicture = (share: Float32Array, pageWidth: number, region: RegionMask
 
 /**
  * S5/S6 for one page: build the stroke mask of every region, classify the regions (how a text is drawn is
- * one of the cues), then restore the paper under the text that is translated. SFX and art lettering are
- * kept. The strokes are filled twice from the page as it is, by the membrane fill in this process and,
- * where the picture meets them, by the inpainting engine; each pixel takes the engine's fill by the share
- * of the picture around it. The engine sees every stroke as a hole: on a page where some are already filled
- * smoothly it continues the smoothness instead of the picture (measured: 19 against 16 levels of error on
- * the picture's edges, 31 against 22 on a second volume). Writes `<pageKey>.filled.png`, or, when the
- * engine ran, `<pageKey>.mask.bin`, `<pageKey>.model.png` and `<pageKey>.clean.png` into `workDirectory`.
+ * one of the cues), then restore the paper under the text that is translated, and find the inside of each
+ * bubble around its text for the lettering. SFX and art lettering are kept. The strokes are filled twice
+ * from the page as it is, by the membrane fill in this process and, where the picture meets them, by the
+ * inpainting engine; each pixel takes the engine's fill by the share of the picture around it. The engine
+ * sees every stroke as a hole: on a page where some are already filled smoothly it continues the smoothness
+ * instead of the picture (measured: 19 against 16 levels of error on the picture's edges, 31 against 22 on
+ * a second volume). Writes `<pageKey>.filled.png`, or, when the engine ran, `<pageKey>.mask.bin`,
+ * `<pageKey>.model.png` and `<pageKey>.clean.png` into `workDirectory`.
  */
 export const cleanPage = async (
   client: VisionClient,
@@ -82,11 +84,14 @@ export const cleanPage = async (
     for (const mask of erased) if (mask) addToPageMask(pageStrokes, width, mask);
     const pictured = pictureShare(gray, pageStrokes);
     membraneFill(rgb, pageStrokes);
+    const cleared = rgbToGray(rgb);
 
     const results = oriented.map(({ region, orientation }, regionIndex): RegionResult => {
       const classification = classifications[regionIndex]!;
       const mask = erased[regionIndex];
       const clean = classification.policy === "keep" ? "kept" : !mask ? "none" : meetsPicture(pictured, width, mask) ? "inpaint" : "membrane";
+      const { frame } = orientation;
+      const textBox = { x0: frame.cx - frame.w / 2, y0: frame.cy - frame.h / 2, x1: frame.cx + frame.w / 2, y1: frame.cy + frame.h / 2 };
       return {
         box: region.box,
         cls: region.cls,
@@ -99,6 +104,8 @@ export const cleanPage = async (
         paper: mask ? mask.ringMedian : null,
         ink: mask ? mask.inkMedian : null,
         outline: mask ? mask.outlineMedian : null,
+        // Read on the page without its text: other text of the bubble is no frame.
+        inside: region.bubble ? bubbleInside(cleared, textBox, region.bubble) : null,
       };
     });
     return { regions: results, strokes: pageStrokes, share: pictured };
