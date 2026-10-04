@@ -103,7 +103,7 @@ const createInpaintEngine = (model: InpaintModel): VisionEngine => {
       if (rgb.width !== task.width || rgb.height !== task.height || strokes.length !== task.width * task.height) {
         throw new Error("Inpaint task image, mask and size disagree");
       }
-      const mask = model.holeGrowPixels > 0 ? dilateSquare(strokes, task.width, task.height, model.holeGrowPixels) : strokes;
+      const mask = dilateSquare(strokes, task.width, task.height, model.holeGrowPixels);
       const started = performance.now();
       await applyInpaint(rgb, mask, task.tiles, async (image, holes) => {
         const out = await session!.run(model.feeds(ort!, image, holes));
