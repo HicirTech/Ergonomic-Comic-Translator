@@ -6,7 +6,7 @@
 > **[English](README.md)**
 
 > **状态：v2 正在开发中（`v2` 分支）。** 完整流水线、作业调度、本地服务和网页界面都已实现并有单元测试。命令行流水线
-> 已在 RTX 5090 上完整跑过一本 146 页的日文本子：识别和清字约 4.5 分钟，翻译约 1.5 分钟，嵌字几秒。其他语言和画风
+> 已在 RTX 5090 上完整跑过一本 146 页的日文本子：识别和清字约 6.5 分钟，翻译约 1.5 分钟，嵌字几秒。其他语言和画风
 > 还没有测量。见[尚未完成](#尚未完成)。
 
 ---
@@ -22,7 +22,7 @@
    也会留下，而紧贴着这种线的句号照样擦掉。深色对白里夹着的一小行浅色字（横穿对话框的艺术字）也不算文字。
    擦掉的笔画用周围的底色填回去，
    底是纯色时这样填是准确的；文字碰到画面的地方（线条、色块的边、网点、透过对话框看到的画）这样填会把画面
-   抹糊，所以只在笔画的这一小段改用 MI-GAN 补出的画面。
+   抹糊，所以只在笔画的这一小段改用修补模型补出的画面：识别模型跑在显卡上时用 LaMa，只用 CPU 时用 MI-GAN。
    横向的宽对话框如果整句识别漏了字，改为逐行识别；检测器漏掉的文字行，只要在气泡里并且读得出来，
    或者读起来是排版文字，也会照常翻译。拟声词和艺术字保留原样，在对话框里也一样：框里墨色和对白不同、
    又是手绘样子的字就是艺术字；单独占着一块底、既有彩色又有描边的字也是（只占其一、又读不成文字的同样算）。检测到的文字框里如果找不到任何文字行，就没法清字，这一处保持原样，
@@ -49,7 +49,7 @@
 | 系统 | Windows 10/11 x64。Linux x64 为实验性支持，只用 CPU。 |
 | 运行时 | [Bun](https://bun.sh) 1.4 或更新 |
 | 显卡 | NVIDIA 或 AMD，需要 DirectX 12（识别，通过 DirectML）和 Vulkan（翻译，通过 llama.cpp）。AMD 核显（如 Radeon 780M）需要至少 2 GB 的 UMA 显存划分。不支持 Intel 显卡，会改用 CPU。 |
-| 显存 | 默认翻译模型需要约 10 GB 空闲显存，识别模型约 1.5 GB（RTX 5090 实测；两者不会同时加载）；8 GB 显卡和核显有更小的档位。 |
+| 显存 | 默认翻译模型需要约 10 GB 空闲显存，识别模型约 2 GB（RTX 5090 实测；两者不会同时加载）；8 GB 显卡和核显有更小的档位。 |
 | 硬盘 | 默认下载约 14 GB（识别模型 1.2 GB、翻译模型 12.2 GB、llama.cpp 50 MB），小显卡模型另需 8 GB。 |
 
 本程序会礼让其他程序：加载任何东西之前先检查空闲显存、内存和提交量；内存紧张时暂停（黄灯），快耗尽时卸载自己的
@@ -140,7 +140,8 @@ bun run start                           # 然后打开 http://127.0.0.1:3000
 - 主模型反复拒答或失败时换用其他模型重译（目前只有同一个模型的重试）。
 - 重新运行一本书会从头算一遍，已完成的步骤还不能复用。
 - 小显卡翻译档位（8 GB 显卡、核显）尚未测试。
-- LaMa 修补模型已可下载但还没用上：DirectML 在测试用的显卡上拒绝运行它，所以修补模型用的是 MI-GAN。
+- LaMa 修补模型跑在 WebGPU 上，因为 DirectML 拒绝运行它；WebGPU 自己挑显卡，在有两块显卡的机器上可能和识别模型
+  用的不是同一块。WebGPU 加载不了它时改用 MI-GAN，文字压在画面上的地方补得明显差一些。
 - 单独成行的一排省略号会被擦掉但不会翻译：文字行检测找不到它。
 - 便携安装包、ONNX 执行后端的显卡自检、Linux 上的显卡支持。
 
@@ -171,8 +172,8 @@ bun run dev:frontend   # Vite 跑在 5173 端口，把 /api 转发给 3000 端�
 | [PP-LCNet textline orientation](https://huggingface.co/PaddlePaddle/PP-LCNet_x1_0_textline_ori_onnx) | Apache-2.0 | 文字行 0/180 度方向 |
 | [Baberu OCR](https://huggingface.co/genshiai-daichi/baberu-ocr) | Apache-2.0 | 主 OCR（日文、中文、英文） |
 | [manga-ocr](https://huggingface.co/onnx-community/manga-ocr-base-ONNX) | Apache-2.0 | 日文短句 |
-| [MI-GAN](https://huggingface.co/andraniksargsyan/migan) | MIT | 修补文字下面露出画面的地方 |
-| [LaMa manga](https://huggingface.co/mayocream/lama-manga-onnx) | Apache-2.0 | 修补（尚未使用） |
+| [LaMa manga](https://huggingface.co/mayocream/lama-manga-onnx) | Apache-2.0 | 修补文字下面露出画面的地方 |
+| [MI-GAN](https://huggingface.co/andraniksargsyan/migan) | MIT | 只用 CPU 时、以及 WebGPU 跑不了 LaMa 时做同样的事 |
 | [Qwen3.5-9B GGUF](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF) | Apache-2.0 | 翻译（Q6_K、Q4_K_M、IQ3_XXS 档位） |
 | [Hy-MT2-7B GGUF](https://huggingface.co/tencent/Hy-MT2-7B-GGUF) | Apache-2.0 | 核显用的翻译档位 |
 | [Noto Sans SC Bold](https://github.com/notofonts/noto-cjk) | OFL-1.1 | 中文嵌字字体 |

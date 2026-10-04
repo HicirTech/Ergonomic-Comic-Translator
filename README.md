@@ -9,7 +9,7 @@ checking are automatic.
 
 > **Status: v2 is under development (branch `v2`).** The whole pipeline, the job runner, the local server and the
 > web UI are implemented and covered by unit tests. The command-line pipeline has been run end to end on one
-> 146-page Japanese volume on an RTX 5090: about 4.5 minutes to read and clean, 1.5 minutes to translate and a
+> 146-page Japanese volume on an RTX 5090: about 6.5 minutes to read and clean, 1.5 minutes to translate and a
 > few seconds to letter. Other languages and art styles are not measured yet. See [Not done yet](#not-done-yet).
 
 ---
@@ -29,7 +29,8 @@ checking are automatic.
    dark text (lettering drawn across the box). The strokes are filled from the paper around
    them, which is exact on plain paper. Where the picture meets the text (a line, the edge of a shape,
    screentone, artwork seen through a dialogue box) that fill would smear it, so there, and only on that
-   part of the strokes, MI-GAN's fill of the page is used. A wide dialogue box is read line by line when the
+   part of the strokes, an inpainting model's fill of the page is used: LaMa where the reading models run
+   on a GPU, MI-GAN on the CPU. A wide dialogue box is read line by line when the
    sentence reader drops part of it. A line the detector missed is still translated when it stands in a
    bubble and can be read, or reads as typeset text. Sound effects and art lettering keep their original
    lettering, also inside a dialogue box: there it is what is drawn in another ink than the box's dialogue,
@@ -67,7 +68,7 @@ and the reading direction follows from it.
 | OS | Windows 10/11 x64. Linux x64 is experimental and runs on the CPU only. |
 | Runtime | [Bun](https://bun.sh) 1.4 or newer |
 | GPU | NVIDIA or AMD with DirectX 12 (reading, via DirectML) and Vulkan (translation, via llama.cpp). AMD integrated graphics (e.g. Radeon 780M) work with a UMA frame buffer of at least 2 GB. Intel GPUs are not supported; the CPU is used instead. |
-| Video memory | About 10 GB free for the default translation model and 1.5 GB for the reading models (measured on an RTX 5090; the two are never loaded together); smaller tiers exist for 8 GB cards and integrated graphics. |
+| Video memory | About 10 GB free for the default translation model and 2 GB for the reading models (measured on an RTX 5090; the two are never loaded together); smaller tiers exist for 8 GB cards and integrated graphics. |
 | Disk | About 14 GB for the default downloads (vision 1.2 GB, translation models 12.2 GB, llama.cpp 50 MB), plus 8 GB for the small-GPU models. |
 
 The app shares the GPU politely: it checks free video memory, RAM and commit before loading anything, pauses when
@@ -168,8 +169,9 @@ Lettering and export run on the CPU alongside.
   same model exist today).
 - Re-running a volume recomputes every step; finished steps are not reused yet.
 - The small-GPU translation tiers (8 GB cards, integrated graphics) are untested.
-- LaMa is downloaded but not used: DirectML rejects the model on the tested GPU, so MI-GAN is the
-  inpainting model.
+- LaMa runs on WebGPU, because DirectML rejects the model; WebGPU chooses its graphics adapter itself, which
+  on a machine with two can be another one than the reading models use. Where WebGPU cannot load it, MI-GAN
+  takes its place, with a visibly weaker fill where text stands on artwork.
 - A row of dots set as a line of its own is erased but not translated: the line detector does not find it.
 - A portable installer, a GPU self-check of the ONNX execution providers, and GPU support on Linux.
 
@@ -202,8 +204,8 @@ Rules for contributions:
 | [PP-LCNet textline orientation](https://huggingface.co/PaddlePaddle/PP-LCNet_x1_0_textline_ori_onnx) | Apache-2.0 | 0/180 degree line orientation |
 | [Baberu OCR](https://huggingface.co/genshiai-daichi/baberu-ocr) | Apache-2.0 | main OCR (Japanese, Chinese, English) |
 | [manga-ocr](https://huggingface.co/onnx-community/manga-ocr-base-ONNX) | Apache-2.0 | short Japanese text |
-| [MI-GAN](https://huggingface.co/andraniksargsyan/migan) | MIT | inpainting where the picture shows under the text |
-| [LaMa manga](https://huggingface.co/mayocream/lama-manga-onnx) | Apache-2.0 | inpainting (not used yet) |
+| [LaMa manga](https://huggingface.co/mayocream/lama-manga-onnx) | Apache-2.0 | inpainting where the picture shows under the text |
+| [MI-GAN](https://huggingface.co/andraniksargsyan/migan) | MIT | the same on the CPU, and where WebGPU cannot run LaMa |
 | [Qwen3.5-9B GGUF](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF) | Apache-2.0 | translation (Q6_K, Q4_K_M, IQ3_XXS tiers) |
 | [Hy-MT2-7B GGUF](https://huggingface.co/tencent/Hy-MT2-7B-GGUF) | Apache-2.0 | translation tier for integrated graphics |
 | [Noto Sans SC Bold](https://github.com/notofonts/noto-cjk) | OFL-1.1 | Chinese lettering font |

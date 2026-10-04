@@ -26,10 +26,11 @@ const picturedSpread = 16;
  * there does the page need a model's fill, and only that part of a hole: a column of glyphs that touches
  * a balloon's outline at one end is plain paper everywhere else.
  *
- * Measured on two volumes by erasing stroke-shaped holes where the true pixels are known, with the model's
- * fill blended in by this share: mean error 2.1 and 0.4 levels, on the picture's edges 16 and 22. The
- * membrane alone leaves 2.6 and 0.6, on edges 29 and 51 (it smears them); the model alone 4.5 and 3.5 (it
- * tints plain paper).
+ * Measured on two volumes by erasing stroke-shaped holes where the true pixels are known, with LaMa's fill
+ * blended in by this share: mean error 1.9 and 0.2 levels, on the picture's edges 14 and 18. The membrane
+ * alone leaves 3.4 and 0.5, on edges 38 and 70 (it smears them); LaMa alone 3.7 and 0.7 (on plain paper it
+ * is less exact than the membrane). With MI-GAN's fill instead the blend leaves 2.2 and 0.3, on edges 17
+ * and 21.
  */
 export const pictureShare = (gray: GrayImage, mask: Uint8Array) => {
   const { width, height } = gray;
