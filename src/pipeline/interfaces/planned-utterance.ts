@@ -21,4 +21,6 @@ export interface PlannedUtterance {
   lineReading: LineReading | null;
   /** Median thickness of the utterance's own line rectangles; null for a region read whole, without lines. */
   lineThickness: number | null;
+  /** Where the utterance's lines stand in the region's `lines`. */
+  lineIndexes: number[];
 }

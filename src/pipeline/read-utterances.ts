@@ -79,7 +79,7 @@ export const utteranceResults = (
     const text = lines ? lines.text : choice?.reading.text ?? "";
     return {
       box: item.box,
-      lineIndexes: item.split.lines,
+      lineIndexes: item.lineIndexes,
       lineThickness: item.lineThickness,
       startReasons: item.split.startReasons,
       nameTag: item.split.nameTag,

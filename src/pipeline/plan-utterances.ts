@@ -66,7 +66,7 @@ export const planUtterances = (
       const { frame } = orientation;
       const box = { x0: frame.cx - frame.w / 2, y0: frame.cy - frame.h / 2, x1: frame.cx + frame.w / 2, y1: frame.cy + frame.h / 2 };
       const split = { lines: [], startReasons: [], styleBreaks: [], nameTag: false, thought: false };
-      return [{ regionIndex, split, box, crop: utteranceCrop(frame, box, turns), engine: "baberu", writingMode: mode, lineCrop: null, lineReading: null, lineThickness: null }];
+      return [{ regionIndex, split, box, crop: utteranceCrop(frame, box, turns), engine: "baberu", writingMode: mode, lineCrop: null, lineReading: null, lineThickness: null, lineIndexes: [] }];
     }
     const text = (line: TextLine) => structureOf.get(line)?.text ?? "";
     const splits = splitUtterances(upright.map(({ line, box }) => ({ box, text: text(line), conf: structureOf.get(line)?.meanProb ?? 0 })), mode);
@@ -85,6 +85,7 @@ export const planUtterances = (
         // Horizontal lines only: on vertical columns the line recognizer is the weaker reader.
         lineReading: mode === "h" ? joinLineReadings(split.lines.map((index) => structureOf.get(upright[index]!.line))) : null,
         lineThickness: textThickness(split.lines.map((index) => upright[index]!.line)),
+        lineIndexes: split.lines.map((index) => region.lines.indexOf(upright[index]!.line)),
       };
     });
   });

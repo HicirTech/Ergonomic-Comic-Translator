@@ -4,6 +4,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import sharp from "sharp";
 import type { PlannedUtterance, StageTimer, VisionClient } from "../../src/pipeline/interfaces/index.ts";
+import { orientRegions, planUtterances } from "../../src/pipeline/plan-utterances.ts";
 import { readPlannedUtterances, utteranceResults } from "../../src/pipeline/read-utterances.ts";
 import { runVisionPage } from "../../src/pipeline/vision-page.ts";
 import type { InpaintTask } from "../../src/stages/clean/interfaces/index.ts";
@@ -174,6 +175,7 @@ const plannedUtterance = (writingMode: "h" | "v", lineCount: number): PlannedUtt
   lineCrop: lineProbe,
   lineReading: null,
   lineThickness: null,
+  lineIndexes: Array.from({ length: lineCount }, (_, index) => index),
 });
 
 const timed: StageTimer = async (_name, work) => work();
@@ -202,6 +204,18 @@ const readOne = async (item: PlannedUtterance, upsideDown: number, flipMean: num
   const chosen = await readPlannedUtterances(orientationClient(upsideDown, flipMean, orientationCrops), "page.png", [item], timed);
   return { result: utteranceResults([item], chosen, 0)[0]!, orientationCrops };
 };
+
+describe("planUtterances", () => {
+  it("records where an utterance's lines stand in the region, whatever order they are read in", () => {
+    // Two columns far enough apart to be two speakers, stored left to right; vertical text reads the right one first.
+    const lines = [line(60, 140, 170, 26, 90), line(120, 140, 170, 26, 90)];
+    const region = { box: { x0: 40, y0: 50, x1: 140, y1: 230 }, cls: "text_bubble" as const, score: 0.9, bubble: null, lines };
+    const structure = new Map(lines.map((column) => [column, { text: "あいうえお", meanProb: 0.9, minProb: 0.9, tokens: 5, quarterTurns: 0 }]));
+    const planned = planUtterances(orientRegions([region]), structure, "v");
+    expect(planned.map((item) => item.split.lines)).toEqual([[0], [1]]);
+    expect(planned.map((item) => item.lineIndexes)).toEqual([[1], [0]]);
+  });
+});
 
 describe("readPlannedUtterances", () => {
   it("never flips a vertical block, even when textline-ori would call the line upside down", async () => {

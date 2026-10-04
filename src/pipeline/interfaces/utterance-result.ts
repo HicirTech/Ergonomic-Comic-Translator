@@ -4,6 +4,7 @@ import type { CutReason } from "../../stages/utterances/interfaces/index.ts";
 export interface UtteranceResult {
   /** Box in the region's upright frame. */
   box: Box;
+  /** Where the utterance's lines stand in the region's `lines`; empty for a region read whole, without lines. */
   lineIndexes: number[];
   /** Median thickness of the utterance's own line rectangles: its text size. Null without lines. */
   lineThickness: number | null;
