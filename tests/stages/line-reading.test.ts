@@ -6,6 +6,7 @@ const read = (text: string, meanProb: number): OcrReading => ({ text, meanProb, 
 const lines = (text: string, lowestLineProb: number, meanProb = 0.95): LineReading => ({ text, meanProb, lowestLineProb });
 
 type UnsureCase = [sentenceProb: number, linesProb: number, isTaken: boolean];
+type KanaCase = [sentenceReading: string, isTaken: boolean, sentence: OcrReading | null];
 type KeptCase = [text: string, sentenceReading: string, isTaken: boolean, linesText: string, sentence: OcrReading | null];
 
 describe("joinLineReadings", () => {
@@ -29,29 +30,37 @@ describe("joinLineReadings", () => {
 
 describe("preferLineReading", () => {
   const twenty = "あ".repeat(20);
-  const forty = "あ".repeat(40);
+  const japanese = "喉に絡みます";
+  const han = "今天天氣很好請把門關上我在這裡";
   const latin = "The cat waits by the door all day, and then it sleeps.";
 
-  it("reads kana and Han text of 40 characters or more by its lines when every line was read with confidence", () => {
-    expect(preferLineReading(read(forty, 0.98), lines(forty, 0.85))).toBe(true);
-    expect(preferLineReading(read(forty, 0.98), lines(forty, 0.84))).toBe(false);
-    expect(preferLineReading(read("あ".repeat(39), 0.98), lines("あ".repeat(39), 0.85))).toBe(false);
-    expect(preferLineReading(null, lines(forty, 0.84))).toBe(false);
-    expect(preferLineReading(read(forty, 0.5), null)).toBe(false);
+  it.each<KanaCase>([
+    ["another character in place", true, read("娘に絡みます", 0.98)],
+    ["the same letters and other marks", false, read("喉に絡みます．．．♥", 0.98)],
+    ["a character more than the lines", false, read("喉にも絡みます", 0.98)],
+    ["fewer characters than the lines", true, read("喉に絡み", 0.98)],
+    ["the same letters, read unsure", true, read(japanese, 0.79)],
+    ["no text", true, read("", 0)],
+    ["nothing read", true, null],
+  ])("Japanese lines read with confidence against a sentence reading with %s: they are taken: %p", (_sentenceReading, isTaken, sentence) => {
+    expect(preferLineReading(sentence, lines(japanese, 0.85))).toBe(isTaken);
+  });
+
+  it("keeps a sure sentence reading when one of the lines was read without confidence", () => {
+    expect(preferLineReading(read("娘に絡みます", 0.98), lines(japanese, 0.84))).toBe(false);
+    expect(preferLineReading(null, lines(japanese, 0.84))).toBe(false);
+    expect(preferLineReading(read(japanese, 0.5), null)).toBe(false);
   });
 
   it.each<KeptCase>([
-    ["short kana", "sure and whole", false, twenty, read(twenty, 0.98)],
-    ["short kana", "unsure", true, twenty, read(twenty, 0.79)],
-    ["short kana", "less than a fifth shorter", false, twenty, read("あ".repeat(16), 0.98)],
-    ["short kana", "a fifth shorter", true, twenty, read("あ".repeat(15), 0.98)],
-    ["short kana", "empty", true, twenty, read("", 0)],
-    ["short kana", "missing", true, twenty, null],
-    ["long Latin", "sure and whole", false, latin, read(latin, 0.98)],
-    ["long Latin", "unsure", true, latin, read(latin, 0.79)],
-    ["long Latin", "less than a fifth shorter", false, latin, read("a".repeat(35), 0.98)],
-    ["long Latin", "a fifth shorter", true, latin, read("a".repeat(34), 0.98)],
-  ])("%s text with a sentence reading that is %s: its lines are taken: %p", (_text, _sentenceReading, isTaken, linesText, sentence) => {
+    ["Han", "sure and whole", false, han, read(han, 0.98)],
+    ["Han", "sure, with another character in place", false, han, read("今天天氣很好請把門關上我在這裏", 0.98)],
+    ["Han", "unsure", true, han, read(han, 0.79)],
+    ["Han", "less than a fifth shorter", false, han, read("今".repeat(12), 0.98)],
+    ["Han", "a fifth shorter", true, han, read("今".repeat(11), 0.98)],
+    ["Latin", "sure and whole", false, latin, read(latin, 0.98)],
+    ["Latin", "a fifth shorter", true, latin, read("a".repeat(34), 0.98)],
+  ])("%s text without kana and a sentence reading that is %s: its lines are taken: %p", (_text, _sentenceReading, isTaken, linesText, sentence) => {
     expect(preferLineReading(sentence, lines(linesText, 0.9))).toBe(isTaken);
   });
 
