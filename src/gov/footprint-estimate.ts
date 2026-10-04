@@ -14,8 +14,11 @@ const llmHostPrivateBytes = 2 * GiB;
 /** Extra RAM a CPU-only LLM needs beyond its weights. */
 const cpuLlmExtraBytes = 2 * GiB;
 
-/** Vision sessions measured at about 0.4 GB each (detector, LaMa); reserve for all of them until measured. */
-export const visionResidentBytes = 1.5 * GiB;
+/**
+ * The vision sessions together: 1.8 GB on an RTX 5090 after a volume (detector and Baberu on DirectML, LaMa
+ * on WebGPU, which alone takes 0.95 GB).
+ */
+export const visionResidentBytes = 2 * GiB;
 
 export const estimateGpuLlm = (weightsBytes: number) => ({
   devBytes: (weightsBytes + kvCacheBytes + computeBufferBytes + runtimeOverheadBytes) * safetyFactor,
