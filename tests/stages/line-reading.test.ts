@@ -3,7 +3,9 @@ import type { LineReading, OcrReading } from "../../src/stages/ocr/interfaces/in
 import { joinLineReadings, preferLineReading } from "../../src/stages/ocr/line-reading.ts";
 
 const read = (text: string, meanProb: number): OcrReading => ({ text, meanProb, minProb: meanProb / 2, tokens: [...text].length });
-const lines = (text: string, lowestLineProb: number): LineReading => ({ text, meanProb: 0.95, lowestLineProb });
+const lines = (text: string, lowestLineProb: number, meanProb = 0.95): LineReading => ({ text, meanProb, lowestLineProb });
+
+type UnsureCase = [sentenceProb: number, linesProb: number, isTaken: boolean];
 
 describe("joinLineReadings", () => {
   it("joins the lines in the given order and keeps the least confident line's probability", () => {
@@ -39,9 +41,17 @@ describe("preferLineReading", () => {
     expect(preferLineReading(null, lines(twenty, 0.9))).toBe(true);
   });
 
-  it("keeps the sentence reading unless every line was read with confidence", () => {
-    expect(preferLineReading(read("あ".repeat(5), 0.5), lines(twenty, 0.84))).toBe(false);
-    expect(preferLineReading(read("あ".repeat(5), 0.5), lines(twenty, 0.85))).toBe(true);
+  it("keeps a sure sentence reading that lost text unless every line was read with confidence", () => {
+    expect(preferLineReading(read("あ".repeat(5), 0.9), lines(twenty, 0.84))).toBe(false);
+    expect(preferLineReading(read("あ".repeat(5), 0.9), lines(twenty, 0.85))).toBe(true);
     expect(preferLineReading(read("あ".repeat(5), 0.5), null)).toBe(false);
+  });
+
+  it.each<UnsureCase>([
+    [0.7, 0.85, true],
+    [0.7, 0.75, false],
+    [0.8, 0.95, false],
+  ])("with one weak line, a sentence reading at %p gives way to lines read at %p on average: %p", (sentenceProb, linesProb, isTaken) => {
+    expect(preferLineReading(read(twenty, sentenceProb), lines(twenty, 0.5, linesProb))).toBe(isTaken);
   });
 });
