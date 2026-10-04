@@ -1,11 +1,13 @@
 import { rgbToGray } from "../imaging/gray.ts";
 import { decodeRgb } from "../imaging/page-image.ts";
 import type { TextLine } from "../stages/lines/interfaces/index.ts";
+import { lineTone } from "../stages/mask/line-tone.ts";
 import { sameTextInk } from "../stages/mask/text-mask.ts";
 import type { OcrCandidate } from "../stages/ocr/interfaces/index.ts";
 import { assignLines } from "../stages/regions/assign-lines.ts";
 import { consolidateDetections } from "../stages/regions/consolidate.ts";
 import { promoteLines, worthReading } from "../stages/regions/promote-lines.ts";
+import { splitStrayLines } from "../stages/regions/stray-lines.ts";
 import { cleanPage } from "./clean-page.ts";
 import type { PageVisionResult, StageTimer, VisionClient } from "./interfaces/index.ts";
 import { lineCrop, orientRegions, planUtterances } from "./plan-utterances.ts";
@@ -37,16 +39,26 @@ export const runVisionPage = async (
   const cropLines = candidates.length > 0 ? await timed("lines", () => client.lines(imagePath, candidates.map((candidate) => candidate.box))) : [];
   const [pageLines = []] = await timed("page_lines", () => client.lines(imagePath, null));
   const assigned = assignLines(candidates, bubbles, cropLines, pageLines);
-  const gateLines = assigned.uncovered.filter((line) => worthReading(line, bubbles));
+  // The ink of a line tells whether it is text of its region and whether the gate may take it; a page whose
+  // regions hold one line each and that has no unclaimed line needs no pixels for that.
+  const needsInk = assigned.uncovered.length > 0 || assigned.regions.some((region) => region.lines.length > 1);
+  const pixels = needsInk ? await timed("decode", () => decodeRgb(imagePath)) : null;
+  const gray = pixels ? rgbToGray(pixels) : null;
+  const strays: TextLine[] = [];
+  const textRegions = assigned.regions.map((region) => {
+    if (gray === null) return region;
+    const { text, stray } = splitStrayLines(region.lines, (line, paper) => lineTone(gray, line, paper));
+    strays.push(...stray);
+    return stray.length === 0 ? region : { ...region, lines: text };
+  });
+  const unclaimed = [...assigned.uncovered, ...strays];
+  const gateLines = unclaimed.filter((line) => worthReading(line, bubbles));
   const gateReads = gateLines.length > 0 ? await timed("gate_ocr", () => client.recognizeLines(imagePath, gateLines.map(lineCrop))) : [];
   const gateReading = new Map(gateLines.map((line, index) => [line, gateReads[index]?.[0]]));
-  // The gate compares the ink of a line it may take with the ink of the dialogue; pages without gate lines skip it.
-  const pixels = gateLines.length > 0 ? await timed("decode", () => decodeRgb(imagePath)) : null;
-  const gray = pixels ? rgbToGray(pixels) : null;
   const { regions, uncovered } = promoteLines(
-    assigned.regions,
-    assigned.uncovered,
-    assigned.uncovered.map((line) => gateReading.get(line)),
+    textRegions,
+    unclaimed,
+    unclaimed.map((line) => gateReading.get(line)),
     bubbles,
     (line, others) => pixels === null || gray === null || sameTextInk(pixels, gray, [line], others),
   );

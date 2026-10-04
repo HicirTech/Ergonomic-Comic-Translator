@@ -5,12 +5,12 @@ import { rectCorners } from "../../geometry/rotated-rect.ts";
 import { labelComponents } from "../../imaging/components.ts";
 import type { GrayImage, RgbImage } from "../../imaging/interfaces/index.ts";
 import { dilateSquare, erodeSquare } from "../../imaging/morphology.ts";
-import { otsuThreshold } from "../../imaging/threshold.ts";
 import type { TextLine } from "../lines/interfaces/index.ts";
 import { textThickness } from "../lines/text-thickness.ts";
 import { sameInk } from "./ink.ts";
 import type { RegionMask } from "./interfaces/index.ts";
 import { keepLineMarks } from "./line-marks.ts";
+import { edgeBandOf, inkSide } from "./line-tone.ts";
 
 /**
  * The stroke mask grows until the paper is reached: at least 2 px for anti-aliased edges (measured on
@@ -27,13 +27,6 @@ const maxGrowShare = 0.15;
 const paperToneTolerance = 3;
 /** Width of the paper band next to the grown strokes. */
 const paperBandPixels = 6;
-/**
- * A line's paper tone is the median of its rectangle with a band this wide around it (a share of the
- * thickness, at least 2 px): text covers less than half of its rectangle, so the median is paper, and it is
- * the paper the text sits on. A ring further out can lie on another surface (a text plate on artwork).
- */
-const edgeBandShare = 0.1;
-const minEdgeBandPixels = 2;
 /**
  * An outline differs from the paper and from the ink by at least this much on some channel. Less than that
  * around the text is not taken for one: measured on one volume against its textless pages, the paper is up
@@ -89,7 +82,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     return null;
   }
   const maxGrow = Math.max(minGrowPixels, Math.round(maxGrowShare * thickness));
-  const edgeBand = Math.max(minEdgeBandPixels, Math.round(edgeBandShare * thickness));
+  const edgeBand = edgeBandOf(thickness);
   const along = bubble ? markAlongInBubbleShare : markAlongShare;
   const across = bubble ? markAcrossInBubbleShare : markAcrossShare;
   const zoneQuads = lines.map((line) => rectCorners({
@@ -153,9 +146,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
       if (withEdge[index]) own.push(at(index));
     }
     if (inside.length === 0) return;
-    const threshold = otsuThreshold({ data: Uint8Array.from(inside), width: inside.length, height: 1 });
-    const paper = median(own);
-    const darkText = paper > threshold;
+    const { threshold, paper, darkText } = inkSide(inside, own);
     const isInk = (index: number) => (darkText ? at(index) <= threshold : at(index) > threshold);
     const ownInk = linePolygon.map((value, index) => (value && isInk(index) ? 1 : 0));
 
