@@ -229,11 +229,52 @@ describe("typesetPage", () => {
       }],
     };
     const box = placedBox(typesetPage(fakeShaper, wide, text, translation).svg);
-    // Grown by 1.15 the frame would span x -24..424 and y 434..606: past the page and the bubble.
-    expect(box.x0).toBeCloseTo(6.4, 1);
-    expect(box.x1).toBeCloseTo(393.6, 1);
-    expect(box.y0).toBeCloseTo(446.4, 1);
-    expect(box.y1).toBeCloseTo(593.6, 1);
+    // Grown by 1.15 the frame would span x -24..424 and y 434..606: past the page and the bubble. The type
+    // is 20 px, and keeps three quarters of that to the bubble's frame.
+    expect(box.fontSize).toBe(20);
+    expect(box.x0).toBeCloseTo(15, 1);
+    expect(box.x1).toBeCloseTo(385, 1);
+    expect(box.y0).toBeCloseTo(455, 1);
+    expect(box.y1).toBeCloseTo(585, 1);
+  });
+
+  it("sets the text smaller where its margin to the frame would not fit", () => {
+    const region = vision.regions[0]!;
+    // Nine characters of 40 px type are 360 px long, and the box of 400 px leaves 340 px between margins of 30 px.
+    const full: PageVisionResult = {
+      ...vision,
+      regions: [{
+        ...region,
+        bubble: { x0: 0, y0: 200, x1: 400, y1: 400 },
+        lines: [line(200, 300, 380, 54, 0)],
+        inkHeights: [40],
+        orientation: { ...region.orientation, frame: { cx: 200, cy: 300, w: 380, h: 50, angle: 0 } },
+      }],
+    };
+    const box = placedBox(typesetPage(fakeShaper, full, text, { ...translation, targets: { "1": "一二三四五六七八九" } }).svg);
+    // One line of nine characters of size s needs 9 s + 2 * 0.75 s of the 400 px.
+    expect(box.fontSize).toBe(38);
+    expect(box.x0).toBeCloseTo(28.5, 1);
+    expect(box.x1).toBeCloseTo(371.5, 1);
+  });
+
+  it("lets a shout fill half of its box", () => {
+    const region = vision.regions[0]!;
+    // A box 100 px high around a line of 60 px type: the margin asked is a quarter of the box at most.
+    const shout: PageVisionResult = {
+      ...vision,
+      regions: [{
+        ...region,
+        bubble: { x0: 20, y0: 200, x1: 380, y1: 300 },
+        lines: [line(200, 250, 300, 80, 0)],
+        inkHeights: [60],
+        orientation: { ...region.orientation, frame: { cx: 200, cy: 250, w: 300, h: 80, angle: 0 } },
+      }],
+    };
+    const box = placedBox(typesetPage(fakeShaper, shout, text, translation).svg);
+    expect(box.fontSize).toBe(50);
+    expect(box.y0).toBeCloseTo(225, 1);
+    expect(box.y1).toBeCloseTo(275, 1);
   });
 
   it("keeps the lettering box inside the frame the page shows around the text, not just inside the detector's box", () => {
@@ -241,9 +282,9 @@ describe("typesetPage", () => {
     // The bubble's box holds its tail on the left: the frame of the bubble itself stands at x = 95.
     const tailed: PageVisionResult = { ...vision, regions: [{ ...region, bubble: { x0: 60, y0: 90, x1: 310, y1: 310 }, inside: { x0: 95, y0: 90, x1: 310, y1: 310 } }] };
     const box = placedBox(typesetPage(fakeShaper, tailed, text, translation).svg);
-    // Grown by 1.15 the frame spans x 85..315; the inset is 4 % of the bubble's shorter side, 8.8 px.
-    expect(box.x0).toBeCloseTo(103.8, 1);
-    expect(box.x1).toBeCloseTo(301.2, 1);
+    // Grown by 1.15 the frame spans x 85..315; 20 px type keeps 15 px to the frame at x = 95 and x = 310.
+    expect(box.x0).toBeCloseTo(110, 1);
+    expect(box.x1).toBeCloseTo(295, 1);
   });
 
   it("sets the text no larger than the ink of the text it replaces stands", () => {
