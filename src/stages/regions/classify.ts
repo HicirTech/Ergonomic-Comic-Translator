@@ -12,6 +12,11 @@ const sfxAngleSpread = 15;
 const sfxMaxChars = 6;
 /** Two independent cues are needed: slanted dialogue exists, so tilt alone never makes an SFX. */
 const sfxMinCues = 2;
+/**
+ * Below this mean probability the reader is not sure of a text. Measured on two volumes: dialogue set large
+ * in a box of its own reads at 0.81 and above, lettering drawn in a "bubble" of its own at 0.79 and below.
+ */
+export const unsureReadingBelow = 0.8;
 
 /** A short text that repeats a character or ends in a sound mark reads like a sound effect. */
 export const soundLike = (text: string) => {
@@ -27,10 +32,13 @@ export const soundLike = (text: string) => {
  * the text is drawn, when its ink could be measured.
  *
  * Art lettering is kept, also inside a bubble: there it is what is not set in the ink of the bubble's
- * dialogue and is drawn rather than typeset (outlined, slanted or curved, or a sound). Outside bubbles a
- * coloured ink is one more cue, and a coloured ink with an outline two. Measured on two volumes: this keeps
- * the four pieces of art lettering an earlier translation had left alone, and none of the dialogue set in
- * white or in colour in a bubble of its own, nor the captions set in black with a white outline.
+ * dialogue and is drawn rather than typeset (outlined, slanted or curved, or a sound). Lettering that
+ * stands alone in what the detector took for a bubble is art when it is coloured and outlined, or coloured
+ * or outlined and the reader is not sure of it; dialogue set large in a box of its own is black or white,
+ * has no outline and reads well. Outside bubbles a coloured ink is one more cue, and a coloured ink with an
+ * outline two. Measured on two volumes: this keeps the pieces of art lettering an earlier translation had
+ * left alone, and none of the dialogue set in white in a bubble of its own, nor the captions set in black
+ * with a white outline.
  */
 export const classifyRegion = (
   region: PageRegion,
@@ -46,8 +54,12 @@ export const classifyRegion = (
   const spread = angles.length > 1 ? Math.max(...angles.map((angle) => lineAngleDistance(angle, angles[0]!))) : 0;
   const drawn = Math.abs(orientation.tilt) > sfxTilt || spread > sfxAngleSpread || region.lines.some((line) => line.curved);
   if (region.bubble) {
-    const art = lettering !== null && lettering.otherInkThanBubble && (lettering.outlined || drawn || soundLike(text));
-    return art ? { layout: "bubble", kind: "sfx", policy: "keep" } : { layout: "bubble", kind: thought ? "thought" : "dialogue", policy: "translate" };
+    const acrossDialogue = lettering !== null && lettering.otherInkThanBubble && (lettering.outlined || drawn || soundLike(text));
+    const onItsOwn = lettering !== null && lettering.aloneInBubble
+      && ((lettering.coloured && lettering.outlined) || ((lettering.coloured || lettering.outlined) && lettering.readUnsure));
+    return acrossDialogue || onItsOwn
+      ? { layout: "bubble", kind: "sfx", policy: "keep" }
+      : { layout: "bubble", kind: thought ? "thought" : "dialogue", policy: "translate" };
   }
   const center = boxCenter(region.box);
   if (boxWidth(region.box) >= bottomBoxWidthShare * pageWidth && center.y >= bottomBoxCenterShare * pageHeight) {

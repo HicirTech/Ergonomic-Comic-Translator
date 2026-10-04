@@ -11,7 +11,7 @@ import { pictureShare } from "../stages/clean/picture-share.ts";
 import { isColoured, sameInk } from "../stages/mask/ink.ts";
 import type { RegionMask } from "../stages/mask/interfaces/index.ts";
 import { addToPageMask, regionTextMask } from "../stages/mask/text-mask.ts";
-import { classifyRegion } from "../stages/regions/classify.ts";
+import { classifyRegion, unsureReadingBelow } from "../stages/regions/classify.ts";
 import type { LetteringCues } from "../stages/regions/interfaces/index.ts";
 import type { OrientedRegion, RegionResult, StageTimer, UtteranceResult, VisionClient } from "./interfaces/index.ts";
 
@@ -74,6 +74,8 @@ export const cleanPage = async (
         coloured: isColoured(mask.inkMedian) || (mask.outlineMedian !== null && isColoured(mask.outlineMedian)),
         outlined: mask.outlineMedian !== null,
         otherInkThanBubble: dialogue !== null && !sameInk(mask.inkMedian, masks[dialogue]!.inkMedian),
+        aloneInBubble: bubble !== null && !oriented.some((other, index) => index !== regionIndex && other.region.bubble === bubble),
+        readUnsure: utterancesOf(regionIndex).some((utterance) => utterance.meanProb < unsureReadingBelow),
       };
     };
     const classifications = oriented.map(({ region, orientation }, regionIndex) =>

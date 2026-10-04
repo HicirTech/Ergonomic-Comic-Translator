@@ -3,11 +3,12 @@ type Rgb = readonly [number, number, number];
 /** The lines of one dialogue are set in one ink: their colours agree within this much on every channel. */
 const sameInkTolerance = 48;
 /**
- * An ink or an outline whose largest and smallest channel are this far apart is a colour. Measured on two
- * volumes: dialogue and captions are black or white (a spread of 3 at most), drawn lettering is pink, olive
- * with a yellow outline, and the like (53 and more on the ink or the outline).
+ * An ink or an outline whose largest and smallest channel are this far apart is a colour. Measured on the
+ * 485 regions of two volumes: dialogue and captions are black, white or grey, a spread of 15 at most (one
+ * region 22); drawn lettering is blue-black, slate, pink, olive with a yellow outline, 27 and more on the
+ * ink or the outline.
  */
-const colouredSpread = 40;
+const colouredSpread = 24;
 
 export const sameInk = (first: Rgb, second: Rgb) => first.every((value, channel) => Math.abs(value - second[channel]!) <= sameInkTolerance);
 

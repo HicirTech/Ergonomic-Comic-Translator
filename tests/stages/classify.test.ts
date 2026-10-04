@@ -13,6 +13,9 @@ const region = (overrides: Partial<PageRegion>): PageRegion => ({
   ...overrides,
 });
 
+/** Typeset text in plain ink that reads well, among other text of its bubble. */
+const plain: LetteringCues = { coloured: false, outlined: false, otherInkThanBubble: false, aloneInBubble: false, readUnsure: false };
+
 const classify = (target: PageRegion, text: string, dialogueThickness: number | null = 20) =>
   classifyRegion(target, estimateOrientation(target.lines, target.box), text, 1000, 1400, dialogueThickness);
 
@@ -40,21 +43,35 @@ describe("classifyRegion", () => {
 
   it("keeps art lettering drawn across a bubble: not in the ink of the bubble's dialogue, and drawn", () => {
     const inBubble = region({ cls: "text_bubble", bubble: { x0: 0, y0: 0, x1: 300, y1: 300 }, lines: [line(150, 150, 100, 20, 0)] });
-    const withCues = (lettering: LetteringCues, text = "ゆらり") =>
-      classifyRegion(inBubble, estimateOrientation(inBubble.lines, inBubble.box), text, 1000, 1400, 20, lettering);
-    expect(withCues({ coloured: false, outlined: true, otherInkThanBubble: true })).toEqual({ layout: "bubble", kind: "sfx", policy: "keep" });
-    expect(withCues({ coloured: false, outlined: false, otherInkThanBubble: true }, "ドドドッ").policy).toBe("keep");
+    const withCues = (lettering: Partial<LetteringCues>, text = "ゆらり") =>
+      classifyRegion(inBubble, estimateOrientation(inBubble.lines, inBubble.box), text, 1000, 1400, 20, { ...plain, ...lettering });
+    expect(withCues({ outlined: true, otherInkThanBubble: true })).toEqual({ layout: "bubble", kind: "sfx", policy: "keep" });
+    expect(withCues({ otherInkThanBubble: true }, "ドドドッ").policy).toBe("keep");
     // In the dialogue's own ink it is dialogue, however it is drawn; in another ink but typeset it may be a name tag.
-    expect(withCues({ coloured: true, outlined: true, otherInkThanBubble: false }).policy).toBe("translate");
-    expect(withCues({ coloured: false, outlined: false, otherInkThanBubble: true }).policy).toBe("translate");
+    expect(withCues({ coloured: true, outlined: true }).policy).toBe("translate");
+    expect(withCues({ otherInkThanBubble: true }).policy).toBe("translate");
+  });
+
+  it("keeps lettering that stands alone in a bubble when it is drawn in colour or outline and does not read as text", () => {
+    const inBubble = region({ cls: "text_bubble", bubble: { x0: 0, y0: 0, x1: 300, y1: 300 }, lines: [line(150, 150, 280, 250, 0)] });
+    const withCues = (lettering: Partial<LetteringCues>) =>
+      classifyRegion(inBubble, estimateOrientation(inBubble.lines, inBubble.box), "ゆらり", 1000, 1400, 250, { ...plain, aloneInBubble: true, ...lettering });
+    expect(withCues({ coloured: true, readUnsure: true })).toEqual({ layout: "bubble", kind: "sfx", policy: "keep" });
+    expect(withCues({ outlined: true, readUnsure: true }).policy).toBe("keep");
+    expect(withCues({ coloured: true, outlined: true }).policy).toBe("keep");
+    // Dialogue set large in a box of its own is black or white without an outline, however badly it reads;
+    // dialogue in colour reads well.
+    expect(withCues({ readUnsure: true }).policy).toBe("translate");
+    expect(withCues({ coloured: true }).policy).toBe("translate");
+    expect(withCues({ coloured: true, readUnsure: true, aloneInBubble: false }).policy).toBe("translate");
   });
 
   it("counts coloured ink and an outline as cues for lettering outside bubbles", () => {
     const upright = region({ lines: [line(150, 150, 200, 20, 0)] });
-    const withCues = (lettering: LetteringCues) =>
-      classifyRegion(upright, estimateOrientation(upright.lines, upright.box), "おわり", 1000, 1400, 20, lettering);
-    expect(withCues({ coloured: true, outlined: true, otherInkThanBubble: false })).toEqual({ layout: "text_free", kind: "sfx", policy: "keep" });
+    const withCues = (lettering: Partial<LetteringCues>) =>
+      classifyRegion(upright, estimateOrientation(upright.lines, upright.box), "おわり", 1000, 1400, 20, { ...plain, ...lettering });
+    expect(withCues({ coloured: true, outlined: true })).toEqual({ layout: "text_free", kind: "sfx", policy: "keep" });
     // Black text with a white outline is how captions are set on artwork.
-    expect(withCues({ coloured: false, outlined: true, otherInkThanBubble: false }).policy).toBe("translate");
+    expect(withCues({ outlined: true }).policy).toBe("translate");
   });
 });
