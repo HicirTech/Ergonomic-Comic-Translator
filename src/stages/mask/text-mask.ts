@@ -8,6 +8,7 @@ import type { GrayImage, RgbImage } from "../../imaging/interfaces/index.ts";
 import { dilateSquare, erodeSquare } from "../../imaging/morphology.ts";
 import type { TextLine } from "../lines/interfaces/index.ts";
 import { textThickness } from "../lines/text-thickness.ts";
+import { faintRunsOut } from "./faint-runs.ts";
 import { sameInk } from "./ink.ts";
 import type { RegionMask } from "./interfaces/index.ts";
 import { keepLineMarks, markSideShare } from "./line-marks.ts";
@@ -31,6 +32,11 @@ const paperToneTolerance = 3;
 const paperBandPixels = 6;
 /** A rectangle within this many degrees of level or plumb has rows and columns that run from edge to edge. */
 const uprightWithinDegrees = 5;
+/**
+ * Solid ink lies on the text's side of this share of the way from the line's ink tone to its threshold;
+ * what lies beyond is faint: the soft rim of a glyph, or a line that is not text at all.
+ */
+const faintShare = 0.5;
 /**
  * An outline differs from the paper and from the ink by at least this much on some channel. Less than that
  * around the text is not taken for one: measured on one volume against its textless pages, the paper is up
@@ -173,6 +179,15 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
         Math.max(box.x1 - box.x0, box.y1 - box.y0) > markSideShare * thickness || box.x0 === 0 || box.y0 === 0 || box.x1 === width || box.y1 === height);
       notText(throughRuns(linePolygon, ownInk, (index) => beside.labels[index]! > 0 && goesOn[beside.labels[index]! - 1]!, width, height));
     }
+    // Marks are set in the line's own ink: a blob of another colour is artwork, however dark.
+    const lineInkRgb = rgbOf(ownInk);
+    // So is faint ink that runs on into such a frame, or out of the region's rectangles.
+    const inkTone = median(Array.from(ownInk.keys()).filter((index) => ownInk[index]).map(at));
+    const solidUpTo = inkTone + faintShare * (threshold - inkTone);
+    const faint = ownInk.map((value, index) => (value && (darkText ? at(index) > solidUpTo : at(index) < solidUpTo) ? 1 : 0));
+    const solid = ownInk.map((value, index) => (value && !faint[index] ? 1 : 0));
+    const beyond = (index: number) => inkAround[index] === 1 || (!polygon[index] && isInk(index));
+    notText(faintRunsOut(faint, solid, beyond, width, height));
 
     // An outline is ink too, and what it encloses is the glyph's fill: paper inside a glyph has the paper's
     // tone, a fill does not.
@@ -197,8 +212,6 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
       glyphFill[index] = 1;
     }
 
-    // Marks are set in the line's own ink: a blob of another colour is artwork, however dark.
-    const lineInkRgb = rgbOf(ownInk.map((value, index) => (value && isInk(index) ? 1 : 0)));
     const sameInk = (index: number) => {
       const offset = pageIndex(index) * 3;
       return lineInkRgb.every((value, channel) => Math.abs(rgb.data[offset + channel]! - value) <= markInkTolerance);

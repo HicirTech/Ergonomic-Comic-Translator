@@ -283,6 +283,30 @@ describe("regionTextMask", () => {
     expect(regionTextMask(runningOn, rgbToGray(runningOn), [line(200, 110, 230, 40, 0)])!.strokePixels).toBe(0);
   });
 
+  it("leaves a faint line that passes the text and runs out of the rectangle, and takes the mark it passes", () => {
+    // A grey line of 2 px from inside the rectangle to the bottom of the page: the outline of something that
+    // shows through a translucent box. A full stop of the text stands against it.
+    const rgb = page(400, 220, 230, 10, { cx: 190, cy: 110, long: 160, short: 14, angle: 0 });
+    for (let y = 100; y < 220; y += 1) rgb.data.fill(90, (y * 400 + 300) * 3, (y * 400 + 302) * 3);
+    for (let y = 108; y < 116; y += 1) rgb.data.fill(10, (y * 400 + 292) * 3, (y * 400 + 300) * 3);
+    const pageMask = new Uint8Array(400 * 220);
+    addToPageMask(pageMask, 400, regionTextMask(rgb, rgbToGray(rgb), [line(200, 110, 230, 40, 0)])!);
+    expect(pageMask[110 * 400 + 190]).toBe(1);
+    expect(pageMask[112 * 400 + 295]).toBe(1);
+    expect(pageMask[102 * 400 + 300]).toBe(0);
+    expect(pageMask[125 * 400 + 300]).toBe(0);
+  });
+
+  it("takes text that is set lighter than the rest of its line", () => {
+    // A grey word after the dark one, inside the rectangle: faint, but it runs on into nothing.
+    const rgb = page(400, 220, 230, 10, { cx: 150, cy: 110, long: 100, short: 14, angle: 0 });
+    for (let y = 103; y < 117; y += 1) rgb.data.fill(90, (y * 400 + 230) * 3, (y * 400 + 290) * 3);
+    const pageMask = new Uint8Array(400 * 220);
+    addToPageMask(pageMask, 400, regionTextMask(rgb, rgbToGray(rgb), [line(200, 110, 230, 40, 0)])!);
+    expect(pageMask[110 * 400 + 150]).toBe(1);
+    expect(pageMask[110 * 400 + 260]).toBe(1);
+  });
+
   it("takes a mark beyond the bubble's box when it is no larger than a glyph", () => {
     // The detector's box ends at x = 250, before the last mark of the line.
     const rgb = page(400, 200, 250, 10, { cx: 150, cy: 100, long: 160, short: 14, angle: 0 });
