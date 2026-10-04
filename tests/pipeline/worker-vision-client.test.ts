@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createWorkerVisionClient, engineLanes } from "../../src/pipeline/worker-vision-client.ts";
+import { WorkerCrashedError, WorkerTaskError } from "../../src/workers/errors/index.ts";
 import type { ExecutionProvider } from "../../src/workers/interfaces/index.ts";
 import { visionEngineFactories } from "../../src/workers/vision-engines.ts";
 
@@ -11,15 +12,15 @@ interface SentRequest {
 
 /**
  * Stand-ins for the two worker supervisors: they record each request and answer like a loaded engine.
- * An engine named in `failing` cannot be loaded.
+ * Loading LaMa fails with `lamaFailure` when one is given.
  */
-const fakeLanes = (failing: readonly string[] = []) => {
+const fakeLanes = (lamaFailure: Error | null = null) => {
   const sent: SentRequest[] = [];
   const lane = (name: SentRequest["lane"]) => ({
     request: async (body: unknown, timeoutMs: number) => {
       const request = body as SentRequest["body"];
       sent.push({ lane: name, body: request, timeoutMs });
-      if (request.kind === "load" && failing.includes(request.engine!)) throw new Error(`${request.engine} cannot be loaded`);
+      if (request.kind === "load" && request.engine === "lama" && lamaFailure) throw lamaFailure;
       return request.kind === "load" ? { engine: request.engine, ep: request.ep?.name, loadMs: 0, inputNames: [], outputNames: [] } : [[]];
     },
   });
@@ -28,6 +29,9 @@ const fakeLanes = (failing: readonly string[] = []) => {
 
 const gpuEp: ExecutionProvider = { name: "dml", adapterLuid: "luid" };
 const region = { x0: 0, y0: 0, x1: 40, y1: 20 };
+const inpaintTask = { imagePath: "page.png", maskPath: "mask.bin", width: 8, height: 8, tiles: [], outputPath: "out.png" };
+
+type InpaintCase = [session: string, lamaFailure: Error | null, ep: ExecutionProvider, loadedFirst: string, used: string];
 
 /** What a session with a GPU loads, in load order. */
 const sessionLoads = [
@@ -75,20 +79,36 @@ describe("worker vision client", () => {
     expect(loaded.map((load) => load.engine)).toEqual(sessionLoads.map(([, engine]) => engine!));
   });
 
-  it("inpaints with LaMa where the session has a GPU, with MI-GAN where WebGPU cannot host it and on the CPU", async () => {
-    const inpaintTask = { imagePath: "page.png", maskPath: "mask.bin", width: 8, height: 8, tiles: [], outputPath: "out.png" };
-    const engineOf = async (lanes: ReturnType<typeof fakeLanes>, ep: ExecutionProvider) => {
-      const { client, loadAll } = createWorkerVisionClient(lanes.gpu, lanes.cpu);
-      const loaded = await loadAll("models", ep);
-      await client.inpaint(inpaintTask);
-      return { loaded: loaded.map((load) => `${load.engine}@${load.ep}`).slice(0, 2), used: lanes.sent.at(-1)!.body.engine };
-    };
+  it.each<InpaintCase>([
+    ["with a GPU", null, gpuEp, "lama@webgpu", "lama"],
+    ["whose WebGPU provider refuses LaMa", new WorkerTaskError("WORKER_ERROR", "no WebGPU adapter"), gpuEp, "migan@dml", "migan"],
+    ["on the CPU", null, { name: "cpu" }, "migan@cpu", "migan"],
+  ])("fills the picture of a session %s with the inpainting engine it loaded", async (_session, lamaFailure, ep, loadedFirst, used) => {
+    const { gpu, cpu, sent } = fakeLanes(lamaFailure);
+    const { client, loadAll } = createWorkerVisionClient(gpu, cpu);
 
-    expect(await engineOf(fakeLanes(), gpuEp)).toEqual({ loaded: ["lama@webgpu", "detector@dml"], used: "lama" });
-    expect(await engineOf(fakeLanes(["lama"]), gpuEp)).toEqual({ loaded: ["migan@dml", "detector@dml"], used: "migan" });
-    const onCpu = fakeLanes();
-    expect(await engineOf(onCpu, { name: "cpu" })).toEqual({ loaded: ["migan@cpu", "detector@cpu"], used: "migan" });
-    expect(onCpu.sent.some(({ body }) => body.engine === "lama")).toBe(false);
+    const loaded = await loadAll("models", ep);
+    await client.inpaint(inpaintTask);
+
+    expect(`${loaded[0]!.engine}@${loaded[0]!.ep}`).toBe(loadedFirst);
+    expect(sent.at(-1)!.body.engine).toBe(used);
+  });
+
+  it("never asks a CPU session to load LaMa", async () => {
+    const { gpu, cpu, sent } = fakeLanes();
+    const { loadAll } = createWorkerVisionClient(gpu, cpu);
+
+    await loadAll("models", { name: "cpu" });
+
+    expect(sent.some(({ body }) => body.engine === "lama")).toBe(false);
+  });
+
+  it("fails the load when the worker dies under LaMa instead of loading MI-GAN", async () => {
+    const { gpu, cpu, sent } = fakeLanes(new WorkerCrashedError("vision-gpu", null));
+    const { loadAll } = createWorkerVisionClient(gpu, cpu);
+
+    await expect(loadAll("models", gpuEp)).rejects.toBeInstanceOf(WorkerCrashedError);
+    expect(sent.map(({ body }) => body.engine)).toEqual(["lama"]);
   });
 
   it("hosts every engine of the lane table in the worker engine registry", () => {

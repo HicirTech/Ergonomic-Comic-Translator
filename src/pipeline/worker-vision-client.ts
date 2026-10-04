@@ -1,16 +1,19 @@
 import type { Box } from "../geometry/interfaces/index.ts";
+import { getLogger } from "../logger.ts";
 import type { InpaintTask } from "../stages/clean/interfaces/index.ts";
 import type { Detection } from "../stages/detect/interfaces/index.ts";
 import type { TextLine } from "../stages/lines/interfaces/index.ts";
 import type { OcrCandidate, OcrCrop, OrientationReading } from "../stages/ocr/interfaces/index.ts";
+import { WorkerTaskError } from "../workers/errors/index.ts";
 import type { ExecutionProvider, LoadResult } from "../workers/interfaces/index.ts";
 import type { WorkerSupervisor } from "../workers/worker-supervisor.ts";
 import type { VisionClient } from "./interfaces/index.ts";
 
+const logger = getLogger("vision");
+
 /**
  * Which worker hosts which engine. G (GPU EP) runs the heavy convolutional models; C (CPU) runs the
- * small line models and manga-ocr. Baberu's decoders run on the CPU inside G. A session loads one of
- * the two inpainting engines (see `loadAll`).
+ * small line models and manga-ocr. Baberu's decoders run on the CPU inside G.
  */
 export const engineLanes = {
   detector: "gpu",
@@ -24,7 +27,10 @@ export const engineLanes = {
 } as const;
 
 type EngineName = keyof typeof engineLanes;
-type InpaintEngine = "lama" | "migan";
+
+/** A session loads one of these to fill the picture under text. */
+const inpaintEngines = ["lama", "migan"] as const satisfies readonly EngineName[];
+type InpaintEngine = (typeof inpaintEngines)[number];
 
 const loadTimeoutMs = 120_000;
 /** A single model run gets 10 s (a hung DirectML call is killed); batched requests scale with their size. */
@@ -39,7 +45,9 @@ export const createWorkerVisionClient = (gpu: Pick<WorkerSupervisor, "request">,
   const worker = (engine: EngineName) => (engineLanes[engine] === "gpu" ? gpu : cpu);
   const task = <T>(engine: EngineName, body: unknown, runs: number) =>
     worker(engine).request({ kind: "task", engine, task: body }, timeoutFor(runs)) as Promise<T>;
-  const sessionEngines = (Object.keys(engineLanes) as EngineName[]).filter((engine) => engine !== "lama" && engine !== "migan");
+  const load = async (modelsRoot: string, engine: EngineName, ep: ExecutionProvider) =>
+    (await worker(engine).request({ kind: "load", engine, modelsRoot, ep }, loadTimeoutMs)) as LoadResult;
+  const sessionEngines = (Object.keys(engineLanes) as EngineName[]).filter((engine) => !(inpaintEngines as readonly EngineName[]).includes(engine));
   let inpaintEngine: InpaintEngine = "migan";
 
   const client: VisionClient = {
@@ -54,31 +62,27 @@ export const createWorkerVisionClient = (gpu: Pick<WorkerSupervisor, "request">,
   };
 
   /**
-   * Loads every engine of the session on its lane; the GPU lane uses `gpuEp`, the CPU lane always the CPU.
-   *
-   * The inpainting engine comes first. Where the lane has a GPU it is LaMa on WebGPU: DirectML rejects the
-   * MatMul of LaMa's Fourier units (HRESULT 0x80070057), WebGPU runs them (105 ms a tile on an RTX 5090,
-   * next to DirectML sessions in the same process), and its fill restores the picture under text far
-   * better than MI-GAN's. Where WebGPU cannot host it, and on the CPU, where LaMa takes a second a tile,
-   * MI-GAN serves. A WebGPU load that takes the worker down costs nothing at that point: the next load
-   * starts a fresh worker.
+   * LaMa runs on WebGPU because DirectML rejects the MatMul of its Fourier units (HRESULT 0x80070057).
+   * Null where the WebGPU provider refuses the model.
    */
-  const loadAll = async (modelsRoot: string, gpuEp: ExecutionProvider) => {
-    const load = async (engine: EngineName, ep: ExecutionProvider) =>
-      (await worker(engine).request({ kind: "load", engine, modelsRoot, ep }, loadTimeoutMs)) as LoadResult;
-    const results: LoadResult[] = [];
-    inpaintEngine = "migan";
-    if (gpuEp.name !== "cpu") {
-      try {
-        results.push(await load("lama", { name: "webgpu" }));
-        inpaintEngine = "lama";
-      } catch {
-        // No WebGPU for LaMa on this machine: MI-GAN is loaded below.
-      }
+  const loadLamaOnWebGpu = async (modelsRoot: string) => {
+    try {
+      return await load(modelsRoot, "lama", { name: "webgpu" });
+    } catch (error) {
+      if (!(error instanceof WorkerTaskError)) throw error;
+      logger.warn(`LaMa was not loaded on WebGPU (${error.code}: ${error.message}); MI-GAN fills the picture instead`);
+      return null;
     }
-    if (inpaintEngine === "migan") results.push(await load("migan", gpuEp));
+  };
+
+  /** Loads every engine of the session on its lane; the GPU lane uses `gpuEp`, the CPU lane always the CPU. */
+  const loadAll = async (modelsRoot: string, gpuEp: ExecutionProvider) => {
+    // On the CPU LaMa takes a second a tile, so a CPU session fills with MI-GAN.
+    const lama = gpuEp.name === "cpu" ? null : await loadLamaOnWebGpu(modelsRoot);
+    inpaintEngine = lama ? "lama" : "migan";
+    const results = [lama ?? (await load(modelsRoot, "migan", gpuEp))];
     for (const engine of sessionEngines) {
-      results.push(await load(engine, engineLanes[engine] === "gpu" ? gpuEp : { name: "cpu" }));
+      results.push(await load(modelsRoot, engine, engineLanes[engine] === "gpu" ? gpuEp : { name: "cpu" }));
     }
     return results;
   };
