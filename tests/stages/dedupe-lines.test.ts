@@ -38,6 +38,13 @@ describe("dedupeLines", () => {
     expect(kept).toEqual(expect.arrayContaining([...paragraph, crossing]));
   });
 
+  it("drops a rectangle drawn around a block of lines, and keeps the lines", () => {
+    // Two lines of dialogue and, around them and the art lettering beside them, one rectangle.
+    const lines = [line(618, 382, 242, 38, 0, 0.95), line(606, 420, 215, 40, 0, 0.95)];
+    const block = line(609, 399, 385, 143, 0, 0.91);
+    expect(dedupeLines([block, ...lines])).toEqual(lines);
+  });
+
   it("keeps a short line inside a rectangle twice as thick: that is two lines seen as one, not a piece", () => {
     const blob = line(300, 125, 400, 90, 0, 0.9);
     const short = line(180, 148, 160, 40, 0, 0.95);

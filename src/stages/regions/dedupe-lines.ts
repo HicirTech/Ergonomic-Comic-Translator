@@ -17,6 +17,12 @@ const sameLengthShare = 0.7;
 const sameDirectionDegrees = 15;
 /** A piece is about as thick as the line it is a piece of. */
 const pieceThicknessShare = 0.6;
+/**
+ * A rectangle around a block of text holds this many of its lines, each much thinner than the rectangle
+ * (the complement of `pieceThicknessShare`) and at least this share of its length.
+ */
+const blockLines = 2;
+const blockLineLengthShare = 0.5;
 
 /** Both rectangles as boxes in the reference line's frame. Equal angles make them axis-aligned. */
 const uprightBoxes = (reference: TextLine, other: TextLine) => {
@@ -57,6 +63,9 @@ const stretchedOver = (line: TextLine, other: TextLine): TextLine => {
  * - The same rectangle twice: the more confident one stays.
  * - The same line with two thicknesses (DB draws a thick rectangle in a cramped crop): the thin one stays,
  *   stretched to the length of the thick one, which may reach a trailing mark the thin one cut off.
+ * - A rectangle around a block of lines (DB draws one around the whole text of a cramped crop): the block
+ *   goes and its lines stay as they are. Taken for a line, its rectangle reaches over what stands beside
+ *   the text, the frame of a dialogue box or art lettering, and the mask erases that as ink.
  * - A piece of a longer line (the page pass breaks a line at wide gaps): the piece goes.
  * Without this the joined line readings of a region repeat text.
  */
@@ -69,8 +78,14 @@ export const dedupeLines = (lines: readonly TextLine[]) => {
   const thick = new Set<TextLine>();
   const stretched = new Map<TextLine, TextLine>();
   for (const outer of distinct) {
-    const twins = distinct.filter((inner) =>
-      inner !== outer && inner.rect.short < outer.rect.short && inner.rect.long >= sameLengthShare * outer.rect.long && holds(outer, inner));
+    const held = distinct.filter((inner) => inner !== outer && inner.rect.short < outer.rect.short && holds(outer, inner));
+    const blockOf = held.filter((inner) =>
+      inner.rect.short <= pieceThicknessShare * outer.rect.short && inner.rect.long >= blockLineLengthShare * outer.rect.long);
+    if (blockOf.length >= blockLines) {
+      thick.add(outer);
+      continue;
+    }
+    const twins = held.filter((inner) => inner.rect.long >= sameLengthShare * outer.rect.long);
     if (twins.length === 0) continue;
     thick.add(outer);
     for (const twin of twins) stretched.set(twin, stretchedOver(stretched.get(twin) ?? twin, outer));
