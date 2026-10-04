@@ -30,8 +30,9 @@ checking are automatic.
    them, which is exact on plain paper. Where the picture meets the text (a line, the edge of a shape,
    screentone, artwork seen through a dialogue box) that fill would smear it, so there, and only on that
    part of the strokes, an inpainting model's fill of the page is used: LaMa where the reading models run
-   on a GPU, MI-GAN on the CPU. A wide dialogue box is read line by line when the
-   sentence reader drops part of it or is unsure of it. A line the detector missed is still translated when it stands in a
+   on a GPU, MI-GAN on the CPU. Horizontal Japanese or Chinese text of 40 characters or more is read line
+   by line, shorter text when the sentence reader drops part of it or is unsure of it. A line the detector
+   missed is still translated when it stands in a
    bubble and can be read, or reads as typeset text. Sound effects and art lettering keep their original
    lettering, also inside a dialogue box: there it is what is drawn in another ink than the box's dialogue,
    or what stands alone on a shape of its own in colour and with an outline (in one of the two, when it does
