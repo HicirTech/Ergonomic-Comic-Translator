@@ -39,11 +39,7 @@ const fromPlanar = (data: ArrayLike<number>, scale: number) => {
   return image;
 };
 
-/**
- * LaMa (manga): float image 0..1, float mask 1 = hole; output scale detected (0..1 or 0..255). It fills the
- * stroke mask as it is: on dialogue panels whose clean picture is known its error is 2.06 levels so, and
- * 2.13 with the holes a pixel larger.
- */
+/** LaMa (manga): float image 0..1, float mask 1 = hole; output scale detected (0..1 or 0..255). */
 const lama: InpaintModel = {
   modelId: "lama-manga",
   file: "lama-manga.onnx",
@@ -60,14 +56,11 @@ const lama: InpaintModel = {
   },
 };
 
-/**
- * Official MI-GAN pipeline v2: uint8 image, uint8 mask with 255 = keep and 0 = hole; uint8 output. It reads
- * the rim of its holes, and the last trace of ink there darkens what it paints: on the same panels its
- * error falls from 7.1 to 3.3 levels with holes a pixel larger than the stroke mask, and rises again with two.
- */
+/** Official MI-GAN pipeline v2: uint8 image, uint8 mask with 255 = keep and 0 = hole; uint8 output. */
 const migan: InpaintModel = {
   modelId: "migan",
   file: "migan_pipeline_v2.onnx",
+  // MI-GAN reads the rim of its holes, and a trace of ink left there darkens what it paints.
   holeGrowPixels: 1,
   feeds: (ort, image, holes) => ({
     image: new ort.Tensor("uint8", Uint8Array.from(toPlanar(image, 1)), [1, 3, size, size]),

@@ -24,13 +24,8 @@ const picturedSpread = 16;
  * them, a smear, and how much they differ is the spread of that average: the root of the average of the
  * squared tones minus the squared average, which two membrane solves give for every pixel at once. Only
  * there does the page need a model's fill, and only that part of a hole: a column of glyphs that touches
- * a balloon's outline at one end is plain paper everywhere else.
- *
- * Measured on two volumes by erasing stroke-shaped holes where the true pixels are known, with LaMa's fill
- * blended in by this share: mean error 1.9 and 0.2 levels, on the picture's edges 14 and 18. The membrane
- * alone leaves 3.4 and 0.5, on edges 38 and 70 (it smears them); LaMa alone 3.7 and 0.7 (on plain paper it
- * is less exact than the membrane). With MI-GAN's fill instead the blend leaves 2.2 and 0.3, on edges 17
- * and 21.
+ * a balloon's outline at one end is plain paper everywhere else, where the model is less exact than the
+ * membrane.
  */
 export const pictureShare = (gray: GrayImage, mask: Uint8Array) => {
   const { width, height } = gray;
