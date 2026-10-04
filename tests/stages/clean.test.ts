@@ -247,6 +247,42 @@ describe("regionTextMask", () => {
     expect(pageMask[61 * 400 + 100]).toBe(0);
   });
 
+  it("takes a glyph that touches the frame its rectangle reaches over, and leaves the frame", () => {
+    // A box of 320 x 100 px with a frame of 3 px all around, and a stroke of the text that stands 55 px tall
+    // and reaches up to the frame's top line.
+    const rgb = page(400, 220, 250, 10, { cx: 200, cy: 110, long: 160, short: 14, angle: 0 });
+    for (const y0 of [60, 157]) for (let y = y0; y < y0 + 3; y += 1) rgb.data.fill(10, (y * 400 + 40) * 3, (y * 400 + 360) * 3);
+    for (let y = 60; y < 160; y += 1) for (const x0 of [40, 357]) rgb.data.fill(10, (y * 400 + x0) * 3, (y * 400 + x0 + 3) * 3);
+    for (let y = 63; y < 118; y += 1) rgb.data.fill(10, (y * 400 + 250) * 3, (y * 400 + 256) * 3);
+    const pageMask = new Uint8Array(400 * 220);
+    addToPageMask(pageMask, 400, regionTextMask(rgb, rgbToGray(rgb), [line(200, 100, 230, 110, 0)], { x0: 40, y0: 60, x1: 360, y1: 160 })!);
+    expect(pageMask[90 * 400 + 252]).toBe(1);
+    expect(pageMask[110 * 400 + 200]).toBe(1);
+    expect(pageMask[61 * 400 + 150]).toBe(0);
+  });
+
+  it("leaves a frame that runs straight through the rectangle, and takes the mark that touches it", () => {
+    // The right side of a box: a line of 3 px from the top of the page to its bottom, and a full stop set against it.
+    const rgb = page(400, 220, 250, 10, { cx: 200, cy: 110, long: 160, short: 14, angle: 0 });
+    for (let y = 0; y < 220; y += 1) rgb.data.fill(10, (y * 400 + 290) * 3, (y * 400 + 293) * 3);
+    for (let y = 108; y < 116; y += 1) rgb.data.fill(10, (y * 400 + 282) * 3, (y * 400 + 290) * 3);
+    const pageMask = new Uint8Array(400 * 220);
+    addToPageMask(pageMask, 400, regionTextMask(rgb, rgbToGray(rgb), [line(200, 110, 230, 40, 0)], { x0: 40, y0: 60, x1: 296, y1: 160 })!);
+    expect(pageMask[110 * 400 + 200]).toBe(1);
+    expect(pageMask[112 * 400 + 285]).toBe(1);
+    // The rectangle covers rows 90 to 129 of the frame: away from the full stop none of it is text.
+    expect(pageMask[95 * 400 + 291]).toBe(0);
+    expect(pageMask[126 * 400 + 291]).toBe(0);
+  });
+
+  it("takes a stroke that fills its rectangle from end to end, and leaves one that runs on past it", () => {
+    const filling = page(400, 220, 250, 10, { cx: 200, cy: 110, long: 230, short: 14, angle: 0 });
+    expect(regionTextMask(filling, rgbToGray(filling), [line(200, 110, 230, 40, 0)])!.strokePixels).toBeGreaterThan(230 * 14);
+    // A rule across the whole page.
+    const runningOn = page(400, 220, 250, 10, { cx: 200, cy: 110, long: 400, short: 14, angle: 0 });
+    expect(regionTextMask(runningOn, rgbToGray(runningOn), [line(200, 110, 230, 40, 0)])!.strokePixels).toBe(0);
+  });
+
   it("takes a mark beyond the bubble's box when it is no larger than a glyph", () => {
     // The detector's box ends at x = 250, before the last mark of the line.
     const rgb = page(400, 200, 250, 10, { cx: 150, cy: 100, long: 160, short: 14, angle: 0 });

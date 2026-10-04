@@ -1,3 +1,4 @@
+import { lineAngleDistance } from "../../geometry/angle.ts";
 import { boundingBoxOfPoints, clampToImage, expandBox } from "../../geometry/box.ts";
 import type { Box } from "../../geometry/interfaces/index.ts";
 import { rasterizeConvexQuad } from "../../geometry/raster.ts";
@@ -11,6 +12,7 @@ import { sameInk } from "./ink.ts";
 import type { RegionMask } from "./interfaces/index.ts";
 import { keepLineMarks, markSideShare } from "./line-marks.ts";
 import { edgeBandOf, inkSide } from "./line-tone.ts";
+import { throughRuns } from "./through-runs.ts";
 
 /**
  * The stroke mask grows until the paper is reached: at least 2 px for anti-aliased edges (measured on
@@ -27,6 +29,8 @@ const maxGrowShare = 0.15;
 const paperToneTolerance = 3;
 /** Width of the paper band next to the grown strokes. */
 const paperBandPixels = 6;
+/** A rectangle within this many degrees of level or plumb has rows and columns that run from edge to edge. */
+const uprightWithinDegrees = 5;
 /**
  * An outline differs from the paper and from the ink by at least this much on some channel. Less than that
  * around the text is not taken for one: measured on one volume against its textless pages, the paper is up
@@ -138,10 +142,9 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   const glyphFill = new Uint8Array(width * height);
   const candidate = new Uint8Array(width * height);
   const zone = new Uint8Array(width * height);
-  // Ink-toned pixels around the line rectangles, whatever their colour: what the ink in a rectangle runs on into.
+  // Ink-toned pixels that are not text, whatever their colour: around the line rectangles, and the frame
+  // lines that run through them. What the ink in a rectangle runs on into.
   const inkAround = new Uint8Array(width * height);
-  // Whether tone tells the ink from everything that is paper: in a box nearly as dark as its text it does not.
-  let inkStandsOut = true;
   linePolygons.forEach((linePolygon, lineIndex) => {
     const withEdge = dilateSquare(linePolygon, width, height, edgeBand);
     const inside: number[] = [];
@@ -152,9 +155,24 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     }
     if (inside.length === 0) return;
     const { threshold, paper, darkText } = inkSide(inside, own);
-    if (Math.abs(paper - threshold) < outlineContrast) inkStandsOut = false;
     const isInk = (index: number) => (darkText ? at(index) <= threshold : at(index) > threshold);
     const ownInk = linePolygon.map((value, index) => (value && isInk(index) ? 1 : 0));
+    const notText = (found: Uint8Array) => {
+      for (let index = 0; index < ownInk.length; index += 1) {
+        if (!found[index]) continue;
+        ownInk[index] = 0;
+        inkAround[index] = 1;
+      }
+    };
+    // What runs straight through an upright rectangle and on into more than a glyph is a frame the rectangle
+    // reaches over.
+    const { angle } = lines[lineIndex]!.rect;
+    if (Math.min(lineAngleDistance(angle, 0), lineAngleDistance(angle, 90)) <= uprightWithinDegrees) {
+      const beside = labelComponents(linePolygon.map((value, index) => (!value && isInk(index) ? 1 : 0)), width, height);
+      const goesOn = beside.components.map(({ box }) =>
+        Math.max(box.x1 - box.x0, box.y1 - box.y0) > markSideShare * thickness || box.x0 === 0 || box.y0 === 0 || box.x1 === width || box.y1 === height);
+      notText(throughRuns(linePolygon, ownInk, (index) => beside.labels[index]! > 0 && goesOn[beside.labels[index]! - 1]!, width, height));
+    }
 
     // An outline is ink too, and what it encloses is the glyph's fill: paper inside a glyph has the paper's
     // tone, a fill does not.
@@ -218,26 +236,26 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     candidate[index] = 0;
   }
   // The band along a bubble's edge holds its frame, and beyond the bubble lies another surface; a line
-  // rectangle larger than its text reaches over both. A shape larger than a glyph, counted with what it runs
-  // on into outside the rectangles, whose ink lies mostly there is the frame or the picture, all of it. Text
-  // that touches the frame has most of its ink inside the bubble and stays text, with the piece of frame it
-  // touches. Where the paper comes close to the ink's tone, darker paper passes for ink and joins the
-  // punctuation at a rectangle's edge to the band below it: there the rule is left out.
-  if (bubble && inkStandsOut) {
+  // rectangle larger than its text reaches over both. A piece of ink that lies mostly there, and belongs to
+  // a shape larger than a glyph when counted with what it runs on into, is the frame or the picture. Text
+  // that touches the frame has most of its ink inside the bubble and stays text, with the bit of frame it
+  // touches.
+  if (bubble) {
     const shapes = labelComponents(ink.map((value, index) => value | inkAround[index]!), width, height);
-    const inkInside = new Int32Array(shapes.components.length);
-    const inkBeyond = new Int32Array(shapes.components.length);
+    const largerThanGlyph = shapes.components.map((component) =>
+      Math.max(component.box.x1 - component.box.x0, component.box.y1 - component.box.y0) > markSideShare * thickness);
+    const pieces = labelComponents(ink, width, height);
+    const inkInside = new Int32Array(pieces.components.length);
+    const inkBeyond = new Int32Array(pieces.components.length);
     for (let index = 0; index < ink.length; index += 1) {
-      const label = shapes.labels[index]!;
-      if (!label || !ink[index]) continue;
+      const label = pieces.labels[index]!;
+      if (!label) continue;
       if (inBubble(index)) inkInside[label - 1]! += 1;
       else inkBeyond[label - 1]! += 1;
     }
-    const notText = shapes.components.map((component, index) =>
-      Math.max(component.box.x1 - component.box.x0, component.box.y1 - component.box.y0) > markSideShare * thickness && inkBeyond[index]! > inkInside[index]!);
     for (let index = 0; index < ink.length; index += 1) {
-      const label = shapes.labels[index]!;
-      if (!label || !notText[label - 1]) continue;
+      const label = pieces.labels[index]!;
+      if (!label || inkBeyond[label - 1]! <= inkInside[label - 1]! || !largerThanGlyph[shapes.labels[index]! - 1]) continue;
       ink[index] = 0;
       glyphFill[index] = 0;
     }
