@@ -139,6 +139,18 @@ describe("regionTextMask", () => {
     expect(region.ringMedian).toEqual([30, 30, 30]);
   });
 
+  it("measures how tall the ink of each line stands in its rectangle", () => {
+    // A level bar 20 px tall and a plumb one 30 px wide, each in a rectangle 60 px thick, and a rectangle on blank paper.
+    const rgb = page(400, 300, 250, 10, { cx: 150, cy: 50, long: 200, short: 20, angle: 0 });
+    for (let y = 100; y < 280; y += 1) rgb.data.fill(10, (y * 400 + 285) * 3, (y * 400 + 315) * 3);
+    const lines = [line(150, 50, 230, 60, 0), line(300, 190, 200, 60, 90), line(120, 200, 150, 40, 0)];
+    const { inkHeights } = regionTextMask(rgb, rgbToGray(rgb), lines)!;
+    // Whole rows are left out at either end, so the measure is good to a pixel or so.
+    expect(Math.abs(inkHeights[0]! - 20)).toBeLessThan(1.5);
+    expect(Math.abs(inkHeights[1]! - 30)).toBeLessThan(1.5);
+    expect(inkHeights[2]).toBeNull();
+  });
+
   /** A text bar in a line rectangle that ends at x = 175, with a 4 px dot at each given x on the line's axis. */
   const withDots = (dotXs: number[]) => {
     const rgb = page(400, 160, 250, 10, { cx: 110, cy: 80, long: 120, short: 14, angle: 0 });

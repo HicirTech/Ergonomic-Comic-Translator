@@ -419,6 +419,7 @@ describe("ocr page score", () => {
         ink: null,
         outline: null,
         inside: null,
+        inkHeights: null,
         utterances: [{
           box: regionBox,
           lineIndexes: [],
@@ -491,6 +492,7 @@ describe("ocr page score", () => {
       ink: null,
       outline: null,
       inside: null,
+      inkHeights: null,
       utterances: [{
         box,
         lineIndexes: [],
@@ -581,6 +583,7 @@ describe("planned search reads", () => {
     ink: null,
     outline: null,
     inside: null,
+    inkHeights: null,
     utterances: [{
       box: { x0: 2, y0: 2, x1: 38, y1: 14 },
       lineIndexes: [0],

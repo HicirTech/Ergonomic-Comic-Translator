@@ -196,6 +196,7 @@ describe("typesetPage", () => {
       ink: null,
       outline: null,
       inside: null,
+      inkHeights: null,
     }],
     uncovered: [],
     cleanedPath: "cleaned.png",

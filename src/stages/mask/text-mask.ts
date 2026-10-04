@@ -9,6 +9,7 @@ import { dilateSquare, erodeSquare } from "../../imaging/morphology.ts";
 import type { TextLine } from "../lines/interfaces/index.ts";
 import { textThickness } from "../lines/text-thickness.ts";
 import { faintRunsOut } from "./faint-runs.ts";
+import { inkHeight } from "./ink-height.ts";
 import { sameInk } from "./ink.ts";
 import type { RegionMask } from "./interfaces/index.ts";
 import { keepLineMarks, markSideShare } from "./line-marks.ts";
@@ -274,6 +275,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     }
   }
   const lineInk = ink.slice();
+  const inkHeights = lines.map((line, lineIndex) => inkHeight(lineInk, linePolygons[lineIndex]!, line.rect.angle, width));
 
   const lineBoxes = lines.map((line) => {
     const box = boundingBoxOfPoints(line.quad);
@@ -338,6 +340,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     outlineMedian,
     ringMedian,
     strokePixels,
+    inkHeights,
   };
 };
 

@@ -24,4 +24,9 @@ export interface RegionResult {
    * beside the text. Null without a bubble.
    */
   inside: Box | null;
+  /**
+   * How tall the type of each of `lines` stands, measured across the line on its ink; null for a line that
+   * holds hardly any, and for a region without a mask.
+   */
+  inkHeights: (number | null)[] | null;
 }

@@ -51,6 +51,7 @@ const region = (x0: number, y0: number, texts: string[], policy: "translate" | "
   ink: null,
   outline: null,
   inside: null,
+  inkHeights: null,
 });
 
 describe("pageText", () => {

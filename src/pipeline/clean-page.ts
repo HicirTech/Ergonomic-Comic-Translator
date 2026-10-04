@@ -108,6 +108,7 @@ export const cleanPage = async (
         outline: mask ? mask.outlineMedian : null,
         // Read on the page without its text: other text of the bubble is no frame.
         inside: region.bubble ? bubbleInside(cleared, textBox, region.bubble) : null,
+        inkHeights: masks[regionIndex]?.inkHeights ?? null,
       };
     });
     return { regions: results, strokes: pageStrokes, share: pictured };

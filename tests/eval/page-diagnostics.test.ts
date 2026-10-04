@@ -70,6 +70,7 @@ const region = (
   ink: null,
   outline: null,
   inside: null,
+  inkHeights: null,
   utterances: [],
 });
 

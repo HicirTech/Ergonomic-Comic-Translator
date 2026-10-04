@@ -12,4 +12,6 @@ export interface RegionMask {
   /** Median RGB of the paper band right next to the grown strokes. */
   ringMedian: [number, number, number];
   strokePixels: number;
+  /** How tall the type of each line stands, measured across the line on its ink; null where a line holds hardly any. */
+  inkHeights: (number | null)[];
 }
