@@ -6,6 +6,7 @@ const read = (text: string, meanProb: number): OcrReading => ({ text, meanProb, 
 const lines = (text: string, lowestLineProb: number, meanProb = 0.95): LineReading => ({ text, meanProb, lowestLineProb });
 
 type UnsureCase = [sentenceProb: number, linesProb: number, isTaken: boolean];
+type KeptCase = [text: string, sentenceReading: string, isTaken: boolean, linesText: string, sentence: OcrReading | null];
 
 describe("joinLineReadings", () => {
   it("joins the lines in the given order and keeps the least confident line's probability", () => {
@@ -28,23 +29,30 @@ describe("joinLineReadings", () => {
 
 describe("preferLineReading", () => {
   const twenty = "あ".repeat(20);
+  const forty = "あ".repeat(40);
+  const latin = "The cat waits by the door all day, and then it sleeps.";
 
-  it("takes the lines when the sentence reader lost a fifth of the text or more", () => {
-    expect(preferLineReading(read("あ".repeat(15), 0.98), lines(twenty, 0.9))).toBe(true);
-    expect(preferLineReading(read("あ".repeat(16), 0.98), lines(twenty, 0.9))).toBe(false);
+  it("reads kana and Han text of 40 characters or more by its lines when every line was read with confidence", () => {
+    expect(preferLineReading(read(forty, 0.98), lines(forty, 0.85))).toBe(true);
+    expect(preferLineReading(read(forty, 0.98), lines(forty, 0.84))).toBe(false);
+    expect(preferLineReading(read("あ".repeat(39), 0.98), lines("あ".repeat(39), 0.85))).toBe(false);
+    expect(preferLineReading(null, lines(forty, 0.84))).toBe(false);
+    expect(preferLineReading(read(forty, 0.5), null)).toBe(false);
   });
 
-  it("takes the lines when the sentence reader is unsure or read nothing", () => {
-    expect(preferLineReading(read(twenty, 0.79), lines(twenty, 0.9))).toBe(true);
-    expect(preferLineReading(read(twenty, 0.8), lines(twenty, 0.9))).toBe(false);
-    expect(preferLineReading(read("", 0), lines(twenty, 0.9))).toBe(true);
-    expect(preferLineReading(null, lines(twenty, 0.9))).toBe(true);
-  });
-
-  it("keeps a sure sentence reading that lost text unless every line was read with confidence", () => {
-    expect(preferLineReading(read("あ".repeat(5), 0.9), lines(twenty, 0.84))).toBe(false);
-    expect(preferLineReading(read("あ".repeat(5), 0.9), lines(twenty, 0.85))).toBe(true);
-    expect(preferLineReading(read("あ".repeat(5), 0.5), null)).toBe(false);
+  it.each<KeptCase>([
+    ["short kana", "sure and whole", false, twenty, read(twenty, 0.98)],
+    ["short kana", "unsure", true, twenty, read(twenty, 0.79)],
+    ["short kana", "less than a fifth shorter", false, twenty, read("あ".repeat(16), 0.98)],
+    ["short kana", "a fifth shorter", true, twenty, read("あ".repeat(15), 0.98)],
+    ["short kana", "empty", true, twenty, read("", 0)],
+    ["short kana", "missing", true, twenty, null],
+    ["long Latin", "sure and whole", false, latin, read(latin, 0.98)],
+    ["long Latin", "unsure", true, latin, read(latin, 0.79)],
+    ["long Latin", "less than a fifth shorter", false, latin, read("a".repeat(35), 0.98)],
+    ["long Latin", "a fifth shorter", true, latin, read("a".repeat(34), 0.98)],
+  ])("%s text with a sentence reading that is %s: its lines are taken: %p", (_text, _sentenceReading, isTaken, linesText, sentence) => {
+    expect(preferLineReading(sentence, lines(linesText, 0.9))).toBe(isTaken);
   });
 
   it.each<UnsureCase>([
