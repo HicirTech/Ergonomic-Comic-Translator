@@ -6,6 +6,7 @@ import { unifyEllipses } from "../typeset/ellipsis.ts";
 import type { Shaper, TextLayout } from "../typeset/interfaces/index.ts";
 import { layoutText } from "../typeset/layout.ts";
 import { letteringStyle } from "../typeset/lettering-style.ts";
+import { letterable } from "../typeset/stand-ins.ts";
 import { pageOverlaySvg, placedBlockSvg } from "../typeset/svg.ts";
 import type { PageTranslationResult, PageVisionResult, RegionResult, UtteranceResult, VolumePageText } from "./interfaces/index.ts";
 
@@ -93,7 +94,7 @@ export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: Volu
     const ref = text.refs[unit.id];
     if (!ref) continue;
     const accepted = translation.targets[unit.id];
-    const target = accepted === undefined ? untranslatedPlaceholderZh : unifyEllipses(accepted, unit.source);
+    const target = letterable(shaper, accepted === undefined ? untranslatedPlaceholderZh : unifyEllipses(accepted, unit.source));
     const region = vision.regions[ref.regionIndex]!;
     const utterance = region.utterances[ref.utteranceIndex]!;
     const { frame } = region.orientation;

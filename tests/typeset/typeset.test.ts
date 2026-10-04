@@ -9,6 +9,7 @@ import type { Shaper } from "../../src/typeset/interfaces/index.ts";
 import { breakLines } from "../../src/typeset/kinsoku.ts";
 import { layoutText } from "../../src/typeset/layout.ts";
 import { letteringStyle, relativeLuminance } from "../../src/typeset/lettering-style.ts";
+import { letterable } from "../../src/typeset/stand-ins.ts";
 import { layoutPaths, pageOverlaySvg, placedBlockSvg } from "../../src/typeset/svg.ts";
 import { line } from "../stages/fixtures.ts";
 
@@ -152,6 +153,23 @@ describe("unifyEllipses", () => {
     expect(unifyEllipses("琳·哈特……你好", "リン・ハート…こんにちは")).toBe("琳·哈特…你好");
     // The same dot between two words of a sentence is what is left of a row of dots.
     expect(unifyEllipses("老师·还有问题吗", "先生・・・まだ質問が")).toBe("老师…还有问题吗");
+  });
+});
+
+describe("letterable", () => {
+  /** A font without the heavy heart and the anger mark. */
+  const plainFont: Shaper = {
+    ...fakeShaper,
+    shape: (text, direction) => fakeShaper.shape(text, direction).map((glyph) => ({ ...glyph, id: "❤💢".includes(String.fromCodePoint(glyph.id)) ? 0 : glyph.id })),
+  };
+
+  it("letters a mark the font lacks as the mark of the same meaning it has", () => {
+    expect(letterable(plainFont, "喜欢❤️你♥")).toBe("喜欢♥你♥");
+  });
+
+  it("leaves out a character without a glyph or a stand-in, and keeps the rest", () => {
+    expect(letterable(plainFont, "你 说\n什么💢！")).toBe("你 说\n什么！");
+    expect(letterable(fakeShaper, "喜欢❤你")).toBe("喜欢❤你");
   });
 });
 
