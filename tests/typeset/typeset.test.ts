@@ -4,6 +4,7 @@ import { buildCbz, comicInfoXml } from "../../src/export/cbz.ts";
 import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
 import { typesetPage, untranslatedPlaceholderZh } from "../../src/pipeline/typeset-page.ts";
 import { pageText } from "../../src/pipeline/volume-text.ts";
+import { unifyEllipses } from "../../src/typeset/ellipsis.ts";
 import type { Shaper } from "../../src/typeset/interfaces/index.ts";
 import { breakLines } from "../../src/typeset/kinsoku.ts";
 import { layoutText } from "../../src/typeset/layout.ts";
@@ -135,6 +136,25 @@ describe("lettering style", () => {
   });
 });
 
+describe("unifyEllipses", () => {
+  it("turns every row of dots into one ellipsis, whatever it is made of", () => {
+    expect(unifyEllipses("嗯~……·下雨了······真的假的·", "")).toBe("嗯~…下雨了…真的假的…");
+    expect(unifyEllipses("·小林……先生…………明天再说", "")).toBe("…小林…先生…明天再说");
+    expect(unifyEllipses("好．．．．吧...嗯。。。", "")).toBe("好…吧…嗯…");
+  });
+
+  it("keeps a sentence period on its own, and drops the one that closes a row of dots", () => {
+    expect(unifyEllipses("知道了。走吧……。", "")).toBe("知道了。走吧…");
+    expect(unifyEllipses("3.5 倍", "")).toBe("3.5 倍");
+  });
+
+  it("keeps the interpunct of a name when the source has one", () => {
+    expect(unifyEllipses("琳·哈特……你好", "リン・ハート…こんにちは")).toBe("琳·哈特…你好");
+    // The same dot between two words of a sentence is what is left of a row of dots.
+    expect(unifyEllipses("老师·还有问题吗", "先生・・・まだ質問が")).toBe("老师…还有问题吗");
+  });
+});
+
 describe("CBZ export", () => {
   it("stores pages in order with ComicInfo.xml", () => {
     const cbz = buildCbz("测试<卷>", [{ extension: ".png", data: new Uint8Array([1]) }, { extension: ".png", data: new Uint8Array([2]) }], true);
@@ -240,6 +260,11 @@ describe("typesetPage", () => {
     expect(placedBox(typesetPage(fakeShaper, big, text, translation).svg).fontSize).toBe(65);
     const small: PageVisionResult = { ...big, regions: [{ ...big.regions[0]!, utterances: [{ ...region.utterances[0]!, lineThickness: 30 }] }] };
     expect(placedBox(typesetPage(fakeShaper, small, text, translation).svg).fontSize).toBe(24);
+  });
+
+  it("letters one ellipsis for a row of dots", () => {
+    const { svg } = typesetPage(fakeShaper, vision, text, { ...translation, targets: { "1": "好……·吧" } });
+    expect(svg.match(/<path /gu)).toHaveLength(3);
   });
 
   it("never leaves a cleaned bubble empty when the translation failed", () => {

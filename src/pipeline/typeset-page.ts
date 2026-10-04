@@ -2,6 +2,7 @@ import { boxHeight, boxWidth, expandBox } from "../geometry/box.ts";
 import type { Box } from "../geometry/interfaces/index.ts";
 import { rotatePoint } from "../geometry/rotated-rect.ts";
 import { textThickness } from "../stages/lines/text-thickness.ts";
+import { unifyEllipses } from "../typeset/ellipsis.ts";
 import type { Shaper } from "../typeset/interfaces/index.ts";
 import { layoutText } from "../typeset/layout.ts";
 import { letteringStyle } from "../typeset/lettering-style.ts";
@@ -53,7 +54,8 @@ export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: Volu
   for (const unit of text.units) {
     const ref = text.refs[unit.id];
     if (!ref) continue;
-    const target = translation.targets[unit.id] ?? untranslatedPlaceholderZh;
+    const accepted = translation.targets[unit.id];
+    const target = accepted === undefined ? untranslatedPlaceholderZh : unifyEllipses(accepted, unit.source);
     const region = vision.regions[ref.regionIndex]!;
     const { frame } = region.orientation;
     const translated = region.utterances.filter((utterance) => utterance.text.trim() !== "").length;
