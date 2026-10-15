@@ -8,7 +8,8 @@ export const extractContractVersion = "term-extract@1";
 const chunkTokenBudget = 2500;
 /** Rough tokens per line of JSON framing on top of the text. */
 const lineOverhead = 10;
-export const extractMaxTokens = 1024;
+/** Room for the forty entities the schema allows, each with its evidence; a tighter cap cuts a full chunk off. */
+export const extractMaxTokens = 2048;
 
 const kinds: readonly TermKind[] = ["person", "place", "org", "skill", "item", "title", "nickname", "term", "other"];
 
