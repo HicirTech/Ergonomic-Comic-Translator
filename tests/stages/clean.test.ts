@@ -142,6 +142,16 @@ describe("regionTextMask", () => {
     expect(region.outlineMedian).toEqual([255, 255, 255]);
   });
 
+  it("tells light glyphs from the coloured edge around them when both lie on the light side of a dark page", () => {
+    // A white bar in a pink edge on a near-black page: both are the light side, white the lighter half.
+    const rgb = page(200, 160, 20, 200, { cx: 100, cy: 80, long: 108, short: 20, angle: 0 });
+    for (let y = 70; y < 90; y += 1) for (let x = 46; x < 154; x += 1) rgb.data.set([240, 90, 140], (y * 200 + x) * 3);
+    for (let y = 74; y < 86; y += 1) rgb.data.fill(255, (y * 200 + 50) * 3, (y * 200 + 150) * 3);
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 150, 60, 0)])!;
+    expect(region.inkMedian).toEqual([255, 255, 255]);
+    expect(region.outlineMedian).toEqual([240, 90, 140]);
+  });
+
   it("does not take paper that is lighter around the text for an outline", () => {
     // The artwork is 20 levels lighter within 8 px of the text than further out: nothing is drawn there.
     const rgb = page(200, 160, 180, 200, { cx: 100, cy: 80, long: 116, short: 28, angle: 0 });

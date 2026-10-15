@@ -82,12 +82,15 @@ const fillStep = 12;
 /** Fills amounting to this share of the strokes make the strokes an outline (a few stray fills do not). */
 const outlinedFillShare = 0.2;
 /**
- * Strokes in a second tone amounting to this share of them are the glyphs, and the first tone their edge
- * (a pink fill edged in white on a dark page reads as one light side). Blends of ink and paper lie on the
- * line between the two colours and are never that second tone.
+ * Strokes in a second tone amounting to this share of them are the glyphs or their edge (a pink fill edged
+ * in white, or white glyphs edged in pink, read as one light side on a dark page). Blends of ink and paper
+ * lie on the line between the two colours and are never that second tone.
  */
 const secondToneShare = 0.2;
-/** A second tone that touches the paper over more than this share of its pixels is lettering drawn across the text, not a fill. */
+/**
+ * A tone that touches the paper over more than this share of its pixels is not enclosed by the other: a
+ * second tone open like that is lettering drawn across the text, not a fill.
+ */
 const secondToneOpenShare = 0.2;
 /**
  * Ink longer than this many line thicknesses that fills less than this share of its bounding box is a thin
@@ -446,19 +449,33 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
       const colour = [rgb.data[offset]!, rgb.data[offset + 1]!, rgb.data[offset + 2]!] as const;
       return isColoured(colour) && awayFromBlend(colour, inkMedian, paperShell) >= outlineContrast ? 1 : 0;
     });
+    // The tone that touches the paper is the edge, the tone it encloses the glyphs: a second tone enclosed
+    // by the first is a coloured fill in a light edge, a first tone enclosed by the second is light glyphs in
+    // a coloured edge. Two tones that both touch the paper are text and art drawn across it.
     let secondTonePixels = 0;
     let openPixels = 0;
-    for (let index = 0; index < secondTone.length; index += 1) {
-      if (!secondTone[index]) continue;
-      secondTonePixels += 1;
+    let firstTonePixels = 0;
+    let firstOpenPixels = 0;
+    for (let index = 0; index < strokes.length; index += 1) {
+      if (!strokes[index]) continue;
       const x = index % width;
       const y = Math.floor(index / width);
       const onPaper = (x > 0 && !lineInk[index - 1]) || (x < width - 1 && !lineInk[index + 1]) || (y > 0 && !lineInk[index - width]) || (y < height - 1 && !lineInk[index + width]);
-      if (onPaper) openPixels += 1;
+      if (secondTone[index]) {
+        secondTonePixels += 1;
+        if (onPaper) openPixels += 1;
+      } else {
+        firstTonePixels += 1;
+        if (onPaper) firstOpenPixels += 1;
+      }
     }
-    if (secondTonePixels >= secondToneShare * strokeLuma.length && openPixels <= secondToneOpenShare * secondTonePixels) {
-      outlineMedian = inkMedian;
-      inkMedian = rgbOf(secondTone);
+    if (secondTonePixels >= secondToneShare * strokeLuma.length) {
+      if (openPixels <= secondToneOpenShare * secondTonePixels) {
+        outlineMedian = inkMedian;
+        inkMedian = rgbOf(secondTone);
+      } else if (firstOpenPixels <= secondToneOpenShare * firstTonePixels) {
+        outlineMedian = rgbOf(secondTone);
+      }
     }
   }
 
