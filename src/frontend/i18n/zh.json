@@ -60,6 +60,7 @@
     "vision": "正在识别第 {{page}} 页",
     "glossary": "正在整理全书的人名和名词",
     "translate": "正在翻译第 {{page}} 页",
+    "review": "正在审校第 {{page}} 页",
     "render": "正在排版第 {{page}} 页",
     "export": "正在打包 CBZ 和 PDF"
   },
