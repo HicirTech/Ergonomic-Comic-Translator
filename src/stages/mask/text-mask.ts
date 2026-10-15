@@ -79,6 +79,14 @@ const fillStep = 12;
 /** Fills amounting to this share of the strokes make the strokes an outline (a few stray fills do not). */
 const outlinedFillShare = 0.2;
 /**
+ * Strokes in a second tone amounting to this share of them are the glyphs, and the first tone their edge
+ * (a pink fill edged in white on a dark page reads as one light side). Blends of ink and paper lie on the
+ * line between the two colours and are never that second tone.
+ */
+const secondToneShare = 0.2;
+/** A second tone that touches the paper over more than this share of its pixels is lettering drawn across the text, not a fill. */
+const secondToneOpenShare = 0.2;
+/**
  * Ink longer than this many line thicknesses that fills less than this share of its bounding box is a thin
  * curve, not text: a 3 px bubble outline fills about 7 % of its box, glyphs that touch each other far more.
  */
@@ -88,6 +96,14 @@ const structureDensity = 0.12;
 const median = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[sorted.length >> 1] ?? 0;
+};
+
+/** Distance of a colour from the segment between two colours, in RGB levels. */
+const awayFromBlend = (colour: readonly number[], from: readonly number[], to: readonly number[]) => {
+  const span = to.map((value, channel) => value - from[channel]!);
+  const length = span.reduce((sum, value) => sum + value * value, 0);
+  const along = length === 0 ? 0 : Math.max(0, Math.min(1, colour.reduce((sum, value, channel) => sum + (value - from[channel]!) * span[channel]!, 0) / length));
+  return Math.sqrt(colour.reduce((sum, value, channel) => sum + (value - from[channel]! - along * span[channel]!) ** 2, 0));
 };
 
 /** The pixels for which `wanted` holds that are connected (8-neighbourhood) to the set pixels of `seed`, within `reach`. */
@@ -394,8 +410,30 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   // it is neither the paper nor the ink.
   const outlinedFill = fillPixels >= outlinedFillShare * strokeLuma.length;
   const halo = shells[minGrowPixels - 1]!;
-  const inkMedian = outlinedFill ? rgbOf(glyphFill) : strokeMedian;
-  const outlineMedian = outlinedFill ? strokeMedian : outlined && apart(halo, paperShell) && apart(halo, strokeMedian) ? halo : null;
+  let inkMedian = outlinedFill ? rgbOf(glyphFill) : strokeMedian;
+  let outlineMedian = outlinedFill ? strokeMedian : outlined && apart(halo, paperShell) && apart(halo, strokeMedian) ? halo : null;
+  if (outlineMedian === null && !outlinedFill) {
+    const secondTone = strokes.map((value, index) => {
+      if (!value) return 0;
+      const offset = pageIndex(index) * 3;
+      const colour = [rgb.data[offset]!, rgb.data[offset + 1]!, rgb.data[offset + 2]!] as const;
+      return isColoured(colour) && awayFromBlend(colour, inkMedian, paperShell) >= outlineContrast ? 1 : 0;
+    });
+    let secondTonePixels = 0;
+    let openPixels = 0;
+    for (let index = 0; index < secondTone.length; index += 1) {
+      if (!secondTone[index]) continue;
+      secondTonePixels += 1;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      const onPaper = (x > 0 && !lineInk[index - 1]) || (x < width - 1 && !lineInk[index + 1]) || (y > 0 && !lineInk[index - width]) || (y < height - 1 && !lineInk[index + width]);
+      if (onPaper) openPixels += 1;
+    }
+    if (secondTonePixels >= secondToneShare * strokeLuma.length && openPixels <= secondToneOpenShare * secondTonePixels) {
+      outlineMedian = inkMedian;
+      inkMedian = rgbOf(secondTone);
+    }
+  }
 
   // An outline drawn wider than the mask may grow: the pixels of its colour that touch the strokes, and one
   // more for their blended rim, go with the strokes, so the fill starts from the paper beyond the band.

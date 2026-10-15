@@ -108,6 +108,15 @@ describe("regionTextMask", () => {
     expect(region.ringMedian).toEqual([190, 190, 190]);
   });
 
+  it("tells a coloured fill from the light edge around it when both lie on the light side of a dark page", () => {
+    // A thin pink bar in a thick white edge on a near-black page: both are the light side, white the lighter half.
+    const rgb = page(200, 160, 20, 255, { cx: 100, cy: 80, long: 112, short: 18, angle: 0 });
+    for (let y = 77; y < 83; y += 1) for (let x = 50; x < 150; x += 1) rgb.data.set([240, 90, 140], (y * 200 + x) * 3);
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 150, 60, 0)])!;
+    expect(region.inkMedian).toEqual([240, 90, 140]);
+    expect(region.outlineMedian).toEqual([255, 255, 255]);
+  });
+
   it("does not take paper that is lighter around the text for an outline", () => {
     // The artwork is 20 levels lighter within 8 px of the text than further out: nothing is drawn there.
     const rgb = page(200, 160, 180, 200, { cx: 100, cy: 80, long: 116, short: 28, angle: 0 });
