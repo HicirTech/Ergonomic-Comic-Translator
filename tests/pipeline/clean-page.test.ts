@@ -23,6 +23,7 @@ const utterance = (text: string): UtteranceResult => ({
   minProb: 0.9,
   engine: "baberu",
   textFrom: "sentence",
+  pieces: 1,
   quarterTurns: 0,
   flags: [],
 });

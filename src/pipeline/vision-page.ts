@@ -4,6 +4,7 @@ import type { TextLine } from "../stages/lines/interfaces/index.ts";
 import { lineTone } from "../stages/mask/line-tone.ts";
 import { sameTextInk } from "../stages/mask/text-mask.ts";
 import type { OcrCandidate } from "../stages/ocr/interfaces/index.ts";
+import { lineChars, pieceCount } from "../stages/ocr/line-pieces.ts";
 import { assignLines } from "../stages/regions/assign-lines.ts";
 import { consolidateDetections } from "../stages/regions/consolidate.ts";
 import { promoteLines, worthReading } from "../stages/regions/promote-lines.ts";
@@ -68,7 +69,10 @@ export const runVisionPage = async (
   const structure = allLines.length > 0 ? await timed("structure_ocr", () => client.recognizeLines(imagePath, allLines.map(lineCrop))) : [];
   const structureOf = new Map<TextLine, OcrCandidate>(allLines.map((line, index) => [line, structure[index]![0]!]));
 
-  const planned = planUtterances(oriented, structureOf, writingPrior);
+  // A long line is cut into pieces where its picture is flat; a page without one needs no pixels for that.
+  const needsPieces = allLines.some((line) => pieceCount(lineChars(line, structureOf.get(line))) > 1);
+  const grayForPieces = gray ?? (needsPieces ? rgbToGray(await timed("decode", () => decodeRgb(imagePath))) : null);
+  const planned = planUtterances(oriented, structureOf, writingPrior, grayForPieces);
   const chosen = await readPlannedUtterances(client, imagePath, planned, timed);
   const { regions: results, cleanedPath } = await cleanPage(
     client,

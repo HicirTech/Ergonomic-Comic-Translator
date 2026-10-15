@@ -1,4 +1,5 @@
 import type { OcrCandidate, OcrCrop } from "../stages/ocr/interfaces/index.ts";
+import { joinPieceCandidates } from "../stages/ocr/line-pieces.ts";
 import { preferLineReading } from "../stages/ocr/line-reading.ts";
 import { canProbeUpsideDown, chooseReading, isUpsideDown, preferFlippedReading } from "../stages/ocr/ocr-plan.ts";
 import { dropDakutenMarks } from "../stages/ocr/reading-marks.ts";
@@ -6,9 +7,27 @@ import type { PlannedUtterance, StageTimer, UtteranceResult, VisionClient } from
 
 const engines = ["baberu", "manga-ocr"] as const;
 
+/** Reads every item's crops in one request and joins each item's piece readings. */
+const readJoined = async (
+  client: VisionClient,
+  imagePath: string,
+  items: readonly PlannedUtterance[],
+  cropsOf: (item: PlannedUtterance) => OcrCrop[],
+  engine: (typeof engines)[number],
+) => {
+  const batches = items.map(cropsOf);
+  const readings = await client.readUtterances(imagePath, batches.flat(), engine);
+  let at = 0;
+  return batches.map((crops) => {
+    const own = readings.slice(at, at + crops.length);
+    at += crops.length;
+    return joinPieceCandidates(own);
+  });
+};
+
 /**
- * Reads every planned utterance with its engine and keeps the most confident orientation.
- * textline-ori then sees only a single horizontal line. A 180-degree re-read replaces that
+ * Reads every planned utterance with its engine, its pieces joined, and keeps the most confident
+ * orientation. textline-ori then sees only a single horizontal line. A 180-degree re-read replaces that
  * choice only when its mean probability is strictly higher.
  */
 export const readPlannedUtterances = async (
@@ -22,7 +41,7 @@ export const readPlannedUtterances = async (
     for (const engine of engines) {
       const items = planned.filter((item) => item.engine === engine);
       if (items.length === 0) continue;
-      const readings = await client.readUtterances(imagePath, items.map((item) => item.crop), engine);
+      const readings = await readJoined(client, imagePath, items, (item) => item.crops, engine);
       readings.forEach((candidates, index) => {
         const choice = chooseReading(candidates, 0);
         if (choice) chosen.set(items[index]!, choice);
@@ -50,8 +69,8 @@ export const readPlannedUtterances = async (
     for (const engine of engines) {
       const items = flipped.filter((item) => item.engine === engine);
       if (items.length === 0) continue;
-      const crops = items.map((item) => ({ ...item.crop, quarterTurns: [(chosen.get(item)!.reading.quarterTurns + 2) % 4] }));
-      const readings = await client.readUtterances(imagePath, crops, engine);
+      const flippedCrops = (item: PlannedUtterance) => item.crops.map((crop) => ({ ...crop, quarterTurns: [(chosen.get(item)!.reading.quarterTurns + 2) % 4] }));
+      const readings = await readJoined(client, imagePath, items, flippedCrops, engine);
       readings.forEach((candidates, index) => {
         const item = items[index]!;
         const previous = chosen.get(item)!;
@@ -91,6 +110,7 @@ export const utteranceResults = (
       minProb: lines ? lines.lowestLineProb : choice?.reading.minProb ?? 0,
       engine: item.engine,
       textFrom: lines ? "lines" : "sentence",
+      pieces: item.crops.length,
       quarterTurns: choice?.reading.quarterTurns ?? 0,
       flags: [
         ...(choice?.unsure && !lines ? ["ORIENT_UNSURE"] : []),

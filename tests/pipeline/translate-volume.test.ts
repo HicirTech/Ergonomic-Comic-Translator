@@ -33,6 +33,7 @@ const utterance = (text: string, overrides: Partial<RegionResult["utterances"][n
   minProb: 0.8,
   engine: "baberu",
   textFrom: "sentence",
+  pieces: 1,
   quarterTurns: 0,
   flags: [],
   ...overrides,

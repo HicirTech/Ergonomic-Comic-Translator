@@ -127,6 +127,21 @@ describe("runVisionPage", () => {
     expect(Math.abs(cleaned[(150 * width + 300) * 3]! - 160)).toBeLessThanOrEqual(3);
   });
 
+  it("reads a line that holds too many characters for one crop in pieces, and joins their readings", async () => {
+    const readCalls: { engine: string; crops: OcrCrop[] }[] = [];
+    const client = fakeClient([], readCalls);
+    // The structure reading of the first column holds 17 characters: too many for the sentence reader's square.
+    const structure = ["「今日はいい天気ですね、行くぞ。」", "「待って！」", "営業中です"];
+    client.recognizeLines = async (_, crops) => crops.map((crop, index) => [{ quarterTurns: 0, text: structure[index] ?? "", meanProb: 0.95, minProb: 0.9, tokens: 5 }]);
+    const result = await runVisionPage(client, join(root, "page.png"), "p4", root, "v");
+
+    const [bubble] = result.regions;
+    const baberu = readCalls.find((call) => call.engine === "baberu")!;
+    expect(baberu.crops).toHaveLength(4);
+    expect(bubble!.utterances[0]).toMatchObject({ text: "baberu-0-0baberu-1-0", pieces: 2 });
+    expect(bubble!.utterances[1]).toMatchObject({ text: "baberu-2-0", pieces: 1 });
+  });
+
   it("gives a region to a dialogue line the detector missed, and leaves a short fragment uncovered", async () => {
     // Both lie outside the detector's boxes; the fake recognizer reads the first gate crop as "「行くぞ。」".
     // The fragment is short and the line detector is not sure of it, so the gate does not even read it.
@@ -168,7 +183,7 @@ const plannedUtterance = (writingMode: "h" | "v", lineCount: number): PlannedUtt
     thought: false,
   },
   box: { x0: 0, y0: 0, x1: 40, y1: 30 },
-  crop: cropOf(40, 30, [0, 1, 3]),
+  crops: [cropOf(40, 30, [0, 1, 3])],
   engine: "baberu",
   writingMode,
   // Present even when the utterance must not be probed, so the guard is not just a null crop.
@@ -216,7 +231,7 @@ describe("planUtterances", () => {
     const lines = [line(60, 140, 170, 26, 90), line(120, 140, 170, 26, 90)];
     const region = { box: { x0: 40, y0: 50, x1: 140, y1: 230 }, cls: "text_bubble" as const, score: 0.9, bubble: null, lines };
     const structure = new Map(lines.map((column) => [column, { text: "あいうえお", meanProb: 0.9, minProb: 0.9, tokens: 5, quarterTurns: 0 }]));
-    const planned = planUtterances(orientRegions([region]), structure, "v");
+    const planned = planUtterances(orientRegions([region]), structure, "v", null);
     expect(planned.map((item) => item.split.lines)).toEqual([[0], [1]]);
     expect(planned.map((item) => item.lineIndexes)).toEqual([[1], [0]]);
   });

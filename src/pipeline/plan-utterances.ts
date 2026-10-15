@@ -1,12 +1,16 @@
 import { unionBox } from "../geometry/box.ts";
 import { readingCorners } from "../geometry/rotated-rect.ts";
+import type { Box } from "../geometry/interfaces/index.ts";
+import { warpGray } from "../imaging/warp.ts";
+import type { GrayImage } from "../imaging/interfaces/index.ts";
 import type { TextLine } from "../stages/lines/interfaces/index.ts";
 import { textThickness } from "../stages/lines/text-thickness.ts";
 import type { OcrCandidate, OcrCrop } from "../stages/ocr/interfaces/index.ts";
+import { cutOffsets, edgeProfile, lineChars, pieceBoxes, pieceCount } from "../stages/ocr/line-pieces.ts";
 import { joinLineReadings } from "../stages/ocr/line-reading.ts";
-import { canProbeUpsideDown, planQuarterTurns, utteranceCrop } from "../stages/ocr/ocr-plan.ts";
+import { canProbeUpsideDown, frameCrop, planQuarterTurns, utteranceCrop } from "../stages/ocr/ocr-plan.ts";
 import { lineBox } from "../stages/regions/assign-lines.ts";
-import type { PageRegion } from "../stages/regions/interfaces/index.ts";
+import type { OrientedFrame, PageRegion } from "../stages/regions/interfaces/index.ts";
 import { estimateOrientation, groupByDirection } from "../stages/regions/orientation.ts";
 import { splitUtterances, toUtteranceLines } from "../stages/utterances/split-utterances.ts";
 import type { OrientedRegion, PlannedUtterance } from "./interfaces/index.ts";
@@ -35,6 +39,33 @@ const upsideDownCrop = (
   return source ? lineCrop(source.line) : null;
 };
 
+/**
+ * Crops of one utterance for its sentence reader: its box as one crop, or, when a line holds more characters
+ * than one crop reads well, its lines in pieces cut between characters, in reading order.
+ */
+const utteranceCrops = (
+  frame: OrientedFrame,
+  mode: "h" | "v",
+  members: readonly { line: TextLine; box: Box }[],
+  structureOf: ReadonlyMap<TextLine, OcrCandidate>,
+  turns: number[],
+  gray: GrayImage | null,
+): OcrCrop[] => {
+  const chars = members.map(({ line }) => lineChars(line, structureOf.get(line)));
+  if (gray === null || chars.every((count) => pieceCount(count) === 1)) {
+    return [utteranceCrop(frame, unionBox(members.map(({ box }) => box)), turns)];
+  }
+  return members.flatMap(({ box }, index) => {
+    const count = pieceCount(chars[index]!);
+    const strip = frameCrop(frame, box, [0]);
+    const length = mode === "h" ? strip.width : strip.height;
+    const offsets = count === 1
+      ? []
+      : cutOffsets(edgeProfile(warpGray(gray, strip.corners, strip.width, strip.height), mode), count, length / chars[index]!);
+    return pieceBoxes(box, mode, offsets).map((piece) => frameCrop(frame, piece, turns));
+  });
+};
+
 /** Splits regions whose lines run in different directions, then estimates each part's orientation. */
 export const orientRegions = (regions: readonly PageRegion[]): OrientedRegion[] =>
   regions.flatMap((region) => {
@@ -49,14 +80,17 @@ export const orientRegions = (regions: readonly PageRegion[]): OrientedRegion[] 
   });
 
 /**
- * Splits every region into utterances (using structure OCR for brackets and name tags) and plans one OCR
- * crop per utterance. Regions without lines are read whole, with the orientation search. A horizontal
- * utterance keeps the structure OCR of its own lines, joined, for when the sentence reader loses text.
+ * Splits every region into utterances (using structure OCR for brackets and name tags) and plans the OCR
+ * crops per utterance: one, or the lines in pieces when a line holds too many characters for one crop
+ * (`gray` is the page those pieces are cut on). Regions without lines are read whole, with the orientation
+ * search. A horizontal utterance keeps the structure OCR of its own lines, joined, for when the sentence
+ * reader loses text.
  */
 export const planUtterances = (
   oriented: readonly OrientedRegion[],
   structureOf: ReadonlyMap<TextLine, OcrCandidate>,
   writingPrior: "h" | "v",
+  gray: GrayImage | null,
 ): PlannedUtterance[] =>
   oriented.flatMap(({ region, orientation }, regionIndex): PlannedUtterance[] => {
     const mode = orientation.writingMode ?? writingPrior;
@@ -66,7 +100,7 @@ export const planUtterances = (
       const { frame } = orientation;
       const box = { x0: frame.cx - frame.w / 2, y0: frame.cy - frame.h / 2, x1: frame.cx + frame.w / 2, y1: frame.cy + frame.h / 2 };
       const split = { lines: [], startReasons: [], styleBreaks: [], nameTag: false, thought: false };
-      return [{ regionIndex, split, box, crop: utteranceCrop(frame, box, turns), engine: "baberu", writingMode: mode, lineCrop: null, lineReading: null, lineThickness: null, lineIndexes: [] }];
+      return [{ regionIndex, split, box, crops: [utteranceCrop(frame, box, turns)], engine: "baberu", writingMode: mode, lineCrop: null, lineReading: null, lineThickness: null, lineIndexes: [] }];
     }
     const text = (line: TextLine) => structureOf.get(line)?.text ?? "";
     const splits = splitUtterances(upright.map(({ line, box }) => ({ box, text: text(line), conf: structureOf.get(line)?.meanProb ?? 0 })), mode);
@@ -78,7 +112,7 @@ export const planUtterances = (
         regionIndex,
         split,
         box,
-        crop: utteranceCrop(orientation.frame, box, short ? allTurns : turns),
+        crops: utteranceCrops(orientation.frame, mode, split.lines.map((index) => upright[index]!), structureOf, short ? allTurns : turns, gray),
         engine: short ? "manga-ocr" : "baberu",
         writingMode: mode,
         lineCrop: upsideDownCrop(mode, upright, split.lines),

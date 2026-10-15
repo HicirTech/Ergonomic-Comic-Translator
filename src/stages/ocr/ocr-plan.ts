@@ -1,3 +1,4 @@
+import { expandBox } from "../../geometry/box.ts";
 import { rotatePoint } from "../../geometry/rotated-rect.ts";
 import type { Box, Point } from "../../geometry/interfaces/index.ts";
 import type { OrientedFrame, RegionOrientation } from "../regions/interfaces/index.ts";
@@ -14,29 +15,28 @@ const rectifyFallbackMargin = 0.15;
 /** Context kept around an utterance crop, relative to its short side. */
 const cropMarginShare = 0.2;
 
-/**
- * Page corners of an utterance crop: its box in the region's upright frame, grown by 0.2 of the short
- * side, turned back to the page by the frame angle.
- */
-export const utteranceCrop = (frame: OrientedFrame, uprightBox: Box, quarterTurns: number[]): OcrCrop => {
-  const margin = cropMarginShare * Math.min(uprightBox.x1 - uprightBox.x0, uprightBox.y1 - uprightBox.y0);
-  const box = { x0: uprightBox.x0 - margin, y0: uprightBox.y0 - margin, x1: uprightBox.x1 + margin, y1: uprightBox.y1 + margin };
+/** Page corners of a box measured in the region's upright frame, turned back to the page by the frame angle. */
+export const frameCrop = (frame: OrientedFrame, uprightBox: Box, quarterTurns: number[]): OcrCrop => {
   const center = { x: frame.cx, y: frame.cy };
   // uprightBox was measured after rotating the page by -frame.angle.
   const toPage = (point: Point) => rotatePoint(point, center, frame.angle);
   const corners: OcrCrop["corners"] = [
-    toPage({ x: box.x0, y: box.y0 }),
-    toPage({ x: box.x1, y: box.y0 }),
-    toPage({ x: box.x1, y: box.y1 }),
-    toPage({ x: box.x0, y: box.y1 }),
+    toPage({ x: uprightBox.x0, y: uprightBox.y0 }),
+    toPage({ x: uprightBox.x1, y: uprightBox.y0 }),
+    toPage({ x: uprightBox.x1, y: uprightBox.y1 }),
+    toPage({ x: uprightBox.x0, y: uprightBox.y1 }),
   ];
   return {
     corners,
-    width: Math.max(1, Math.round(box.x1 - box.x0)),
-    height: Math.max(1, Math.round(box.y1 - box.y0)),
+    width: Math.max(1, Math.round(uprightBox.x1 - uprightBox.x0)),
+    height: Math.max(1, Math.round(uprightBox.y1 - uprightBox.y0)),
     quarterTurns,
   };
 };
+
+/** An utterance's crop: its box in the region's upright frame, grown by cropMarginShare of the short side for context. */
+export const utteranceCrop = (frame: OrientedFrame, uprightBox: Box, quarterTurns: number[]): OcrCrop =>
+  frameCrop(frame, expandBox(uprightBox, cropMarginShare * Math.min(uprightBox.x1 - uprightBox.x0, uprightBox.y1 - uprightBox.y0)), quarterTurns);
 
 /** Quarter turns to read: the upright crop always; +-90 degrees when geometry cannot tell the direction. */
 export const planQuarterTurns = (orientation: RegionOrientation, hasLines: boolean) =>

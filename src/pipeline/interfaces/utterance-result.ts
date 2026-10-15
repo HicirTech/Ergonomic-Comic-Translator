@@ -21,6 +21,8 @@ export interface UtteranceResult {
    * joined when the sentence reader lost text (preferLineReading).
    */
   textFrom: "sentence" | "lines";
+  /** Crops the sentence reader read and whose readings were joined: 1, or more when a line is long. */
+  pieces: number;
   /** Clockwise quarter turns of the sentence reader's chosen reading (2 when textline-ori flipped it). */
   quarterTurns: number;
   /** Flags such as ORIENT_UNSURE or OCR_EMPTY; codes only, never text. */

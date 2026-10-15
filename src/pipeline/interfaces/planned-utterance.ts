@@ -8,7 +8,8 @@ export interface PlannedUtterance {
   split: UtteranceSplit;
   /** Box in the region's upright frame. */
   box: Box;
-  crop: OcrCrop;
+  /** Crops for the sentence reader, in reading order: one, or the lines in pieces when a line is long. */
+  crops: OcrCrop[];
   engine: "baberu" | "manga-ocr";
   /** Writing mode of the region. textline-ori never flips a vertical region. */
   writingMode: "h" | "v";
