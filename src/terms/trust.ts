@@ -13,6 +13,8 @@ const katakanaWord = /^[ァ-ヶー・]+$/u;
 const reduplicated = /^(.{1,3})\1$/u;
 /** A loanword seen this often is a term of the volume, not a one-off. */
 const loanwordMinOccurrences = 2;
+/** A name is longer than this: a single character (村, 森) is a common noun the extractor took for a place. */
+const nameMinChars = 2;
 
 /** Whether a term is a loanword the volume keeps using, worth one fixed rendering. */
 const isRecurringLoanword = (term: FixedTerm) =>
@@ -35,11 +37,12 @@ export const hasNameEvidence = (surfaces: readonly string[], lines: readonly Sou
 };
 
 /**
- * Whether a fixed term may steer the translation: it names someone or somewhere (a person with name evidence
- * in a language whose names carry honorifics; elsewhere the extractor's word stands), or it is a recurring
- * loanword.
+ * Whether a fixed term may steer the translation: it names someone or somewhere with a name of two characters
+ * or more (a person with name evidence in a language whose names carry honorifics; elsewhere the extractor's
+ * word stands), or it is a recurring loanword.
  */
 export const isTrustedTerm = (term: FixedTerm, lines: readonly SourceLine[], language: SourceLanguage) =>
   namingKinds.has(term.kind)
-    ? term.kind !== "person" || honorifics[language].length === 0 || hasNameEvidence(term.surfaces, lines, language)
+    ? [...term.canonical].length >= nameMinChars
+      && (term.kind !== "person" || honorifics[language].length === 0 || hasNameEvidence(term.surfaces, lines, language))
     : isRecurringLoanword(term);

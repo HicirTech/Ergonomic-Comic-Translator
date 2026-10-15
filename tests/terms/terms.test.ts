@@ -189,6 +189,11 @@ describe("trust", () => {
     expect(isTrustedTerm(fixed({ normKey: "受付", canonical: "受付", kind: "title", surfaces: ["受付"], occurrences: 4 }), lines, "ja")).toBe(false);
   });
 
+  it("drops a place of one character: a common noun the extractor took for a name", () => {
+    expect(isTrustedTerm(fixed({ normKey: "村", canonical: "村", kind: "place", surfaces: ["村"], occurrences: 8 }), lines, "ja")).toBe(false);
+    expect(isTrustedTerm(fixed({ normKey: "村", canonical: "村", kind: "org", surfaces: ["村"], occurrences: 8 }), lines, "ja")).toBe(false);
+  });
+
   it("takes an honorific, quotation marks or a name tag as name evidence", () => {
     expect(hasNameEvidence(["ユキ"], [line("1.1.0", "「ユキ」と申します")], "ja")).toBe(true);
     expect(hasNameEvidence(["ゆき"], [line("1.1.0", "【ユキ】", true)], "ja")).toBe(true);
