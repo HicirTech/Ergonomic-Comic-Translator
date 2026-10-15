@@ -10,7 +10,7 @@ import type { TextLine } from "../lines/interfaces/index.ts";
 import { textThickness } from "../lines/text-thickness.ts";
 import { faintRunsOut } from "./faint-runs.ts";
 import { inkHeight } from "./ink-height.ts";
-import { sameInk } from "./ink.ts";
+import { isColoured, sameInk } from "./ink.ts";
 import type { RegionMask } from "./interfaces/index.ts";
 import { keepLineMarks, markSideShare } from "./line-marks.ts";
 import { edgeBandOf, inkSide } from "./line-tone.ts";
@@ -82,8 +82,9 @@ const median = (values: number[]) => {
 
 /**
  * S5: text strokes of one region. Inside each unclipped (possibly rotated) line polygon, Otsu separates
- * ink from paper; the side away from that line's paper tone is the text, so dark-on-light and
- * light-on-dark both work, also when one region holds both. Small blobs of the same ink that continue a
+ * ink from paper; the side away from that line's paper tone (read inside the bubble, when there is one)
+ * is the text, so dark-on-light and light-on-dark both work, also when one region holds both. Small blobs
+ * of the same ink that continue a
  * line or sit beside it are text too (keepLineMarks); with a `bubble` they are only looked for inside it,
  * and what a line rectangle holds of the bubble's frame, or of the picture beyond the bubble, is not text.
  * The grown mask never leaves the neighbourhood of the lines and their marks.
@@ -156,12 +157,16 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     const withEdge = dilateSquare(linePolygon, width, height, edgeBand);
     const inside: number[] = [];
     const own: number[] = [];
+    const ownInBubble: number[] = [];
     for (let index = 0; index < linePolygon.length; index += 1) {
       if (linePolygon[index]) inside.push(at(index));
-      if (withEdge[index]) own.push(at(index));
+      if (!withEdge[index]) continue;
+      own.push(at(index));
+      if (inBubble(index)) ownInBubble.push(at(index));
     }
     if (inside.length === 0) return;
-    const { threshold, paper, darkText } = inkSide(inside, own);
+    // A line's paper is its bubble's: what its band holds beyond the bubble is the page, not paper.
+    const { threshold, paper, darkText } = inkSide(inside, ownInBubble.length > 0 ? ownInBubble : own);
     const isInk = (index: number) => (darkText ? at(index) <= threshold : at(index) > threshold);
     const ownInk = linePolygon.map((value, index) => (value && isInk(index) ? 1 : 0));
     const notText = (found: Uint8Array) => {
@@ -182,6 +187,33 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     }
     // Marks are set in the line's own ink: a blob of another colour is artwork, however dark.
     const lineInkRgb = rgbOf(ownInk);
+    // In a bubble, ink of another colour than the line's is not its text either: the page where the
+    // rectangle reaches beyond the bubble's shape, the bubble's frame, or lettering drawn across the bubble.
+    // The line's colour is that of the pieces that lie within the rectangle (the page enters at its edge);
+    // whole pieces are judged, so the blended edges of the glyphs stay with them, and a colour against
+    // black, white or grey, or two colours apart, tells them, not a lighter grey of a thin mark.
+    if (bubble) {
+      const pieces = labelComponents(ownInk, width, height);
+      const touchesEdge = new Uint8Array(pieces.components.length);
+      const channels = pieces.components.map((): [number[], number[], number[]] => [[], [], []]);
+      for (let index = 0; index < ownInk.length; index += 1) {
+        const label = pieces.labels[index]!;
+        if (!label) continue;
+        const x = index % width;
+        const y = Math.floor(index / width);
+        if (x === 0 || y === 0 || x === width - 1 || y === height - 1
+          || !linePolygon[index - 1] || !linePolygon[index + 1] || !linePolygon[index - width] || !linePolygon[index + width]) touchesEdge[label - 1] = 1;
+        const offset = pageIndex(index) * 3;
+        for (let channel = 0; channel < 3; channel += 1) channels[label - 1]![channel]!.push(rgb.data[offset + channel]!);
+      }
+      const within = rgbOf(ownInk.map((value, index) => (value && !touchesEdge[pieces.labels[index]! - 1] ? 1 : 0)));
+      const reference = touchesEdge.includes(0) ? within : lineInkRgb;
+      const otherInk = channels.map((piece) => {
+        const colour: [number, number, number] = [median(piece[0]), median(piece[1]), median(piece[2])];
+        return isColoured(colour) !== isColoured(reference) || (isColoured(colour) && !sameInk(colour, reference));
+      });
+      notText(ownInk.map((value, index) => (value && otherInk[pieces.labels[index]! - 1] ? 1 : 0)));
+    }
     // So is faint ink that runs on into such a frame, or out of the region's rectangles.
     const inkTone = median(Array.from(ownInk.keys()).filter((index) => ownInk[index]).map(at));
     const solidUpTo = inkTone + faintShare * (threshold - inkTone);
@@ -213,7 +245,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
       glyphFill[index] = 1;
     }
 
-    const sameInk = (index: number) => {
+    const hasLineInk = (index: number) => {
       const offset = pageIndex(index) * 3;
       return lineInkRgb.every((value, channel) => Math.abs(rgb.data[offset + channel]! - value) <= markInkTolerance);
     };
@@ -227,7 +259,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
       if (!polygon[index] && isInk(index)) inkAround[index] = 1;
       if (inBubble(index)) {
         zone[index] = 1;
-        if (!polygon[index] && isInk(index) && sameInk(index)) candidate[index] = 1;
+        if (!polygon[index] && isInk(index) && hasLineInk(index)) candidate[index] = 1;
       }
     }
   });

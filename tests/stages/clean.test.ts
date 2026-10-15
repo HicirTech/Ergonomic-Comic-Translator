@@ -122,6 +122,48 @@ describe("regionTextMask", () => {
     expect(region.ringMedian).toEqual([32, 32, 32]);
   });
 
+  /**
+   * A dark page with a white bubble whose box is the line rectangle, and four pink glyph blocks of `blockWidth`
+   * px. With `cutCorners`, the bubble is a slanted shape: that much of the box's top-left and bottom-right
+   * corners is page.
+   */
+  const pinkLetteringInBubble = (blockWidth: number, cutCorners: number) => {
+    const width = 300;
+    const height = 200;
+    const data = new Uint8Array(width * height * 3).fill(30);
+    const paint = (x0: number, y0: number, x1: number, y1: number, colour: [number, number, number]) => {
+      for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) data.set(colour, (y * width + x) * 3);
+    };
+    const bubble = { x0: 65, y0: 50, x1: 235, y1: 150 };
+    paint(bubble.x0, bubble.y0, bubble.x1, bubble.y1, [255, 255, 255]);
+    for (const [x0, y0] of [[65, 50], [235 - cutCorners, 150 - cutCorners]]) {
+      paint(x0!, y0!, x0! + cutCorners, y0! + cutCorners, [30, 30, 30]);
+    }
+    for (const x0 of [70, 112, 154, 196]) paint(x0, 82, x0 + blockWidth, 119, [200, 40, 100]);
+    return { rgb: { data, width, height }, bubble, textLine: line(150, 100, 170, 100, 0) };
+  };
+
+  it("reads a bubble's paper from the band inside it: lettering that fills a white bubble on a dark page is the ink, not the bubble", () => {
+    const { rgb, bubble, textLine } = pinkLetteringInBubble(38, 0);
+    const region = regionTextMask(rgb, rgbToGray(rgb), [textLine], bubble)!;
+    const pageMask = new Uint8Array(rgb.width * rgb.height);
+    addToPageMask(pageMask, rgb.width, region);
+    expect(region.inkMedian).toEqual([200, 40, 100]);
+    expect(region.ringMedian).toEqual([255, 255, 255]);
+    expect(pageMask[100 * rgb.width + 80]).toBe(1);
+    expect(pageMask[60 * rgb.width + 150]).toBe(0);
+  });
+
+  it("leaves the page that a bubble's box holds in its corners, when the bubble is not a rectangle", () => {
+    const { rgb, bubble, textLine } = pinkLetteringInBubble(30, 30);
+    const region = regionTextMask(rgb, rgbToGray(rgb), [textLine], bubble)!;
+    const pageMask = new Uint8Array(rgb.width * rgb.height);
+    addToPageMask(pageMask, rgb.width, region);
+    expect(region.inkMedian).toEqual([200, 40, 100]);
+    expect(pageMask[100 * rgb.width + 80]).toBe(1);
+    expect(pageMask[60 * rgb.width + 75]).toBe(0);
+  });
+
   it("reads the paper from the line's own rectangle when the text sits on a plate", () => {
     // Light page, a dark plate barely larger than the line rectangle, light text on the plate.
     const rgb = page(200, 160, 220, 240, { cx: 100, cy: 80, long: 100, short: 12, angle: 0 });
