@@ -12,7 +12,7 @@ const peaked = (size: number, winner: number, height = 8) => {
 };
 
 describe("ctcGreedyDecode", () => {
-  it("collapses repeats, drops blanks and keeps a repeat separated by a blank", () => {
+  it("collapses repeats, drops blanks and keeps a repeat separated by a blank, with the step of every kept character", () => {
     const characters = ctcCharacters(["あ", "い"]);
     // steps: あ あ blank あ い blank
     const winners = [1, 1, 0, 1, 2, 0];
@@ -25,6 +25,7 @@ describe("ctcGreedyDecode", () => {
       meanProb: expect.closeTo(0.9, 6),
       minProb: expect.closeTo(0.9, 6),
       tokens: 3,
+      steps: [0, 3, 4],
     });
   });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { GrayImage } from "../../src/imaging/interfaces/index.ts";
 import type { OcrCandidate } from "../../src/stages/ocr/interfaces/index.ts";
-import { cutOffsets, edgeProfile, joinPieceCandidates, lineChars, maxPieceChars, pieceBoxes, pieceCount, piecesFromChars } from "../../src/stages/ocr/line-pieces.ts";
+import { characterBoundaries, cutOffsets, edgeProfile, joinPieceCandidates, lineChars, maxPieceChars, pieceBoxes, pieceCount, piecesFromChars } from "../../src/stages/ocr/line-pieces.ts";
 import { line } from "./fixtures.ts";
 
 type CountCase = [chars: number, pieces: number];
@@ -60,22 +60,51 @@ describe("edgeProfile", () => {
   });
 });
 
-describe("cutOffsets", () => {
-  it("cuts a line in the gaps nearest the even shares", () => {
-    // Glyphs of 16 px on a pitch of 20: the gaps run from 16 to 18, 36 to 38, and so on; the thirds of
-    // 400 fall at 133 and 267, the nearest gaps have their middles at 138 and 258.
-    expect(cutOffsets(edgeProfile(glyphStrip(400, 24, 20, 16), "h"), 3, 20)).toEqual([138, 258]);
+describe("characterBoundaries", () => {
+  it("lies halfway between neighbouring characters, and splits a span that holds a dropped character into its cells", () => {
+    expect(characterBoundaries({ text: "あいうえ", charOffsets: [100, 140, 180, 260] })).toEqual([120, 160, 200, 240]);
+    expect(characterBoundaries({ text: "あ", charOffsets: [100] })).toEqual([]);
   });
 
-  it("cuts a line without gaps at the quietest place within half a pitch of the share", () => {
+  it("leaves out the boundary before a small kana or a long mark, which read wrong on their own", () => {
+    expect(characterBoundaries({ text: "かすみちゃ〜ん", charOffsets: [10, 30, 50, 70, 90, 110, 130] })).toEqual([20, 40, 60, 100, 120]);
+  });
+});
+
+describe("cutOffsets", () => {
+  it("cuts in the gap next to a character the recogniser dropped, not through that character", () => {
+    // Characters found at 100, 140, 180 and 260: the one at 220 was dropped. Quiet gaps lie between the
+    // characters (118 to 122 and so on) and inside the dropped one (218 to 222).
+    const profile = new Float64Array(320).fill(10);
+    for (const at of [118, 158, 198, 218, 238]) profile.fill(0, at, at + 5);
+    expect(cutOffsets(profile, characterBoundaries({ text: "あいうえ", charOffsets: [100, 140, 180, 260] }), 3, 40)).toEqual([120, 200]);
+  });
+
+  it("cuts at the boundary between recognised characters nearest the share, settled in the quiet place there, not in a gap inside a character", () => {
+    // Characters recognised at 110, 128 and 148: a quiet gap inside the middle one (the strokes of い) at
+    // 128 to 132, and the gap between the last two characters at 137 to 139.
+    const profile = new Float64Array(260).fill(10);
+    profile.fill(0, 128, 133);
+    profile.fill(0, 137, 140);
+    expect(cutOffsets(profile, [119, 138], 2, 20)).toEqual([138]);
+    expect(cutOffsets(profile, [], 2, 20)).toEqual([131]);
+  });
+
+  it("cuts a line without recognised characters in the gaps nearest the even shares", () => {
+    // Glyphs of 16 px on a pitch of 20: the gaps run from 16 to 18, 36 to 38, and so on; the thirds of
+    // 400 fall at 133 and 267, the nearest gaps have their middles at 138 and 258.
+    expect(cutOffsets(edgeProfile(glyphStrip(400, 24, 20, 16), "h"), [], 3, 20)).toEqual([138, 258]);
+  });
+
+  it("cuts a line without recognised characters or gaps at the quietest place within half a pitch of the share", () => {
     const profile = new Float64Array(100).fill(10);
     profile[47] = 2;
     profile[70] = 1;
-    expect(cutOffsets(profile, 2, 10)).toEqual([47]);
+    expect(cutOffsets(profile, [], 2, 10)).toEqual([47]);
   });
 
   it("does not cut a line read in one piece", () => {
-    expect(cutOffsets(new Float64Array(100), 1, 10)).toEqual([]);
+    expect(cutOffsets(new Float64Array(100), [10, 30], 1, 10)).toEqual([]);
   });
 });
 

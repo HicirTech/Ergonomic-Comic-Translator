@@ -1,4 +1,4 @@
-import type { OcrReading } from "./interfaces/index.ts";
+import type { CtcReading } from "./interfaces/index.ts";
 import { summarizeProbabilities } from "./token-math.ts";
 
 /**
@@ -9,16 +9,18 @@ export const ctcCharacters = (characterDict: readonly unknown[]) => ["", ...char
 
 /**
  * Greedy CTC decoding of per-timestep probabilities (the PP-OCR rec output is already softmaxed):
- * take the best class per step, collapse repeats, drop blanks.
+ * take the best class per step, collapse repeats, drop blanks; the step of every kept character comes
+ * with the reading.
  */
 export const ctcGreedyDecode = (
   probabilities: ArrayLike<number>,
   steps: number,
   classes: number,
   characters: readonly string[],
-): OcrReading => {
+): CtcReading => {
   let text = "";
   const kept: number[] = [];
+  const emitted: number[] = [];
   let previous = -1;
   for (let step = 0; step < steps; step += 1) {
     const offset = step * classes;
@@ -34,8 +36,9 @@ export const ctcGreedyDecode = (
     if (best !== 0 && best !== previous) {
       text += characters[best] ?? "";
       kept.push(bestProbability);
+      emitted.push(step);
     }
     previous = best;
   }
-  return summarizeProbabilities(text, kept);
+  return { ...summarizeProbabilities(text, kept), steps: emitted };
 };

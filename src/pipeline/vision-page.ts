@@ -3,7 +3,7 @@ import { decodeRgb } from "../imaging/page-image.ts";
 import type { TextLine } from "../stages/lines/interfaces/index.ts";
 import { lineTone } from "../stages/mask/line-tone.ts";
 import { sameTextInk } from "../stages/mask/text-mask.ts";
-import type { OcrCandidate } from "../stages/ocr/interfaces/index.ts";
+import type { LineRecognition } from "../stages/ocr/interfaces/index.ts";
 import { lineChars, pieceCount } from "../stages/ocr/line-pieces.ts";
 import { assignLines } from "../stages/regions/assign-lines.ts";
 import { consolidateDetections } from "../stages/regions/consolidate.ts";
@@ -67,7 +67,7 @@ export const runVisionPage = async (
 
   const allLines = oriented.flatMap(({ region }) => region.lines);
   const structure = allLines.length > 0 ? await timed("structure_ocr", () => client.recognizeLines(imagePath, allLines.map(lineCrop))) : [];
-  const structureOf = new Map<TextLine, OcrCandidate>(allLines.map((line, index) => [line, structure[index]![0]!]));
+  const structureOf = new Map<TextLine, LineRecognition>(allLines.map((line, index) => [line, structure[index]![0]!]));
 
   // A long line is cut into pieces where its picture is flat; a page without one needs no pixels for that.
   const needsPieces = allLines.some((line) => pieceCount(lineChars(line, structureOf.get(line))) > 1);

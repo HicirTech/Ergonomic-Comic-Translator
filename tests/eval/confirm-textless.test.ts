@@ -61,7 +61,7 @@ const fakeRecognizers = (blocksByPath: Record<string, readonly Box[]>, engines =
   const client: Pick<VisionClient, "recognizeLines" | "readUtterances"> = {
     recognizeLines: async (imagePath, crops) => {
       lineCalls.push({ imagePath, crops });
-      return crops.map((crop) => crop.quarterTurns.map((turn) => reading(imagePath, crop, turn, engines.line)));
+      return crops.map((crop) => crop.quarterTurns.map((turn) => ({ ...reading(imagePath, crop, turn, engines.line), charOffsets: [] })));
     },
     readUtterances: async (imagePath, crops, engine) => {
       mangaCalls.push({ imagePath, crops, engine });

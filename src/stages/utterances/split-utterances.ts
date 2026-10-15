@@ -22,7 +22,8 @@ const sentenceEnd = /[。．！？!?…‥♡♥～〜」』）)]$/u;
 const nameBracket = /^【[^】]{1,10}】$/u;
 const nameColon = /^[^「『（(]{1,8}[：:]$/u;
 
-const median = (values: number[]) => {
+/** The median of `values`; the mean of the two middle ones for an even count. */
+export const median = (values: readonly number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
   const middle = sorted.length >> 1;
   return sorted.length % 2 === 1 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2;

@@ -5,8 +5,8 @@ import { warpGray } from "../imaging/warp.ts";
 import type { GrayImage } from "../imaging/interfaces/index.ts";
 import type { TextLine } from "../stages/lines/interfaces/index.ts";
 import { textThickness } from "../stages/lines/text-thickness.ts";
-import type { OcrCandidate, OcrCrop } from "../stages/ocr/interfaces/index.ts";
-import { cutOffsets, edgeProfile, lineChars, pieceBoxes, pieceCount } from "../stages/ocr/line-pieces.ts";
+import type { LineRecognition, OcrCrop } from "../stages/ocr/interfaces/index.ts";
+import { characterBoundaries, cutOffsets, edgeProfile, lineChars, pieceBoxes, pieceCount } from "../stages/ocr/line-pieces.ts";
 import { joinLineReadings } from "../stages/ocr/line-reading.ts";
 import { canProbeUpsideDown, frameCrop, planQuarterTurns, utteranceCrop } from "../stages/ocr/ocr-plan.ts";
 import { lineBox } from "../stages/regions/assign-lines.ts";
@@ -47,7 +47,7 @@ const utteranceCrops = (
   frame: OrientedFrame,
   mode: "h" | "v",
   members: readonly { line: TextLine; box: Box }[],
-  structureOf: ReadonlyMap<TextLine, OcrCandidate>,
+  structureOf: ReadonlyMap<TextLine, LineRecognition>,
   turns: number[],
   gray: GrayImage | null,
 ): OcrCrop[] => {
@@ -55,13 +55,14 @@ const utteranceCrops = (
   if (gray === null || chars.every((count) => pieceCount(count) === 1)) {
     return [utteranceCrop(frame, unionBox(members.map(({ box }) => box)), turns)];
   }
-  return members.flatMap(({ box }, index) => {
+  return members.flatMap(({ line, box }, index) => {
     const count = pieceCount(chars[index]!);
     const strip = frameCrop(frame, box, [0]);
     const length = mode === "h" ? strip.width : strip.height;
+    const structure = structureOf.get(line);
     const offsets = count === 1
       ? []
-      : cutOffsets(edgeProfile(warpGray(gray, strip.corners, strip.width, strip.height), mode), count, length / chars[index]!);
+      : cutOffsets(edgeProfile(warpGray(gray, strip.corners, strip.width, strip.height), mode), structure ? characterBoundaries(structure) : [], count, length / chars[index]!);
     return pieceBoxes(box, mode, offsets).map((piece) => frameCrop(frame, piece, turns));
   });
 };
@@ -88,7 +89,7 @@ export const orientRegions = (regions: readonly PageRegion[]): OrientedRegion[] 
  */
 export const planUtterances = (
   oriented: readonly OrientedRegion[],
-  structureOf: ReadonlyMap<TextLine, OcrCandidate>,
+  structureOf: ReadonlyMap<TextLine, LineRecognition>,
   writingPrior: "h" | "v",
   gray: GrayImage | null,
 ): PlannedUtterance[] =>

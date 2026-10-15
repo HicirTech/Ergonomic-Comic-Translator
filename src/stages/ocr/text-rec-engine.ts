@@ -4,7 +4,7 @@ import { createPageCache, resizeGray } from "../../imaging/page-image.ts";
 import { modelFilePath } from "../../models/lock.ts";
 import type { VisionEngine } from "../../workers/interfaces/index.ts";
 import { ctcCharacters, ctcGreedyDecode } from "./ctc-decode.ts";
-import type { OcrCandidate, OcrTask } from "./interfaces/index.ts";
+import type { LineRecognition, OcrTask } from "./interfaces/index.ts";
 import { grayCandidates } from "./ocr-crops.ts";
 
 const lineHeight = 48;
@@ -39,14 +39,18 @@ export const createTextRecEngine = (modelId: "ppocr-rec-server" | "ppocr-rec-kor
   let characters: string[] = [];
   const pages = createPageCache();
 
-  const read = async (image: GrayImage) => {
+  const read = async (image: GrayImage): Promise<Omit<LineRecognition, "quarterTurns">> => {
     const scaledWidth = Math.min(maxWidth, Math.max(16, Math.ceil((image.width * lineHeight) / image.height)));
     const resized = await resizeGray(image, scaledWidth, lineHeight);
     const width = Math.max(minWidth, scaledWidth);
     const out = await session!.run({ x: new ort!.Tensor("float32", toRecTensor(resized, width), [1, 3, lineHeight, width]) });
     const probabilities = out[session!.outputNames[0]!]!;
     const [, steps, classes] = probabilities.dims as number[];
-    return ctcGreedyDecode(probabilities.data as Float32Array, steps!, classes!, characters);
+    const { steps: emitted, ...reading } = ctcGreedyDecode(probabilities.data as Float32Array, steps!, classes!, characters);
+    // A step stands for width / steps tensor columns; its middle, back in the crop's own pixels.
+    const columnsPerStep = width / steps!;
+    const charOffsets = emitted.map((step) => Math.min(image.width, ((step + 0.5) * columnsPerStep * image.width) / scaledWidth));
+    return { ...reading, charOffsets };
   };
 
   return {
@@ -63,9 +67,9 @@ export const createTextRecEngine = (modelId: "ppocr-rec-server" | "ppocr-rec-kor
       if (!ort || !session) throw new Error(`${modelId} is not loaded`);
       const task = input as OcrTask;
       const { gray } = await pages(task.imagePath);
-      const results: OcrCandidate[][] = [];
+      const results: LineRecognition[][] = [];
       for (const crop of task.crops) {
-        const readings: OcrCandidate[] = [];
+        const readings: LineRecognition[] = [];
         for (const candidate of grayCandidates(gray, crop)) {
           readings.push({ quarterTurns: candidate.quarterTurns, ...(await read(candidate.image)) });
         }

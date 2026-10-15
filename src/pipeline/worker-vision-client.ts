@@ -3,7 +3,7 @@ import { getLogger } from "../logger.ts";
 import type { InpaintTask } from "../stages/clean/interfaces/index.ts";
 import type { Detection } from "../stages/detect/interfaces/index.ts";
 import type { TextLine } from "../stages/lines/interfaces/index.ts";
-import type { OcrCandidate, OcrCrop, OrientationReading } from "../stages/ocr/interfaces/index.ts";
+import type { LineRecognition, OcrCandidate, OcrCrop, OrientationReading } from "../stages/ocr/interfaces/index.ts";
 import { WorkerTaskError } from "../workers/errors/index.ts";
 import type { ExecutionProvider, LoadResult } from "../workers/interfaces/index.ts";
 import type { WorkerSupervisor } from "../workers/worker-supervisor.ts";
@@ -53,7 +53,7 @@ export const createWorkerVisionClient = (gpu: Pick<WorkerSupervisor, "request">,
   const client: VisionClient = {
     detect: (imagePath) => task<{ width: number; height: number; detections: Detection[] }>("detector", { imagePath, minScore: 0.3 }, 1),
     lines: (imagePath, regions: Box[] | null) => task<TextLine[][]>("lines", { imagePath, regions }, regions?.length ?? 1),
-    recognizeLines: (imagePath, crops) => task<OcrCandidate[][]>("text-rec", { imagePath, crops }, runsIn(crops)),
+    recognizeLines: (imagePath, crops) => task<LineRecognition[][]>("text-rec", { imagePath, crops }, runsIn(crops)),
     readUtterances: (imagePath, crops, engine) => task<OcrCandidate[][]>(engine, { imagePath, crops }, runsIn(crops)),
     orientation: (imagePath, crops) => task<OrientationReading[][]>("textline-ori", { imagePath, crops }, runsIn(crops)),
     inpaint: async (inpaint: InpaintTask) => {

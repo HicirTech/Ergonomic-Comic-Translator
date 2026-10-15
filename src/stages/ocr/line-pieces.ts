@@ -1,7 +1,8 @@
 import type { Box } from "../../geometry/interfaces/index.ts";
 import type { GrayImage } from "../../imaging/interfaces/index.ts";
 import type { TextLine } from "../lines/interfaces/index.ts";
-import type { OcrCandidate } from "./interfaces/index.ts";
+import { median } from "../utterances/split-utterances.ts";
+import type { LineRecognition, OcrCandidate } from "./interfaces/index.ts";
 
 /**
  * The sentence readers squash a crop into a square, so every character of a line shares its side: a line
@@ -13,6 +14,8 @@ export const maxPieceChars = 9;
 const pieceMarginShare = 0.15;
 /** Edge energy at or below this share of the line's peak is a gap between characters. */
 const gapShare = 0.03;
+/** A character read together with the one before it: a small kana, a long, iteration or sound mark. */
+const clingsToPrevious = /^[ぁぃぅぇぉゃゅょっゎァィゥェォャュョッヮヵヶー々ゝゞヽヾ゛゜]$/u;
 
 const charCount = (text: string) => [...text.trim()].length;
 
@@ -64,22 +67,53 @@ const quietestNear = (profile: Float64Array, target: number, radius: number) => 
 };
 
 /**
- * Offsets at which to cut a line into `count` pieces of about equal length: near each even share, the
- * middle of the closest gap within one character pitch, else the quietest place within half a pitch.
+ * Boundaries between the characters a line recogniser found: halfway between neighbours, and where two
+ * neighbours stand about n pitches apart (it dropped what lies between) the n boundaries of the cells between
+ * them. The boundary before a character that clings to the one before it is left out: on its own, a small
+ * kana reads as the large one.
  */
-export const cutOffsets = (profile: Float64Array, count: number, pitch: number): number[] => {
+export const characterBoundaries = (recognition: Pick<LineRecognition, "text" | "charOffsets">): number[] => {
+  const offsets = recognition.charOffsets;
+  const chars = [...recognition.text];
+  const labelled = chars.length === offsets.length;
+  const spans = offsets.slice(1).map((offset, index) => offset - offsets[index]!);
+  if (spans.length === 0) return [];
+  const pitch = median(spans);
+  return spans.flatMap((span, index) => {
+    const cells = Math.max(1, Math.round(span / pitch));
+    const boundaries = Array.from({ length: cells }, (_, cell) => offsets[index]! + (span * (cell + 0.5)) / cells);
+    return labelled && clingsToPrevious.test(chars[index + 1]!) ? boundaries.slice(0, -1) : boundaries;
+  });
+};
+
+/** The position nearest `target` among `positions`, within `reach`; null when none is that near. */
+const nearestWithin = (positions: readonly number[], target: number, reach: number): number | null => {
+  let best: number | null = null;
+  for (const at of positions) {
+    if (Math.abs(at - target) <= reach && (best === null || Math.abs(at - target) < Math.abs(best - target))) best = at;
+  }
+  return best;
+};
+
+/**
+ * Offsets at which to cut a line into `count` pieces of about equal length: near each even share, the
+ * closest of the `boundaries` between recognised characters, settled on the quietest place within a
+ * quarter pitch; without one within a pitch the middle of the closest gap within a pitch, else the
+ * quietest place within half a pitch. A gap alone can lie inside a character (the strokes of い); a
+ * boundary between recognised characters cannot.
+ */
+export const cutOffsets = (profile: Float64Array, boundaries: readonly number[], count: number, pitch: number): number[] => {
   const length = profile.length;
   if (count < 2 || length < 3) return [];
   let peak = 0;
   for (const energy of profile) peak = Math.max(peak, energy);
-  const gaps = quietRuns(profile, gapShare * peak).filter((gap) => gap.from > 0 && gap.to < length);
+  const gaps = quietRuns(profile, gapShare * peak).filter((gap) => gap.from > 0 && gap.to < length).map((gap) => (gap.from + gap.to) / 2);
   return Array.from({ length: count - 1 }, (_, index) => {
     const target = Math.round((length * (index + 1)) / count);
-    const nearest = gaps
-      .map((gap) => ({ at: Math.round((gap.from + gap.to) / 2), away: Math.abs((gap.from + gap.to) / 2 - target) }))
-      .filter((gap) => gap.away <= pitch)
-      .sort((a, b) => a.away - b.away)[0];
-    return nearest ? nearest.at : quietestNear(profile, target, Math.round(pitch / 2));
+    const boundary = nearestWithin(boundaries, target, pitch);
+    if (boundary !== null) return quietestNear(profile, Math.round(boundary), Math.round(pitch / 4));
+    const gap = nearestWithin(gaps, target, pitch);
+    return gap !== null ? Math.round(gap) : quietestNear(profile, target, Math.round(pitch / 2));
   });
 };
 

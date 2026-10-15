@@ -62,6 +62,7 @@ const fakeClient = (
     meanProb: 0.95,
     minProb: 0.9,
     tokens: 5,
+    charOffsets: [],
   }]),
   readUtterances: async (_, crops, engine) => {
     readCalls.push({ engine, crops });
@@ -130,9 +131,11 @@ describe("runVisionPage", () => {
   it("reads a line that holds too many characters for one crop in pieces, and joins their readings", async () => {
     const readCalls: { engine: string; crops: OcrCrop[] }[] = [];
     const client = fakeClient([], readCalls);
-    // The structure reading of the first column holds 17 characters: too many for the sentence reader's square.
+    // The structure reading of the first column holds 17 characters, found 10 px apart: too many for the
+    // sentence reader's square.
     const structure = ["「今日はいい天気ですね、行くぞ。」", "「待って！」", "営業中です"];
-    client.recognizeLines = async (_, crops) => crops.map((crop, index) => [{ quarterTurns: 0, text: structure[index] ?? "", meanProb: 0.95, minProb: 0.9, tokens: 5 }]);
+    const charOffsets = (text: string) => Array.from({ length: [...text].length }, (_, index) => (index + 0.5) * 10);
+    client.recognizeLines = async (_, crops) => crops.map((crop, index) => [{ quarterTurns: 0, text: structure[index] ?? "", meanProb: 0.95, minProb: 0.9, tokens: 5, charOffsets: charOffsets(structure[index] ?? "") }]);
     const result = await runVisionPage(client, join(root, "page.png"), "p4", root, "v");
 
     const [bubble] = result.regions;
@@ -230,7 +233,7 @@ describe("planUtterances", () => {
     // Two columns far enough apart to be two speakers, stored left to right; vertical text reads the right one first.
     const lines = [line(60, 140, 170, 26, 90), line(120, 140, 170, 26, 90)];
     const region = { box: { x0: 40, y0: 50, x1: 140, y1: 230 }, cls: "text_bubble" as const, score: 0.9, bubble: null, lines };
-    const structure = new Map(lines.map((column) => [column, { text: "あいうえお", meanProb: 0.9, minProb: 0.9, tokens: 5, quarterTurns: 0 }]));
+    const structure = new Map(lines.map((column) => [column, { text: "あいうえお", meanProb: 0.9, minProb: 0.9, tokens: 5, quarterTurns: 0, charOffsets: [] }]));
     const planned = planUtterances(orientRegions([region]), structure, "v", null);
     expect(planned.map((item) => item.split.lines)).toEqual([[0], [1]]);
     expect(planned.map((item) => item.lineIndexes)).toEqual([[1], [0]]);
