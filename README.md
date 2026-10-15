@@ -26,8 +26,11 @@ checking are automatic.
    text, also where the rectangle of a line reaches over them: a line that runs straight through the
    rectangle and on stays, and so does a faint line that leaves it (the picture seen through a translucent
    box), while a full stop set against such a line is still taken. Neither is a short line set light among
-   dark text (lettering drawn across the box). The strokes are filled from the paper around
-   them, which is exact on plain paper. Where the picture meets the text (a line, the edge of a shape,
+   dark text (lettering drawn across the box). A line set to the edge of a bubble is read against the
+   bubble's own paper, and what its rectangle holds of the page beyond the bubble's shape, or of lettering
+   drawn across the bubble in another colour, is not its text. A wide outline drawn around free text goes
+   with the strokes whole, so the fill starts from the picture beyond it. The strokes are filled from the
+   paper around them, which is exact on plain paper. Where the picture meets the text (a line, the edge of a shape,
    screentone, artwork seen through a dialogue box) that fill would smear it, so there, and only on that
    part of the strokes, an inpainting model's fill of the page is used: LaMa where the reading models run
    on a GPU, MI-GAN on the CPU. A line of fifteen characters or more is read in pieces of at most nine, cut
@@ -38,7 +41,8 @@ checking are automatic.
    bubble and can be read, or reads as typeset text. Sound effects and art lettering keep their original
    lettering, also inside a dialogue box: there it is what is drawn in another ink than the box's dialogue,
    or what stands alone on a shape of its own in colour and with an outline (in one of the two, when it does
-   not read as text either).
+   not read as text either), or a sound drawn in colour on its own; a coloured fill edged in a lighter
+   colour on a dark page counts as that colour.
    A detected text box in which no text line is found cannot be cleaned, so it is left as it is instead of
    being lettered over.
 3. **Names and terms first.** In a Japanese volume, a katakana word the readers got one slip away from a
