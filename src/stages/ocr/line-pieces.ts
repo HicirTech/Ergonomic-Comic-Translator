@@ -3,6 +3,7 @@ import type { GrayImage } from "../../imaging/interfaces/index.ts";
 import type { TextLine } from "../lines/interfaces/index.ts";
 import { median } from "../utterances/split-utterances.ts";
 import type { LineRecognition, OcrCandidate } from "./interfaces/index.ts";
+import { isSplinter } from "./line-reading.ts";
 
 /**
  * The sentence readers squash a crop into a square, so every character of a line shares its side: a line
@@ -136,8 +137,8 @@ export const pieceBoxes = (box: Box, mode: "h" | "v", offsets: readonly number[]
 
 /**
  * One candidate per quarter turn that every piece was read at: the pieces' texts joined in reading order,
- * the mean probability over all their tokens and the lowest among the pieces that read anything. A single
- * crop's candidates pass through unchanged.
+ * the mean probability over all their tokens and the lowest among the pieces that read anything. A piece
+ * read as a splinter (a mark or two, unsure) is left out. A single crop's candidates pass through unchanged.
  */
 export const joinPieceCandidates = (pieces: readonly (readonly OcrCandidate[])[]): OcrCandidate[] => {
   const lead = pieces[0];
@@ -148,7 +149,7 @@ export const joinPieceCandidates = (pieces: readonly (readonly OcrCandidate[])[]
     for (const piece of pieces) {
       const part = piece.find((candidate) => candidate.quarterTurns === first.quarterTurns);
       if (part === undefined) return [];
-      parts.push(part);
+      if (!isSplinter(part)) parts.push(part);
     }
     const tokens = parts.reduce((sum, part) => sum + part.tokens, 0);
     const read = parts.filter((part) => part.tokens > 0);

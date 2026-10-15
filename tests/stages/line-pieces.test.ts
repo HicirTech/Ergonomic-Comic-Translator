@@ -137,6 +137,11 @@ describe("joinPieceCandidates", () => {
     expect(joined[0]!.meanProb).toBeCloseTo(0.84, 10);
   });
 
+  it("leaves out a piece read as an unsure mark or two", () => {
+    const joined = joinPieceCandidates([[candidate(0, "今日は", 0.9, 0.5, 3)], [candidate(0, "2", 0.3, 0.3, 1)]]);
+    expect(joined).toEqual([{ quarterTurns: 0, text: "今日は", meanProb: 0.9, minProb: 0.5, tokens: 3 }]);
+  });
+
   it("hands a single crop's candidates on unchanged", () => {
     const candidates = [candidate(0, " a ", 0.9, 0.8, 1), candidate(3, "b", 0.2, 0.1, 1)];
     expect(joinPieceCandidates([candidates])).toEqual(candidates);

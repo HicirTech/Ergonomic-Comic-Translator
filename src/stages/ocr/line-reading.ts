@@ -25,10 +25,12 @@ const isLeftOutOf = (part: readonly string[], whole: readonly string[]) => {
   return matched === part.length;
 };
 
+/** A reading of a mark or two below the trusted probability: a DB splinter or a stray mark, not text. */
+export const isSplinter = (reading: OcrReading) => charCount(reading.text) <= splinterChars && reading.meanProb < trustedLineProb;
+
 /** Joins an utterance's per-line readings, given in reading order. Null when no line was read. */
 export const joinLineReadings = (lines: readonly (OcrReading | undefined)[]): LineReading | null => {
-  const kept = lines.filter((line): line is OcrReading =>
-    line !== undefined && charCount(line.text) > 0 && !(charCount(line.text) <= splinterChars && line.meanProb < trustedLineProb));
+  const kept = lines.filter((line): line is OcrReading => line !== undefined && charCount(line.text) > 0 && !isSplinter(line));
   if (kept.length === 0) return null;
   const total = kept.reduce((sum, line) => sum + charCount(line.text), 0);
   return {
