@@ -3,11 +3,15 @@ import type { ResourceMonitor } from "../gov/resource-monitor.ts";
 import type { LlmSession, VisionSession } from "../sessions/interfaces/index.ts";
 import { openLlmSession } from "../sessions/llm-session.ts";
 import { openVisionSession } from "../sessions/vision-session.ts";
-import type { ModelHost } from "./interfaces/index.ts";
+import type { ModelHost, ModelNeed } from "./interfaces/index.ts";
+
+/** Whether what one need loads serves the other. */
+export const isSameNeed = (a: ModelNeed, b: ModelNeed) =>
+  a.lane === "gpu" ? b.lane === "gpu" : b.lane === "llm" && a.role === b.role;
 
 /** ModelHost over the real vision workers and llama-server, admitted by `monitor` (which must be running). */
 export const createModelHost = (paths: DataPaths, monitor: ResourceMonitor, cpuOnly: boolean): ModelHost => {
-  let current: { lane: "gpu"; session: VisionSession } | { lane: "llm"; session: LlmSession } | null = null;
+  let current: { lane: "gpu"; need: ModelNeed; session: VisionSession } | { lane: "llm"; need: ModelNeed; session: LlmSession } | null = null;
 
   const close = async () => {
     const closing = current;
@@ -17,7 +21,7 @@ export const createModelHost = (paths: DataPaths, monitor: ResourceMonitor, cpuO
 
   return {
     get loaded() {
-      return current?.lane ?? null;
+      return current?.need ?? null;
     },
     get redLightReasonZh() {
       return current?.session.signal.aborted ? String(current.session.signal.reason) : null;
@@ -30,17 +34,17 @@ export const createModelHost = (paths: DataPaths, monitor: ResourceMonitor, cpuO
       if (current?.lane !== "llm") throw new Error("The LLM is not loaded");
       return current.session;
     },
-    open: async (lane) => {
-      if (current?.lane === lane && !current.session.signal.aborted) return null;
+    open: async (need) => {
+      if (current && isSameNeed(current.need, need) && !current.session.signal.aborted) return null;
       await close();
-      if (lane === "gpu") {
+      if (need.lane === "gpu") {
         const opening = await openVisionSession(paths, monitor, cpuOnly, "translate job: vision");
         if (!opening.ok) return opening.failure;
-        current = { lane, session: opening.session };
+        current = { lane: "gpu", need, session: opening.session };
       } else {
-        const opening = await openLlmSession(paths, monitor, "translate job: llm");
+        const opening = await openLlmSession(paths, monitor, "translate job: llm", need.role);
         if (!opening.ok) return opening.failure;
-        current = { lane, session: opening.session };
+        current = { lane: "llm", need, session: opening.session };
       }
       return null;
     },

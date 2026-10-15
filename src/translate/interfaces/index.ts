@@ -1,4 +1,5 @@
 export type { CompleteFn } from "./complete-fn.ts";
+export type { ContractId } from "./contract-id.ts";
 export type { GlossaryEntry } from "./glossary-entry.ts";
 export type { HistoryPage } from "./history-page.ts";
 export type { PageRequest } from "./page-request.ts";

@@ -2,6 +2,7 @@ import { join } from "path";
 import type { DataPaths } from "../core/data-paths.ts";
 import { MiB } from "../core/units.ts";
 import { hostHeadroomBytes } from "../gov/headroom.ts";
+import type { LlmRole } from "../gov/interfaces/index.ts";
 import type { ResourceMonitor } from "../gov/resource-monitor.ts";
 import { ThroughputCliffDetector } from "../gov/throughput-cliff.ts";
 import { fitTiers, recommendTier } from "../gov/tiers.ts";
@@ -24,15 +25,16 @@ const requestTimeoutMs = 90_000;
  * Starts llama-server with the best tier that fits: on the GPU with the most room (Vulkan), otherwise
  * on the CPU. Admission, the GPU lock and a red-light watch (which stops the server) come first; every
  * request feeds the throughput-cliff detector. The caller keeps `monitor` running while the session is open.
+ * `role` picks the tier table: the general model, or the Japanese translator with the general tiers as fallback.
  */
-export const openLlmSession = async (paths: DataPaths, monitor: ResourceMonitor, purpose: string): Promise<SessionOpening<LlmSession>> => {
+export const openLlmSession = async (paths: DataPaths, monitor: ResourceMonitor, purpose: string, role: LlmRole): Promise<SessionOpening<LlmSession>> => {
   const host = (monitor.latest ?? monitor.tick()).sample.host;
   const hostAvailable = Math.max(0, host.availPhysBytes - hostHeadroomBytes(host.totalPhysBytes));
   const modelsLock = readModelsLock();
   const gpu = supportedAdaptersByBudget(monitor)
-    .map(({ adapter, availableBytes }) => ({ adapter, fit: recommendTier(fitTiers(modelsLock, adapter.kind, availableBytes, hostAvailable)) }))
+    .map(({ adapter, availableBytes }) => ({ adapter, fit: recommendTier(fitTiers(modelsLock, adapter.kind, availableBytes, hostAvailable, role)) }))
     .find((choice) => choice.fit?.tier.device === "gpu") ?? null;
-  const fit = gpu?.fit ?? recommendTier(fitTiers(modelsLock, "unsupported", 0, hostAvailable));
+  const fit = gpu?.fit ?? recommendTier(fitTiers(modelsLock, "unsupported", 0, hostAvailable, role));
   if (!fit) {
     return { ok: false, failure: { kind: "no_tier", messageZh: "内存不足，没有可以运行的翻译档位。" } };
   }
@@ -122,6 +124,6 @@ export const openLlmSession = async (paths: DataPaths, monitor: ResourceMonitor,
   };
   return {
     ok: true,
-    session: { complete, tierId: fit.tier.id, tierLabel: fit.tier.label, modelSha: model.files[0]!.sha256, device, signal: red.signal, close },
+    session: { complete, tierId: fit.tier.id, tierLabel: fit.tier.label, contract: fit.tier.contract, modelSha: model.files[0]!.sha256, device, signal: red.signal, close },
   };
 };

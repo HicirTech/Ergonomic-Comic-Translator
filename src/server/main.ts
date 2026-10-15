@@ -54,7 +54,7 @@ const server = startServer({
   volumes,
   flags,
   jobs: runner,
-  status: () => resourceStatus(monitor.latest ?? monitor.tick(), monitor.adapters, host.loaded),
+  status: () => resourceStatus(monitor.latest ?? monitor.tick(), monitor.adapters, host.loaded?.lane ?? null),
   missingDownloads: () => missingDownloads(paths, modelsLock, runtimesLock),
   staticRoot: existsSync(join(staticRoot, "index.html")) ? staticRoot : null,
   statusIntervalMs,

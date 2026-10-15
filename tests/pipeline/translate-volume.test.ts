@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { ChatHttpError } from "../../src/llm/chat-http-error.ts";
-import type { ChatMessage, ChatResult } from "../../src/llm/interfaces/index.ts";
+import type { ChatMessage, ChatRequest, ChatResult } from "../../src/llm/interfaces/index.ts";
 import { isRetryableLlmError } from "../../src/llm/retryable.ts";
 import { buildGlossary } from "../../src/pipeline/build-glossary.ts";
 import type { RegionResult } from "../../src/pipeline/interfaces/index.ts";
@@ -161,6 +161,7 @@ describe("translateVolume", () => {
     language: "ja" as const,
     complete,
     modelSha: "m",
+    contract: "json" as const,
     historyBudget: 2000,
   });
   const echo: CompleteFn = async ({ messages }) => completion(JSON.stringify({ "1": `琳，第${userJson(messages).page}页` }));
@@ -178,6 +179,22 @@ describe("translateVolume", () => {
     expect(userJson(seen[0]!).terms).toEqual([{ source: "リン", target: "琳" }]);
     const pageTwo = seen.find((messages) => userJson(messages).page === 2)!;
     expect(pageTwo.filter((message) => message.role === "assistant")).toHaveLength(1);
+  });
+
+  it("asks in the loaded model's own contract and hands it the terms' notes", async () => {
+    const seen: ChatRequest[] = [];
+    const noted = { ...rin, noteZh: "女主角" };
+    const results = await translateVolume(pages.slice(0, 1), {
+      ...context(async (request) => {
+        seen.push(request);
+        return completion("琳，第1页");
+      }),
+      terms: [noted],
+      contract: "sakura",
+    });
+    expect(results[0]!.targets).toEqual({ "1": "琳，第1页" });
+    expect(seen[0]!.schema).toBeNull();
+    expect(seen[0]!.messages.at(-1)!.content).toContain("リン->琳 #女主角");
   });
 
   it("re-translates one page with the same history the volume run used, skipping pages without a result", async () => {

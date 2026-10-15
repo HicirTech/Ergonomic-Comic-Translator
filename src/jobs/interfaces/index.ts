@@ -1,4 +1,5 @@
 export type { ModelHost } from "./model-host.ts";
+export type { ModelNeed } from "./model-need.ts";
 export type { RunnerEvent } from "./runner-event.ts";
 export type { StageContext } from "./stage-context.ts";
 export type { StageRun } from "./stage-run.ts";

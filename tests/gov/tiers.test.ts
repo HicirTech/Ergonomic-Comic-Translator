@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { GiB } from "../../src/core/units.ts";
-import { fitTiers, recommendTier } from "../../src/gov/tiers.ts";
+import { fitTiers, llmRoleFor, recommendTier } from "../../src/gov/tiers.ts";
 import { readModelsLock } from "../../src/models/lock.ts";
 
 const lock = readModelsLock();
@@ -27,5 +27,16 @@ describe("tier recommendation (estimates)", () => {
 
   it("recommends nothing when RAM cannot hold even the CPU tier", () => {
     expect(recommend("discrete", 0, 3 * GiB)).toBeNull();
+  });
+
+  it("translates Japanese with the Sakura tier where it fits and with the general tiers elsewhere", () => {
+    expect(recommend("discrete", 17.3 * GiB, 9 * GiB, "japanese")).toMatchObject({ tier: { id: "J2", contract: "sakura" }, fit: "resident" });
+    expect(recommend("discrete", 8.6 * GiB, 9 * GiB, "japanese")).toMatchObject({ tier: { id: "T1", contract: "json" } });
+    expect(recommend("uma", 10 * GiB, 10 * GiB, "japanese")).toMatchObject({ tier: { id: "iG-8" } });
+  });
+
+  it("gives Japanese volumes the Japanese role and every other language the general one", () => {
+    expect(llmRoleFor("ja")).toBe("japanese");
+    expect(llmRoleFor("ko")).toBe("general");
   });
 });

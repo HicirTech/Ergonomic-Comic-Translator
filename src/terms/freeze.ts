@@ -33,7 +33,8 @@ export const resolveTerms = (terms: readonly FixedTerm[]) => {
   return { terms: resolved, conflicts };
 };
 
-const noteOf = (term: FixedTerm) => {
+/** The note a glossary entry carries: the gender when known, then the fixer's note. */
+export const noteOf = (term: FixedTerm) => {
   const gender = term.gender === "m" ? "男" : term.gender === "f" ? "女" : "";
   return [gender, term.noteZh].filter(Boolean).join("，");
 };

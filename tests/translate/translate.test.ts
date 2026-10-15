@@ -4,6 +4,7 @@ import { checkCompletion, hasResidue, isDegenerate, isEcho, isRefusal } from "..
 import { buildMessages, buildSingleTurnMessages, maxTokensFor, outputSchema, unitId } from "../../src/translate/contract.ts";
 import { historyWindowStart, sourceTokens } from "../../src/translate/history-window.ts";
 import type { PageRequest, TranslationUnit } from "../../src/translate/interfaces/index.ts";
+import { parseLineAnswer, sakuraContract } from "../../src/translate/sakura-contract.ts";
 import { translatePage } from "../../src/translate/translate-page.ts";
 
 const unit = (id: string, source: string, kind: TranslationUnit["kind"] = "dialogue"): TranslationUnit => ({ id, kind, source });
@@ -61,6 +62,48 @@ describe("tr-contract@2 messages", () => {
     expect(maxTokensFor(20)).toBe(864);
     expect(maxTokensFor(100)).toBe(2048);
     expect([unitId(12, 0, 1), unitId(12, 0, 2), unitId(12, 1, 2)]).toEqual(["12", "12a", "12b"]);
+  });
+});
+
+describe("tr-sakura@1 messages", () => {
+  it("asks one line per unit with the page's terms as src->dst lines, earlier pages as earlier turns", () => {
+    const messages = sakuraContract.buildMessages(request([unit("1", "リン、\n行くよ"), unit("2", "はい")]));
+    expect(messages.map((message) => message.role)).toEqual(["system", "user", "assistant", "user"]);
+    expect(messages[1]!.content).toBe("将下面的日文文本翻译成中文：おはよう");
+    expect(messages[2]!.content).toBe("早上好");
+    expect(messages[3]!.content).toBe("根据以下术语表（可以为空）：\nリン->琳\n将下面的日文文本根据对应关系和备注翻译成中文：リン、 行くよ\nはい");
+  });
+
+  it("asks without a glossary when no term occurs on the page", () => {
+    const messages = sakuraContract.buildMessages({ ...request([unit("1", "行く")]), matchingTerms: [] });
+    expect(messages.at(-1)!.content).toBe("将下面的日文文本翻译成中文：行く");
+  });
+
+  it("carries a term's note and leaves untranslated history units out of both turns", () => {
+    const messages = sakuraContract.buildMessages({
+      ...request([unit("1", "リン")]),
+      matchingTerms: [{ source: "リン", target: "琳", note: "女主角" }],
+      history: [{ page: 2, units: [unit("1", "おはよう"), unit("2", "ねえ")], targets: { "1": "早上好" } }],
+    });
+    expect(messages[1]!.content).toBe("将下面的日文文本翻译成中文：おはよう");
+    expect(messages[2]!.content).toBe("早上好");
+    expect(messages[3]!.content).toContain("リン->琳 #女主角\n");
+  });
+
+  it("reads one line per unit in order and rejects another count", () => {
+    const units = [unit("1", "行く"), unit("2", "待って")];
+    expect(parseLineAnswer("走\n\n等等\n", units)).toEqual({ values: { "1": "走", "2": "等等" }, extraKeys: false });
+    expect(parseLineAnswer("走", units)).toBeNull();
+  });
+
+  it("answers as free text sampled the way the model card recommends", () => {
+    expect(sakuraContract.schema([unit("1", "行く")])).toBeNull();
+    expect([sakuraContract.temperature, sakuraContract.topP]).toEqual([0.3, 0.8]);
+  });
+
+  it("budgets the answer by the source length, up to a cap", () => {
+    expect(sakuraContract.maxTokens([unit("1", "あ")])).toBeLessThan(sakuraContract.maxTokens([unit("1", "あいうえお")]));
+    expect(sakuraContract.maxTokens([unit("1", "あ".repeat(5000))])).toBe(2048);
   });
 });
 

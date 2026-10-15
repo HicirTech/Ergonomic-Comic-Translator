@@ -44,9 +44,11 @@ export const createTaskQueue = (db: Database) => {
     WHERE state = 'running'
   `);
   const selectJobTasks = db.prepare(`SELECT * FROM task WHERE job_id = $jobId ORDER BY rowid`);
-  const selectQueued = db.prepare(`
-    SELECT 1 FROM task JOIN job ON job.id = task.job_id
-    WHERE task.state = 'queued' AND task.lane = $lane AND job.cancel_requested_at IS NULL LIMIT 1
+  const selectNext = db.prepare(`
+    SELECT task.* FROM task JOIN job ON job.id = task.job_id
+    WHERE task.state = 'queued' AND task.lane = $lane AND job.cancel_requested_at IS NULL
+    ORDER BY task.priority DESC, task.rowid
+    LIMIT 1
   `);
   const requestCancel = db.prepare(`UPDATE job SET cancel_requested_at = $now WHERE id = $jobId AND cancel_requested_at IS NULL`);
   const cancelQueued = db.prepare(`UPDATE task SET state = 'cancelled', finished_at = $now WHERE job_id = $jobId AND state = 'queued'`);
@@ -72,8 +74,11 @@ export const createTaskQueue = (db: Database) => {
       }
     }),
 
+    /** The task `claim(lane)` would return now, left queued. */
+    nextQueued: (lane: TaskLane) => (selectNext.get({ lane }) as TaskRecord | null) ?? null,
+
     /** Whether `claim(lane)` would return a task now. */
-    hasQueued: (lane: TaskLane) => selectQueued.get({ lane }) !== null,
+    hasQueued: (lane: TaskLane) => selectNext.get({ lane }) !== null,
 
     tasksOf: (jobId: string) => selectJobTasks.all({ jobId }) as TaskRecord[],
 

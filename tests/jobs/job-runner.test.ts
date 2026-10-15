@@ -3,14 +3,14 @@ import { openDatabase } from "../../src/db/database.ts";
 import type { JobSummary } from "../../src/db/interfaces/index.ts";
 import { createTaskQueue } from "../../src/db/task-queue.ts";
 import { createVolumeStore } from "../../src/db/volumes.ts";
-import type { ModelHost, RunnerEvent, StageContext, VolumeStage } from "../../src/jobs/interfaces/index.ts";
+import type { ModelHost, ModelNeed, RunnerEvent, StageContext, VolumeStage } from "../../src/jobs/interfaces/index.ts";
 import { JobRunner } from "../../src/jobs/job-runner.ts";
 import type { PageKind } from "../../src/stages/profile/interfaces/index.ts";
 
 const terminalStates = ["succeeded", "needs_review", "partial_failed", "cancelled"];
 
 const fakeHost = () => {
-  let loaded: "gpu" | "llm" | null = null;
+  let loaded: ModelNeed | null = null;
   let redLight: string | null = null;
   let refusals = 0;
   const opens: string[] = [];
@@ -27,13 +27,13 @@ const fakeHost = () => {
     llm: () => {
       throw new Error("not used by fake stages");
     },
-    open: async (lane) => {
+    open: async (need) => {
       if (refusals > 0) {
         refusals -= 1;
         return { kind: "busy", messageZh: "显卡正被占用" };
       }
-      opens.push(lane);
-      loaded = lane;
+      opens.push(need.lane === "llm" ? `llm:${need.role}` : need.lane);
+      loaded = need;
       return null;
     },
     close: async () => {
@@ -53,7 +53,11 @@ const fakeHost = () => {
   };
 };
 
-const setup = (kinds: PageKind["kind"][], behaviour: (call: { stage: VolumeStage; ordinal: number | null; attempt: number }) => Promise<void> | void = () => {}) => {
+const setup = (
+  kinds: PageKind["kind"][],
+  behaviour: (call: { stage: VolumeStage; ordinal: number | null; attempt: number }) => Promise<void> | void = () => {},
+  sourceLanguage: "ja" | null = null,
+) => {
   const db = openDatabase(":memory:");
   const queue = createTaskQueue(db);
   const volumes = createVolumeStore(db);
@@ -63,7 +67,7 @@ const setup = (kinds: PageKind["kind"][], behaviour: (call: { stage: VolumeStage
       page: { ordinal: index + 1, displayName: `${index + 1}.png`, sha256: `sha${index + 1}`, storedPath: `/pages/sha${index + 1}.png`, width: 10, height: 10 },
       kind: kind === "textless_variant" ? { kind, variantOf: 1 } : { kind },
     })),
-    sourceLanguage: null,
+    sourceLanguage,
     readingDirection: null,
   });
   const jobId = volumes.createJob(volumeId, "translate_volume", {});
@@ -72,7 +76,7 @@ const setup = (kinds: PageKind["kind"][], behaviour: (call: { stage: VolumeStage
   const attempts = new Map<string, number>();
   const stage = (name: VolumeStage) => async (context: StageContext) => {
     const ordinal = context.page?.ordinal ?? null;
-    calls.push({ stage: name, ordinal, lane: fake.host.loaded });
+    calls.push({ stage: name, ordinal, lane: fake.host.loaded?.lane ?? null });
     const key = `${name}:${ordinal}`;
     const attempt = (attempts.get(key) ?? 0) + 1;
     attempts.set(key, attempt);
@@ -115,11 +119,19 @@ describe("JobRunner", () => {
     const device = calls.filter((call) => ["vision", "glossary", "translate"].includes(call.stage));
     expect(order(device)).toEqual(["vision1", "vision3", "glossary", "translate1", "translate3"]);
     expect(device.map((call) => call.lane)).toEqual(["gpu", "gpu", "llm", "llm", "llm"]);
-    expect(fake.opens).toEqual(["gpu", "llm"]);
+    expect(fake.opens).toEqual(["gpu", "llm:general"]);
     const at = (name: string) => order(calls).indexOf(name);
     expect(at("render2")).toBeLessThan(at("glossary"));
     expect(at("render1")).toBeGreaterThan(at("translate1"));
     expect(order(calls).at(-1)).toBe("export");
+  });
+
+  it("loads the Japanese translator for the pages of a Japanese volume once the general model fixed its names", async () => {
+    const { runner, jobId, fake, finished } = setup(["main", "main"], () => {}, "ja");
+    runner.start();
+    runner.submit(jobId);
+    expect((await finished).state).toBe("succeeded");
+    expect(fake.opens).toEqual(["gpu", "llm:general", "llm:japanese"]);
   });
 
   it("finishes the volume when a page fails and reports a partial failure", async () => {
@@ -147,7 +159,7 @@ describe("JobRunner", () => {
     runner.start();
     runner.submit(jobId);
     expect((await finished).state).toBe("succeeded");
-    expect(fake.opens).toEqual(["gpu", "gpu", "llm"]);
+    expect(fake.opens).toEqual(["gpu", "gpu", "llm:general"]);
     const vision = queue.tasksOf(jobId).find((task) => task.stage === "vision")!;
     expect([vision.preempts, vision.attempts]).toEqual([1, 0]);
     expect(events).toContainEqual({ type: "models", lane: null, state: "waiting", messageZh: "红灯：显存即将耗尽，正在卸载模型。恢复后自动继续" });

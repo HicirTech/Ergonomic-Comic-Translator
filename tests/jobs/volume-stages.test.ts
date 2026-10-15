@@ -43,13 +43,14 @@ const session: LlmSession = {
   }),
   tierId: "test",
   tierLabel: "test",
+  contract: "json",
   modelSha: "sha",
   device: "none",
   signal: new AbortController().signal,
   close: async () => {},
 };
 const host: ModelHost = {
-  loaded: "llm",
+  loaded: { lane: "llm", role: "general" },
   redLightReasonZh: null,
   vision: () => {
     throw new Error("not used by the glossary stage");

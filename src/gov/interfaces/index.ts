@@ -12,6 +12,7 @@ export type { Light } from "./light.ts";
 export type { LightAssessment } from "./light-assessment.ts";
 export type { LightReason } from "./light-reason.ts";
 export type { LightSignals } from "./light-signals.ts";
+export type { LlmRole } from "./llm-role.ts";
 export type { LlmTier } from "./llm-tier.ts";
 export type { LoadPlan } from "./load-plan.ts";
 export type { MonitorState } from "./monitor-state.ts";

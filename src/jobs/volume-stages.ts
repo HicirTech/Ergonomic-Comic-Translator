@@ -45,7 +45,7 @@ const writingPrior = (volume: VolumeRecord) => {
 
 /**
  * The five stages of a translate_volume job over files in the volume folder. Model stages use whatever
- * `host` has loaded (the runner loads the right lane first); `shaper` loads the lettering font once.
+ * `host` has loaded (the runner loads what each task needs first); `shaper` loads the lettering font once.
  */
 export const createVolumeStages = (
   paths: DataPaths,
@@ -98,7 +98,7 @@ export const createVolumeStages = (
       const glossary = readJsonIfExists<VolumeGlossary>(files.glossary);
       const frozen = glossary?.glossary ?? freezeGlossary([]);
       const earlier = text.pages.slice(0, index).map((entry) => readJsonIfExists<PageTranslationResult>(files.translation(entry.page)));
-      const { complete, modelSha } = host.llm();
+      const { complete, modelSha, contract } = host.llm();
       const result = await translateVolumePage(text.pages, index, earlier, {
         terms: glossary?.terms ?? [],
         roleTable: frozen.roleTable,
@@ -106,6 +106,7 @@ export const createVolumeStages = (
         language: text.language,
         complete,
         modelSha,
+        contract,
         historyBudget,
       });
       const json = JSON.stringify(result);

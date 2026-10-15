@@ -1,8 +1,9 @@
 import { cacheKey, seedFromKey } from "../core/cache-key.ts";
 import { missingTerms, replaceUntranslatedName } from "../qa/term-compliance.ts";
 import type { FixedTerm } from "../terms/interfaces/index.ts";
+import { noteOf } from "../terms/freeze.ts";
 import { createMatcher } from "../terms/matcher.ts";
-import { contractVersion } from "../translate/contract.ts";
+import { translationContracts } from "../translate/contracts.ts";
 import { historyWindowStart, sourceTokens } from "../translate/history-window.ts";
 import type { GlossaryEntry, HistoryPage, TranslationUnit } from "../translate/interfaces/index.ts";
 import { translatePage } from "../translate/translate-page.ts";
@@ -26,6 +27,7 @@ export const translateVolumePage = async (
     return { page: page.page, units: [], targets: {}, flags: {}, requests: 0 };
   }
   const { terms, roleTable, glossarySha, language, complete, modelSha, historyBudget } = context;
+  const contract = translationContracts[context.contract];
   const matcher = createMatcher(terms.flatMap((term) => term.surfaces.map((surface) => ({ surface, value: term }))));
   const start = historyWindowStart(pages.slice(0, index).map((earlierPage) => sourceTokens(earlierPage.units)), historyBudget);
   const history: HistoryPage[] = earlier.slice(start, index)
@@ -38,12 +40,15 @@ export const translateVolumePage = async (
     return [...found].map(([term, surface]) => ({ term, surface }));
   };
   const pageMatches = [...new Map(page.units.flatMap((unit) => matchesOf(unit.source)).map((entry) => [entry.term, entry])).values()];
-  const matchingTerms: GlossaryEntry[] = pageMatches.map(({ term }) => ({ source: term.canonical, target: term.target }));
+  const matchingTerms: GlossaryEntry[] = pageMatches.map(({ term }) => {
+    const note = noteOf(term);
+    return { source: term.canonical, target: term.target, ...(note ? { note } : {}) };
+  });
 
   const request = { language, page: page.page, units: page.units, glossary: [...roleTable], matchingTerms, history };
   const seed = seedFromKey(cacheKey({
     stage: "translate",
-    contract: contractVersion,
+    contract: contract.version,
     modelSha,
     glossarySha,
     units: page.units.map((unit) => [unit.id, unit.source]),
@@ -53,7 +58,7 @@ export const translateVolumePage = async (
     matchesOf(unit.source).map(({ term, surface }) => ({ surface, target: term.target, aliases: term.targetAliases }));
   const postDict = (unit: TranslationUnit, target: string) =>
     expectedOf(unit).reduce((text, term) => replaceUntranslatedName(text, term) ?? text, target);
-  const translation = await translatePage(request, complete, seed, { postDict });
+  const translation = await translatePage(request, complete, seed, { contract, postDict });
   const targets = { ...translation.targets };
   const flags: Record<string, string[]> = Object.fromEntries(Object.entries(translation.failures).map(([id, codes]) => [id, [...codes]]));
   let requests = translation.requests;
@@ -69,7 +74,7 @@ export const translateVolumePage = async (
         { ...request, units: [unit], matchingTerms: missing.map((term) => ({ source: term.surface, target: term.target })) },
         complete,
         seed + 7,
-        { postDict },
+        { contract, postDict },
       );
       requests += retry.requests;
       const candidate = retry.targets[unit.id];

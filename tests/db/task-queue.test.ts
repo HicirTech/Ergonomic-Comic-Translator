@@ -18,6 +18,15 @@ describe("task queue", () => {
     expect((db.query("SELECT COUNT(*) AS n FROM task").get() as { n: number }).n).toBe(3);
   });
 
+  it("shows the task a claim would return without claiming it", () => {
+    const db = seededDatabase();
+    const queue = createTaskQueue(db);
+    queue.enqueue(pageTasks);
+    expect(queue.nextQueued("gpu")).toMatchObject({ page_id: "p2", state: "queued" });
+    expect(queue.nextQueued("llm")).toBeNull();
+    expect(queue.claim("gpu")!.page_id).toBe("p2");
+  });
+
   it("claims by priority, one lane at a time, and never hands out the same task twice", () => {
     const db = seededDatabase();
     const queue = createTaskQueue(db);

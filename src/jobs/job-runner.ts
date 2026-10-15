@@ -2,8 +2,10 @@ import type { Database } from "bun:sqlite";
 import type { TaskRecord, TaskState } from "../db/interfaces/index.ts";
 import type { createTaskQueue } from "../db/task-queue.ts";
 import type { VolumeStore } from "../db/volumes.ts";
+import { llmRoleFor } from "../gov/tiers.ts";
 import { getLogger } from "../logger.ts";
-import type { ModelHost, RunnerEvent, StageRun, VolumeStage } from "./interfaces/index.ts";
+import type { ModelHost, ModelNeed, RunnerEvent, StageRun, VolumeStage } from "./interfaces/index.ts";
+import { isSameNeed } from "./model-host.ts";
 import { planVolumeTasks } from "./plan-volume-tasks.ts";
 
 const logger = getLogger("jobs");
@@ -134,17 +136,27 @@ export class JobRunner {
 
   private nextDeviceLane() {
     const { host, queue } = this.deps;
-    if (host.loaded && queue.hasQueued(host.loaded)) return host.loaded;
+    const loadedLane = host.loaded?.lane ?? null;
+    if (loadedLane && queue.hasQueued(loadedLane)) return loadedLane;
     if (queue.hasQueued("gpu")) return "gpu";
     return queue.hasQueued("llm") ? "llm" : null;
   }
 
-  /** Loads the lane's models; false (after waiting) when they cannot be loaded now. */
-  private async load(lane: "gpu" | "llm") {
+  /** What a device task needs loaded: for the LLM lane the translator of the volume's language; names and terms always use the general model. */
+  private needOf(task: TaskRecord): ModelNeed {
+    if (task.lane !== "llm") return { lane: "gpu" };
+    const volumeId = this.deps.volumes.job(task.job_id)?.volume_id;
+    const language = task.stage === "translate" && volumeId ? this.deps.volumes.volume(volumeId)?.source_lang ?? null : null;
+    return { lane: "llm", role: language ? llmRoleFor(language) : "general" };
+  }
+
+  /** Loads what `need` names; false (after waiting) when it cannot be loaded now. */
+  private async load(need: ModelNeed) {
+    const { lane } = need;
     this.emit({ type: "models", lane, state: "loading", messageZh: `正在加载${laneNameZh[lane]}…` });
     let failureZh: string | null;
     try {
-      failureZh = (await this.deps.host.open(lane))?.messageZh ?? null;
+      failureZh = (await this.deps.host.open(need))?.messageZh ?? null;
     } catch (error) {
       logger.error(`Loading the ${lane} lane failed: ${errorSummary(error)}`);
       failureZh = `${laneNameZh[lane]}加载失败`;
@@ -173,17 +185,20 @@ export class JobRunner {
       }
       const lane = this.nextDeviceLane();
       if (!lane) {
-        if (host.loaded === "gpu") {
+        if (host.loaded?.lane === "gpu") {
           // Vision memory goes back at once; the LLM may be needed again soon.
           await this.unload();
-        } else if (host.loaded === "llm") {
+        } else if (host.loaded?.lane === "llm") {
           this.llmIdleSince ??= Date.now();
           if (Date.now() - this.llmIdleSince >= this.options.llmIdleUnloadMs) await this.unload();
         }
         await this.sleep(this.options.pollMs);
         continue;
       }
-      if (host.loaded !== lane && !(await this.load(lane))) continue;
+      const next = queue.nextQueued(lane);
+      if (!next) continue;
+      const need = this.needOf(next);
+      if (!(host.loaded && isSameNeed(host.loaded, need)) && !(await this.load(need))) continue;
       this.llmIdleSince = null;
       const task = queue.claim(lane);
       if (task) await this.runTask(task);
