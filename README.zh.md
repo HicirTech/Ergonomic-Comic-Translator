@@ -28,7 +28,10 @@
    又是手绘样子的字就是艺术字；单独占着一块底、既有彩色又有描边的字也是（只占其一、又读不成文字的同样算）。检测到的文字框里如果找不到任何文字行，就没法清字，这一处保持原样，
    不会把译文叠在原文上。
 3. **先定人名和名词。** 收集全书的人名和反复出现的名词，结合全书上下文翻译后固定下来，保证每一页用同一个中文名。
-4. **翻译**（llama.cpp）。按阅读顺序一页一页翻，前面几页作为滚动上下文。每次回答都会自动检查（格式、拒答、
+   只有原文本身当作名字的词（后面带敬称、被引号括起、出现在名字牌上）、这些名字的称呼形式和地名会用来约束翻译；
+   模型同时报上来的普通词和俚语不会。
+4. **翻译**（llama.cpp）。日文本子由专门做日译中的 Sakura-14B-Qwen2.5-v1.0 翻译：每句一行，连同本页出现的名词表
+   条目一起交给它；其他语言由 Qwen3.5-9B 按 JSON 契约翻译。按阅读顺序一页一页翻，前面几页作为滚动上下文。每次回答都会自动检查（格式、拒答、
    原样照抄、残留的假名或谚文、重复输出）；不合格的句子会重试，名词表里的名字会被强制使用。重试后仍然
    只是存疑的完整回答（残留少量假名、短文本原样返回、叫声重复较多）会照常使用，并标记为需要查看。
 5. **嵌字。** 中文按原来的框和角度横排或竖排，遵守中文避头尾规则，字体为 Noto Sans SC Bold。文字不会超出
@@ -49,8 +52,8 @@
 | 系统 | Windows 10/11 x64。Linux x64 为实验性支持，只用 CPU。 |
 | 运行时 | [Bun](https://bun.sh) 1.4 或更新 |
 | 显卡 | NVIDIA 或 AMD，需要 DirectX 12（识别，通过 DirectML）和 Vulkan（翻译，通过 llama.cpp）。AMD 核显（如 Radeon 780M）需要至少 2 GB 的 UMA 显存划分。不支持 Intel 显卡，会改用 CPU。 |
-| 显存 | 默认翻译模型需要约 10 GB 空闲显存，识别模型约 2 GB（RTX 5090 实测；两者不会同时加载）；8 GB 显卡和核显有更小的档位。 |
-| 硬盘 | 默认下载约 14 GB（识别模型 1.2 GB、翻译模型 12.2 GB、llama.cpp 50 MB），小显卡模型另需 8 GB。 |
+| 显存 | 日文翻译模型需要约 12 GB 空闲显存，通用翻译模型约 10 GB，识别模型约 2 GB（RTX 5090 实测；不会同时加载）；日文模型放不下时日文本子改用通用模型，通用模型在 8 GB 显卡和核显上有更小的档位。 |
+| 硬盘 | 默认下载约 23 GB（识别模型 1.2 GB、通用翻译模型 12.2 GB、日文翻译模型 9 GB、llama.cpp 50 MB），小显卡模型另需 8 GB。 |
 
 本程序会礼让其他程序：加载任何东西之前先检查空闲显存、内存和提交量；内存紧张时暂停（黄灯），快耗尽时卸载自己的
 模型（红灯），之后自动继续。同一时间只加载一组模型，由一把全机共享的锁保证，命令行工具也遵守这把锁。
@@ -59,7 +62,7 @@
 
 ```bash
 bun install
-bun run models:fetch vision fonts llm   # 8 GB 显卡和核显再加上 llm-small
+bun run models:fetch vision fonts llm llm-ja   # 8 GB 显卡和核显再加上 llm-small
 bun run runtimes:fetch                  # llama.cpp b11146（Vulkan 和 CPU 版）
 bun run build:frontend
 bun run doctor                          # 只读体检：显卡、内存、推荐档位
@@ -99,7 +102,7 @@ bun run start                           # 然后打开 http://127.0.0.1:3000
 |---|---|
 | `bun run start [--port 3000] [--cpu]` | 本地服务，含网页界面和作业调度 |
 | `bun run doctor [--seconds N] [--json]` | 只读的资源报告，从不加载模型 |
-| `bun run models:fetch [组合或模型 id ...]` | 下载并校验模型（组合：`vision`、`fonts`、`llm`、`llm-small`、`korean`；`--list` 列出全部） |
+| `bun run models:fetch [组合或模型 id ...]` | 下载并校验模型（组合：`vision`、`fonts`、`llm`、`llm-ja`、`llm-small`、`korean`；`--list` 列出全部） |
 | `bun run runtimes:fetch [asset ...]` | 下载并解压 llama.cpp（默认：本平台的 Vulkan 和 CPU 版） |
 | `bun run vision <zip、cbz、文件夹或图片> [--out 目录] [--cpu] [--prior v\|h]` | 只做识别和清字，输出到一个结果文件夹 |
 | `bun run translate <结果文件夹> [--lang ja\|ko\|zh-Hant\|en] [--ltr] [--history 2000]` | 对识别结果做人名、名词和翻译 |
@@ -116,9 +119,9 @@ bun run start                           # 然后打开 http://127.0.0.1:3000
 |---|---|
 | Bun 主进程 | 127.0.0.1 上的 HTTP 服务、SQLite（唯一写入者）、作业调度、资源守护、嵌字和导出 |
 | 两个识别子进程 | 子进程里的 ONNX Runtime：一个用显卡（DirectML），一个用 CPU；卡住的运行会被结束 |
-| `llama-server` | 唯一的翻译模型，随机本地端口加随机 API key |
+| `llama-server` | 同一时间只有一个翻译模型（人名和名词用通用模型，日文页面用 Sakura），随机本地端口加随机 API key |
 
-显卡分时使用：先跑识别模型，识别完卸载，再加载翻译模型。嵌字和导出同时在 CPU 上进行。
+显卡分时使用：先跑识别模型，识别完卸载，再逐个加载翻译模型。嵌字和导出同时在 CPU 上进行。
 
 | 文件夹 | 内容 |
 |---|---|
@@ -139,7 +142,7 @@ bun run start                           # 然后打开 http://127.0.0.1:3000
 - 韩语：韩语文字行识别模型可以下载（`korean` 组合），但流水线还没用上，所以韩语页面目前由偏日语的识别模型来读。
 - 主模型反复拒答或失败时换用其他模型重译（目前只有同一个模型的重试）。
 - 重新运行一本书会从头算一遍，已完成的步骤还不能复用。
-- 小显卡翻译档位（8 GB 显卡、核显）尚未测试。
+- 小显卡翻译档位（8 GB 显卡、核显）尚未测试；日文翻译模型只有一个约需 12 GB 空闲显存的档位，更小的显卡用通用模型翻日文。
 - LaMa 修补模型跑在 WebGPU 上，因为 DirectML 拒绝运行它；WebGPU 自己挑显卡，在有两块显卡的机器上可能和识别模型
   用的不是同一块。WebGPU 加载不了它时改用 MI-GAN，文字压在画面上的地方补得明显差一些。
 - 单独成行的一排省略号会被擦掉但不会翻译：文字行检测找不到它。
@@ -160,7 +163,7 @@ bun run dev:frontend   # Vite 跑在 5173 端口，把 /api 转发给 3000 端�
 - 日志和终端输出只含 id 和指标，不含原文或译文。
 - 基准本子以及由它得到的任何内容（OCR 文字、译文、裁图、遮罩）都不进仓库。
 - 加载模型前先检查资源（`bun run doctor`），并且只在持有显卡锁时加载模型。
-- GPL 和 AGPL 项目只作设计参考；默认模型只用 Apache-2.0、MIT 或 OFL 许可的文件。
+- GPL 和 AGPL 项目只作设计参考；默认模型只用 Apache-2.0、MIT 或 OFL 许可的文件，唯一的例外是日文翻译模型（CC BY-NC-SA 4.0，仅限非商业使用）。
 
 ## 模型
 
@@ -176,9 +179,10 @@ bun run dev:frontend   # Vite 跑在 5173 端口，把 /api 转发给 3000 端�
 | [MI-GAN](https://huggingface.co/andraniksargsyan/migan) | MIT | 只用 CPU 时、以及 WebGPU 跑不了 LaMa 时做同样的事 |
 | [Qwen3.5-9B GGUF](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF) | Apache-2.0 | 翻译（Q6_K、Q4_K_M、IQ3_XXS 档位） |
 | [Hy-MT2-7B GGUF](https://huggingface.co/tencent/Hy-MT2-7B-GGUF) | Apache-2.0 | 核显用的翻译档位 |
+| [Sakura-14B-Qwen2.5-v1.0 GGUF](https://huggingface.co/SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF) | CC BY-NC-SA 4.0 | 日文翻译（Q4_K_M）；仅限非商业使用 |
 | [Noto Sans SC Bold](https://github.com/notofonts/noto-cjk) | OFL-1.1 | 中文嵌字字体 |
 | [korean PP-OCRv5 mobile rec](https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx) | Apache-2.0 | 韩语文字行识别（尚未使用） |
 
 ## 许可
 
-MIT，见 [LICENSE](LICENSE)。模型文件各自遵循上表所列的许可。
+MIT，见 [LICENSE](LICENSE)。模型文件各自遵循上表所列的许可；日文翻译模型仅允许非商业使用。

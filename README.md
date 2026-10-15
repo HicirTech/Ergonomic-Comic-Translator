@@ -40,12 +40,16 @@ checking are automatic.
    A detected text box in which no text line is found cannot be cleaned, so it is left as it is instead of
    being lettered over.
 3. **Names and terms first.** Names and recurring terms of the whole volume are collected, translated with
-   context from across the volume, and frozen so every page uses the same Chinese names.
-4. **Translate** (llama.cpp). Page by page in reading order, with earlier pages as rolling context. Every answer
-   is checked automatically (structure, refusals, echoed source text, untranslated kana or hangul, repetition);
-   failed lines are retried, and glossary names are enforced. A complete answer that is still doubtful after
-   the retries (some kana left, a short text returned as it was, a much-repeated cry) is used and marked for
-   review.
+   context from across the volume, and frozen so every page uses the same Chinese names. Only what the text
+   itself treats as a name (an honorific after it, quotation marks around it, a name tag), the address forms of
+   such names and places steer the translation; the common words and slang a model also reports as names do not.
+4. **Translate** (llama.cpp). A Japanese volume is translated by Sakura-14B-Qwen2.5-v1.0, a model trained for
+   Japanese-to-Chinese translation, asked one line per utterance with the glossary entries that occur on the
+   page; other languages by Qwen3.5-9B through a JSON contract. Page by page in reading order, with earlier
+   pages as rolling context. Every answer is checked automatically (structure, refusals, echoed source text,
+   untranslated kana or hangul, repetition); failed lines are retried, and glossary names are enforced. A
+   complete answer that is still doubtful after the retries (some kana left, a short text returned as it was, a
+   much-repeated cry) is used and marked for review.
 5. **Letter.** Chinese text is set horizontally or vertically in the original box at the original angle, with
    Chinese line-breaking rules, in Noto Sans SC Bold. It stays inside its bubble and the page (inside the
    bubble's frame where the page shows one beside the text, not just inside the detected bubble, which also
@@ -69,8 +73,8 @@ and the reading direction follows from it.
 | OS | Windows 10/11 x64. Linux x64 is experimental and runs on the CPU only. |
 | Runtime | [Bun](https://bun.sh) 1.4 or newer |
 | GPU | NVIDIA or AMD with DirectX 12 (reading, via DirectML) and Vulkan (translation, via llama.cpp). AMD integrated graphics (e.g. Radeon 780M) work with a UMA frame buffer of at least 2 GB. Intel GPUs are not supported; the CPU is used instead. |
-| Video memory | About 10 GB free for the default translation model and 2 GB for the reading models (measured on an RTX 5090; the two are never loaded together); smaller tiers exist for 8 GB cards and integrated graphics. |
-| Disk | About 14 GB for the default downloads (vision 1.2 GB, translation models 12.2 GB, llama.cpp 50 MB), plus 8 GB for the small-GPU models. |
+| Video memory | About 12 GB free for the Japanese translation model and 10 GB for the general one, 2 GB for the reading models (measured on an RTX 5090; never loaded together); where the Japanese model does not fit, Japanese volumes use the general one, which has smaller tiers for 8 GB cards and integrated graphics. |
+| Disk | About 23 GB for the default downloads (vision 1.2 GB, general translation models 12.2 GB, the Japanese translation model 9 GB, llama.cpp 50 MB), plus 8 GB for the small-GPU models. |
 
 The app shares the GPU politely: it checks free video memory, RAM and commit before loading anything, pauses when
 memory runs low (yellow light), unloads its models when it runs out (red light) and continues later. Only one
@@ -80,7 +84,7 @@ set of models is loaded at a time, guarded by a machine-wide lock that the comma
 
 ```bash
 bun install
-bun run models:fetch vision fonts llm   # add llm-small on 8 GB cards and integrated graphics
+bun run models:fetch vision fonts llm llm-ja   # add llm-small on 8 GB cards and integrated graphics
 bun run runtimes:fetch                  # llama.cpp b11146 (Vulkan and CPU builds)
 bun run build:frontend
 bun run doctor                          # read-only report: GPUs, memory, recommended tier
@@ -124,7 +128,7 @@ local disk.
 |---|---|
 | `bun run start [--port 3000] [--cpu]` | Local server with the web UI and the job runner |
 | `bun run doctor [--seconds N] [--json]` | Read-only resource report; never loads a model |
-| `bun run models:fetch [pack or model id ...]` | Download and verify models (packs: `vision`, `fonts`, `llm`, `llm-small`, `korean`; `--list` shows all) |
+| `bun run models:fetch [pack or model id ...]` | Download and verify models (packs: `vision`, `fonts`, `llm`, `llm-ja`, `llm-small`, `korean`; `--list` shows all) |
 | `bun run runtimes:fetch [asset ...]` | Download and unpack llama.cpp (default: this platform's Vulkan and CPU builds) |
 | `bun run vision <zip, cbz, folder or images> [--out dir] [--cpu] [--prior v\|h]` | Reading and cleaning only, into a run folder |
 | `bun run translate <run folder> [--lang ja\|ko\|zh-Hant\|en] [--ltr] [--history 2000]` | Names, terms and translation of a vision run |
@@ -142,9 +146,10 @@ the others do not.
 |---|---|
 | Main Bun process | HTTP server on 127.0.0.1, SQLite (single writer), job runner, resource governor, lettering and export |
 | Two vision workers | ONNX Runtime in child processes: one on the GPU (DirectML), one on the CPU; a hung run is killed |
-| `llama-server` | The one translation model, on a random local port with a random API key |
+| `llama-server` | One translation model at a time (the general one for names and terms, Sakura for Japanese pages), on a random local port with a random API key |
 
-The GPU is time-shared: the reading models run first, then they are unloaded and the translation model is loaded.
+The GPU is time-shared: the reading models run first, then they are unloaded and the translation models are
+loaded, one at a time.
 Lettering and export run on the CPU alongside.
 
 | Folder | Contents |
@@ -169,7 +174,8 @@ Lettering and export run on the CPU alongside.
 - Fallback translation with other models when the main model keeps refusing or failing (only retries with the
   same model exist today).
 - Re-running a volume recomputes every step; finished steps are not reused yet.
-- The small-GPU translation tiers (8 GB cards, integrated graphics) are untested.
+- The small-GPU translation tiers (8 GB cards, integrated graphics) are untested, and the Japanese translator has
+  only a tier for cards with about 12 GB free: smaller ones translate Japanese with the general model.
 - LaMa runs on WebGPU, because DirectML rejects the model; WebGPU chooses its graphics adapter itself, which
   on a machine with two can be another one than the reading models use. Where WebGPU cannot load it, MI-GAN
   takes its place, with a visibly weaker fill where text stands on artwork.
@@ -192,8 +198,8 @@ Rules for contributions:
 - Benchmark volumes and anything derived from them (OCR text, translations, crops, masks) never enter the
   repository.
 - Check resources (`bun run doctor`) before loading models, and load models only while holding the GPU lock.
-- GPL and AGPL projects are design references only; the default model pack uses Apache-2.0, MIT or OFL
-  licensed files only.
+- GPL and AGPL projects are design references only; the default model packs use Apache-2.0, MIT or OFL
+  licensed files, except the Japanese translation model, which is CC BY-NC-SA 4.0 (non-commercial use only).
 
 ## Models
 
@@ -209,9 +215,11 @@ Rules for contributions:
 | [MI-GAN](https://huggingface.co/andraniksargsyan/migan) | MIT | the same on the CPU, and where WebGPU cannot run LaMa |
 | [Qwen3.5-9B GGUF](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF) | Apache-2.0 | translation (Q6_K, Q4_K_M, IQ3_XXS tiers) |
 | [Hy-MT2-7B GGUF](https://huggingface.co/tencent/Hy-MT2-7B-GGUF) | Apache-2.0 | translation tier for integrated graphics |
+| [Sakura-14B-Qwen2.5-v1.0 GGUF](https://huggingface.co/SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF) | CC BY-NC-SA 4.0 | Japanese translation (Q4_K_M); non-commercial use only |
 | [Noto Sans SC Bold](https://github.com/notofonts/noto-cjk) | OFL-1.1 | Chinese lettering font |
 | [korean PP-OCRv5 mobile rec](https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx) | Apache-2.0 | Korean line recognition (not used yet) |
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Model files keep their own licences listed above.
+MIT, see [LICENSE](LICENSE). Model files keep their own licences listed above; the Japanese translation model allows
+non-commercial use only.
