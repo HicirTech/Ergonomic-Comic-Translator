@@ -102,9 +102,10 @@ describe("regionTextMask", () => {
     const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 150, 60, 0)])!;
     const pageMask = new Uint8Array(200 * 160);
     addToPageMask(pageMask, 200, region);
-    // The white edge covers rows 62 to 73 above the bar: all of it is masked, the paper two rows above it is not.
+    // The white edge covers rows 62 to 73 above the bar: all of it and its blended rim are masked, the paper beyond is not.
     expect(pageMask[62 * 200 + 100]).toBe(1);
-    expect(pageMask[60 * 200 + 100]).toBe(0);
+    expect(pageMask[60 * 200 + 100]).toBe(1);
+    expect(pageMask[59 * 200 + 100]).toBe(0);
     expect(region.outlineMedian).toEqual([255, 255, 255]);
     expect(region.ringMedian).toEqual([190, 190, 190]);
   });

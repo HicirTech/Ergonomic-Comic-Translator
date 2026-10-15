@@ -59,6 +59,11 @@ const bandReachShare = 0.5;
 /** A pixel this close to the outline's colour on every channel is its band; below outlineContrast, so paper never is. */
 const bandTolerance = 40;
 /**
+ * The blend of a band's edge with the paper spans this many pixels, and they go with the band: one left a
+ * lighter rim that the membrane and the model carried into the hole as a light block.
+ */
+const bandRimPixels = 2;
+/**
  * Marks are looked for this far past the ends of a line and beside it, in line thicknesses. Inside a
  * bubble the search goes further, because nothing but text is that dark in a bubble: along the line it
  * follows a leader of eight dots (on one volume the last dot of one lay 4.1 thicknesses past its line), and
@@ -479,8 +484,8 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     }
   }
 
-  // An outline drawn wider than the mask may grow: the pixels of its colour that touch the strokes, and one
-  // more for their blended rim, go with the strokes, so the fill starts from the paper beyond the band.
+  // An outline drawn wider than the mask may grow: the pixels of its colour that touch the strokes, and
+  // their blended rim, go with the strokes, so the fill starts from the paper beyond the band.
   if (outlineMedian !== null && !outlinedFill) {
     const reach = dilateSquare(reachMask, width, height, Math.min(Math.round(bandReachShare * thickness), 2 * outlineEnd));
     const ofBand = (index: number) => {
@@ -488,7 +493,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
       return outlineMedian.every((value, channel) => Math.abs(rgb.data[offset + channel]! - value) <= bandTolerance);
     };
     const band = floodFrom(grown, reach, ofBand, width, height);
-    const rim = dilateSquare(band, width, height, 1);
+    const rim = dilateSquare(band, width, height, bandRimPixels);
     for (let index = 0; index < grown.length; index += 1) {
       if (grown[index] || !reach[index] || !(band[index] || rim[index])) continue;
       grown[index] = 1;
