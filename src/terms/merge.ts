@@ -92,7 +92,10 @@ export const mergeEntities = (chunks: readonly ExtractedEntity[][], lines: reado
   }
 
   for (const [addressKey, use] of addressUses) {
-    if (use.uses < addressMinUses || !merged.some((term) => term.normKey === addressKey.split("+")[0])) continue;
+    const base = merged.find((term) => term.normKey === addressKey.split("+")[0]);
+    if (use.uses < addressMinUses || !base) continue;
+    // The address form stands for the address term from here on, so a match of it is never the bare name.
+    base.surfaces = base.surfaces.filter((surface) => surface !== use.surface);
     merged.push({
       normKey: addressKey,
       canonical: use.surface,

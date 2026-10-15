@@ -104,6 +104,15 @@ describe("S7c merge", () => {
     expect(terms.some((term) => term.normKey === "学園")).toBe(false);
     expect(terms.find((term) => term.kind === "address")).toMatchObject({ canonical: "リンちゃん", honorific: "ちゃん", votes: 2 });
   });
+
+  it("leaves the address form to the address term, so a match of it is never the bare name", () => {
+    const terms = mergeEntities([
+      [{ src: "リンちゃん", kind: "person", base: "リン", honorific: "ちゃん", evidence: ["1.1.0"] }],
+      [{ src: "リンちゃん", kind: "person", base: "リン", honorific: "ちゃん", evidence: ["2.1.0"] }],
+    ], lines);
+    expect(terms.find((term) => term.kind === "person")!.surfaces).toEqual(["リン"]);
+    expect(terms.find((term) => term.kind === "address")!.surfaces).toEqual(["リンちゃん"]);
+  });
 });
 
 describe("S7d fixing", () => {
@@ -164,6 +173,13 @@ describe("trust", () => {
     expect(isTrustedTerm(fixed({ normKey: "学園", canonical: "学園", kind: "place", surfaces: ["学園"] }), lines, "ja")).toBe(true);
     expect(isTrustedTerm(fixed({ normKey: "ルセェ", canonical: "るせぇ", surfaces: ["るせぇ"] }), lines, "ja")).toBe(false);
     expect(isTrustedTerm(fixed({ normKey: "ムラムラ", canonical: "ムラムラ", kind: "term", surfaces: ["ムラムラ"] }), lines, "ja")).toBe(false);
+  });
+
+  it("keeps a recurring katakana loanword of any kind, but not a mimetic word or a one-off", () => {
+    expect(isTrustedTerm(fixed({ normKey: "アンデッド", canonical: "アンデッド", kind: "title", surfaces: ["アンデッド"], occurrences: 16 }), lines, "ja")).toBe(true);
+    expect(isTrustedTerm(fixed({ normKey: "ドキドキ", canonical: "ドキドキ", kind: "term", surfaces: ["ドキドキ"], occurrences: 5 }), lines, "ja")).toBe(false);
+    expect(isTrustedTerm(fixed({ normKey: "バイブ", canonical: "バイブ", kind: "item", surfaces: ["バイブ"], occurrences: 1 }), lines, "ja")).toBe(false);
+    expect(isTrustedTerm(fixed({ normKey: "受付", canonical: "受付", kind: "title", surfaces: ["受付"], occurrences: 4 }), lines, "ja")).toBe(false);
   });
 
   it("takes an honorific, quotation marks or a name tag as name evidence", () => {
