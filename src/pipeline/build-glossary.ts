@@ -6,6 +6,7 @@ import { applyFixAnswer, fixBatches, fixContractVersion, fixMessages, fixSchema 
 import { freezeGlossary, resolveTerms } from "../terms/freeze.ts";
 import type { ExtractedEntity, FixedTerm, SourceLine } from "../terms/interfaces/index.ts";
 import { mergeEntities } from "../terms/merge.ts";
+import { isTrustedTerm } from "../terms/trust.ts";
 import type { CompleteFn, SourceLanguage } from "../translate/interfaces/index.ts";
 
 /** Answer budget of one term-translate@1 batch (15 items of at most ~60 tokens). */
@@ -26,7 +27,8 @@ const withOneRetry = async <T>(work: (seed: number) => Promise<T>, seed: number)
 
 /**
  * S7 barrier for a volume: rule candidates, chunked extraction with evidence checks and chunk votes,
- * deterministic merge, name fixing with context from the whole volume, then resolution and freeze.
+ * deterministic merge, name fixing with context from the whole volume, then resolution and freeze of the terms
+ * that may steer the translation (names with evidence, places); the rest is dropped and counted.
  * Failed chunks and batches are skipped and counted, never fatal.
  */
 export const buildGlossary = async (lines: readonly SourceLine[], language: SourceLanguage, complete: CompleteFn, modelSha: string) => {
@@ -67,6 +69,7 @@ export const buildGlossary = async (lines: readonly SourceLine[], language: Sour
     unfixed += answer.unanswered.length;
   }
 
-  const { terms, conflicts } = resolveTerms(fixed);
-  return { terms, conflicts, glossary: freezeGlossary(terms), skippedChunks, unfixed };
+  const trusted = fixed.filter((term) => isTrustedTerm(term, lines, language));
+  const { terms, conflicts } = resolveTerms(trusted);
+  return { terms, conflicts, glossary: freezeGlossary(terms), skippedChunks, unfixed, dropped: fixed.length - trusted.length };
 };

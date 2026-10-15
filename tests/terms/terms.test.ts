@@ -8,6 +8,7 @@ import type { FixedTerm, MergedTerm, SourceLine } from "../../src/terms/interfac
 import { createMatcher } from "../../src/terms/matcher.ts";
 import { mergeEntities } from "../../src/terms/merge.ts";
 import { normKey, splitHonorific, toKatakana } from "../../src/terms/norm-key.ts";
+import { hasNameEvidence, isTrustedTerm } from "../../src/terms/trust.ts";
 
 const line = (id: string, text: string, nameTag = false): SourceLine => ({ id, page: Number(id.split(".")[0]), text, nameTag });
 
@@ -151,6 +152,28 @@ describe("S7e freeze", () => {
     const glossary = freezeGlossary([fixed({ gender: "f", noteZh: "女主角" }), fixed({ normKey: "ケン", canonical: "ケン", target: "健", occurrences: 1 })]);
     expect(glossary.roleTable).toEqual([{ source: "リン", target: "琳", note: "女，女主角" }]);
     expect(glossary.sha256).toBe(freezeGlossary([fixed({ gender: "f", noteZh: "女主角" }), fixed({ normKey: "ケン", canonical: "ケン", target: "健", occurrences: 1 })]).sha256);
+  });
+});
+
+describe("trust", () => {
+  const lines = [line("1.1.0", "リンちゃん、おはよう"), line("2.1.0", "っるせぇ！"), line("3.1.0", "学園に行く")];
+
+  it("keeps people the text treats as names, address forms and places, and drops the rest", () => {
+    expect(isTrustedTerm(fixed({}), lines, "ja")).toBe(true);
+    expect(isTrustedTerm(fixed({ normKey: "リン+ちゃん", canonical: "リンちゃん", kind: "address", surfaces: ["リンちゃん"] }), lines, "ja")).toBe(true);
+    expect(isTrustedTerm(fixed({ normKey: "学園", canonical: "学園", kind: "place", surfaces: ["学園"] }), lines, "ja")).toBe(true);
+    expect(isTrustedTerm(fixed({ normKey: "ルセェ", canonical: "るせぇ", surfaces: ["るせぇ"] }), lines, "ja")).toBe(false);
+    expect(isTrustedTerm(fixed({ normKey: "ムラムラ", canonical: "ムラムラ", kind: "term", surfaces: ["ムラムラ"] }), lines, "ja")).toBe(false);
+  });
+
+  it("takes an honorific, quotation marks or a name tag as name evidence", () => {
+    expect(hasNameEvidence(["ユキ"], [line("1.1.0", "「ユキ」と申します")], "ja")).toBe(true);
+    expect(hasNameEvidence(["ゆき"], [line("1.1.0", "【ユキ】", true)], "ja")).toBe(true);
+    expect(hasNameEvidence(["ユキ"], [line("1.1.0", "ユキが来た")], "ja")).toBe(false);
+  });
+
+  it("trusts the extractor's people in a language whose names carry no honorific", () => {
+    expect(isTrustedTerm(fixed({ normKey: "Rin", canonical: "Rin", surfaces: ["Rin"] }), [line("1.1.0", "Rin came")], "en")).toBe(true);
   });
 });
 

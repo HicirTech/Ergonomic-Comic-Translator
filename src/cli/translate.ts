@@ -69,7 +69,7 @@ const withSession = async <T>(role: LlmRole, work: (session: LlmSession) => Prom
 try {
   const glossary = await withSession("general", ({ complete, modelSha }) => buildGlossary(pages.flatMap((page) => page.lines), language, complete, modelSha));
   if (glossary) {
-    console.log(`人物与名词：${glossary.terms.length} 个（跳过 ${glossary.skippedChunks} 块，未定 ${glossary.unfixed} 个，冲突 ${glossary.conflicts.length} 处）`);
+    console.log(`人物与名词：${glossary.terms.length} 个（跳过 ${glossary.skippedChunks} 块，未定 ${glossary.unfixed} 个，弃用 ${glossary.dropped} 个，冲突 ${glossary.conflicts.length} 处）`);
     mkdirSync(join(run, "translations"), { recursive: true });
     writeFileSync(join(run, "translations", "glossary.json"), JSON.stringify(glossary, null, 1));
 

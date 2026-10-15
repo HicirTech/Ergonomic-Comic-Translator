@@ -12,6 +12,9 @@ const rejected = /[～〜~。、！？!?,.…]/u;
 
 type Hit = { surface: string; signal: TermSignal };
 
+/** The name on a name tag, without its brackets or colon. */
+export const nameTagText = (text: string) => text.replace(/^[【\[]|[】\]:：]$/gu, "").trim();
+
 const hitsOf = (line: SourceLine, language: SourceLanguage): Hit[] => {
   const text = line.text.normalize("NFKC");
   const hits: Hit[] = [];
@@ -19,7 +22,7 @@ const hitsOf = (line: SourceLine, language: SourceLanguage): Hit[] => {
     for (const match of text.matchAll(pattern)) hits.push({ surface: match[group]!, signal });
   };
   if (line.nameTag) {
-    hits.push({ surface: text.replace(/^[【\[]|[】\]:：]$/gu, "").trim(), signal: "nametag" });
+    hits.push({ surface: nameTagText(text), signal: "nametag" });
   }
   switch (language) {
     case "ja":

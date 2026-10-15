@@ -122,6 +122,18 @@ describe("buildGlossary", () => {
     expect(result.glossary.roleTable).toEqual([{ source: "リン", target: "琳" }]);
   });
 
+  it("drops a person the text never treats as a name, so it cannot steer the translation", async () => {
+    const lines = [{ id: "1.1.0", page: 1, text: "っるせぇ！", nameTag: false }, { id: "2.1.0", page: 2, text: "るせぇ！", nameTag: false }];
+    const result = await buildGlossary(lines, "ja", async ({ messages, schema }) => {
+      if ("entities" in (schema!.properties as object)) {
+        return completion(JSON.stringify({ entities: [{ src: "るせぇ", kind: "person", evidence: [userJson(messages).lines[0].id] }] }));
+      }
+      return completion(JSON.stringify({ items: userJson(messages).items.map((item: { src: string }) => ({ src: item.src, tgt: "露西", gender: "f", note_zh: "", drop: false })) }));
+    }, "model-sha");
+    expect(result.terms).toEqual([]);
+    expect(result.dropped).toBe(1);
+  });
+
   it("skips a chunk that fails twice instead of failing the volume", async () => {
     const result = await buildGlossary([{ id: "1.1.0", page: 1, text: "テスト", nameTag: false }], "ja", async () => completion("not json"), "m");
     expect(result.skippedChunks).toBe(1);
