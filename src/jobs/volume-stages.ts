@@ -102,7 +102,6 @@ export const createVolumeStages = (
       const result = await translateVolumePage(text.pages, index, earlier, {
         terms: glossary?.terms ?? [],
         roleTable: frozen.roleTable,
-        glossarySha: frozen.sha256,
         language: text.language,
         complete,
         modelSha,

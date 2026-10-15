@@ -5,7 +5,6 @@ import type { CompleteFn, ContractId, GlossaryEntry, SourceLanguage } from "../.
 export interface VolumeTranslationContext {
   terms: readonly FixedTerm[];
   roleTable: readonly GlossaryEntry[];
-  glossarySha: string;
   language: SourceLanguage;
   complete: CompleteFn;
   modelSha: string;

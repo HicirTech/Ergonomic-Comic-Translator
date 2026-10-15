@@ -169,7 +169,6 @@ describe("translateVolume", () => {
   const context = (complete: CompleteFn) => ({
     terms: [rin],
     roleTable: [{ source: "リン", target: "琳" }],
-    glossarySha: "sha",
     language: "ja" as const,
     complete,
     modelSha: "m",
@@ -191,6 +190,17 @@ describe("translateVolume", () => {
     expect(userJson(seen[0]!).terms).toEqual([{ source: "リン", target: "琳" }]);
     const pageTwo = seen.find((messages) => userJson(messages).page === 2)!;
     expect(pageTwo.filter((message) => message.role === "assistant")).toHaveLength(1);
+  });
+
+  it("keeps a page's seed when only the glossary changes", async () => {
+    const seeds: number[] = [];
+    const record: CompleteFn = async (request) => {
+      seeds.push(request.seed);
+      return echo(request);
+    };
+    await translateVolume(pages.slice(0, 1), context(record));
+    await translateVolume(pages.slice(0, 1), { ...context(record), terms: [], roleTable: [] });
+    expect(seeds[1]).toBe(seeds[0]);
   });
 
   it("asks in the loaded model's own contract and hands it the terms' notes", async () => {

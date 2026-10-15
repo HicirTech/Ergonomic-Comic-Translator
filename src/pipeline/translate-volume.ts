@@ -28,7 +28,7 @@ export const translateVolumePage = async (
   if (page.units.length === 0) {
     return { page: page.page, units: [], targets: {}, flags: {}, requests: 0 };
   }
-  const { terms, roleTable, glossarySha, language, complete, modelSha, historyBudget } = context;
+  const { terms, roleTable, language, complete, modelSha, historyBudget } = context;
   const contract = translationContracts[context.contract];
   const matcher = createMatcher(terms.flatMap((term) => term.surfaces.map((surface) => ({ surface, value: term }))));
   const start = historyWindowStart(pages.slice(0, index).map((earlierPage) => sourceTokens(earlierPage.units)), historyBudget);
@@ -56,11 +56,12 @@ export const translateVolumePage = async (
     return cry ? { ...unit, source: shownCry(cry) } : unit;
   });
   const request = { language, page: page.page, units, glossary: [...roleTable], matchingTerms, history };
+  // The seed follows what the model is asked to translate, not the glossary: a changed term changes the prompt
+  // only on the pages where it occurs, and every other page translates as before.
   const seed = seedFromKey(cacheKey({
     stage: "translate",
     contract: contract.version,
     modelSha,
-    glossarySha,
     units: page.units.map((unit) => [unit.id, unit.source]),
     history: history.map((entry) => entry.units.map((unit) => unit.source)),
   }));

@@ -77,7 +77,6 @@ try {
     const results = await withSession(llmRoleFor(language), (session) => translateVolume(pages, {
       terms: glossary.terms,
       roleTable: glossary.glossary.roleTable,
-      glossarySha: glossary.glossary.sha256,
       language,
       complete: session.complete,
       modelSha: session.modelSha,
