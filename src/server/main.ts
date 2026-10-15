@@ -13,6 +13,7 @@ import { ResourceMonitor } from "../gov/resource-monitor.ts";
 import { JobRunner } from "../jobs/job-runner.ts";
 import { createModelHost } from "../jobs/model-host.ts";
 import { createVolumeStages } from "../jobs/volume-stages.ts";
+import { openJapaneseDictionary } from "../pipeline/japanese-dictionary.ts";
 import { readModelsLock, readRuntimesLock } from "../models/lock.ts";
 import { missingDownloads } from "../models/readiness.ts";
 import type { Shaper } from "../typeset/interfaces/index.ts";
@@ -40,7 +41,7 @@ const runner = new JobRunner({
   db,
   queue: createTaskQueue(db),
   volumes,
-  stages: createVolumeStages(paths, volumes, flags, host, () => (shaper ??= loadLetteringShaper(paths))),
+  stages: createVolumeStages(paths, volumes, flags, host, () => (shaper ??= loadLetteringShaper(paths)), () => openJapaneseDictionary(paths, modelsLock)),
   host,
   dispatchAllowed: () => (monitor.latest?.assessment.light ?? "green") === "green",
 });

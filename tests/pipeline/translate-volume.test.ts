@@ -71,6 +71,12 @@ describe("pageText", () => {
     expect(text.lines.map((line) => line.id)).toEqual(["4.1.0", "4.1.1", "4.2.0"]);
   });
 
+  it("mends each reading through the given correction before it becomes a unit and a line", () => {
+    const text = pageText(1, [region(0, 0, ["ピンホーン"])], "rtl", (reading) => reading.replace("ホ", "ポ"));
+    expect(text.units[0]!.source).toBe("ピンポーン");
+    expect(text.lines[0]!.text).toBe("ピンポーン");
+  });
+
   it("leaves out a region whose text could not be removed, so nothing is lettered over it", () => {
     const text = pageText(1, [region(0, 0, ["セリフ"]), { ...region(300, 0, ["消せない字"]), clean: "none" }], "rtl");
     expect(text.units).toEqual([{ id: "2", kind: "dialogue", source: "セリフ" }]);

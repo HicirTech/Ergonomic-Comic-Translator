@@ -5,15 +5,18 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { dataPaths, resolveDataRoot } from "../core/data-paths.ts";
 import type { LlmRole } from "../gov/interfaces/index.ts";
+import { readModelsLock } from "../models/lock.ts";
 import { openResourceProbe } from "../gov/probe.ts";
 import { ResourceMonitor } from "../gov/resource-monitor.ts";
 import { llmRoleFor } from "../gov/tiers.ts";
 import { buildGlossary } from "../pipeline/build-glossary.ts";
 import type { PageVisionResult } from "../pipeline/interfaces/index.ts";
 import { translateVolume } from "../pipeline/translate-volume.ts";
+import { openJapaneseDictionary } from "../pipeline/japanese-dictionary.ts";
 import { pageText } from "../pipeline/volume-text.ts";
 import type { LlmSession } from "../sessions/interfaces/index.ts";
 import { openLlmSession } from "../sessions/llm-session.ts";
+import { correctKatakana } from "../terms/katakana-fix.ts";
 import type { SourceLanguage } from "../translate/interfaces/index.ts";
 
 const args = process.argv.slice(2);
@@ -29,14 +32,22 @@ if (!runDirectory) {
 const language = (option("--lang") ?? "ja") as SourceLanguage;
 const historyBudget = Number(option("--history") ?? 2000);
 const run = resolve(runDirectory);
+const paths = dataPaths(resolveDataRoot());
 
+let corrections = 0;
+const dictionary = language === "ja" ? openJapaneseDictionary(paths, readModelsLock()) : null;
+const correct = (text: string) => {
+  if (!dictionary) return text;
+  const fixed = correctKatakana(text, dictionary);
+  corrections += fixed.changes.length;
+  return fixed.text;
+};
 const pages = readdirSync(join(run, "results")).filter((name) => name.endsWith(".json")).sort().map((name) => {
   const { page, result } = JSON.parse(readFileSync(join(run, "results", name), "utf8")) as { page: { ordinal: number }; result: PageVisionResult };
-  return pageText(page.ordinal, result.regions, args.includes("--ltr") ? "ltr" : "rtl");
+  return pageText(page.ordinal, result.regions, args.includes("--ltr") ? "ltr" : "rtl", correct);
 });
-console.log(`读入 ${pages.length} 页，${pages.reduce((sum, page) => sum + page.units.length, 0)} 句`);
+console.log(`读入 ${pages.length} 页，${pages.reduce((sum, page) => sum + page.units.length, 0)} 句，词典校正 ${corrections} 处`);
 
-const paths = dataPaths(resolveDataRoot());
 const probe = openResourceProbe();
 const monitor = new ResourceMonitor(probe);
 monitor.start();

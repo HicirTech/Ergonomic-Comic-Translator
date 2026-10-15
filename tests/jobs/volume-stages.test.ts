@@ -85,7 +85,7 @@ describe("glossary stage", () => {
 
     const stages = createVolumeStages(paths, volumes, createFlagStore(db), host, () => {
       throw new Error("not used by the glossary stage");
-    });
+    }, () => ({ has: () => true }));
     await stages.glossary({ task: queue.claim("llm")!, volume: volumes.volume(volumeId)!, pages: volumes.pages(volumeId), page: null });
 
     const text = JSON.parse(readFileSync(files.text, "utf8")) as VolumeText;

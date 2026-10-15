@@ -17,6 +17,8 @@ import { pageText } from "../pipeline/volume-text.ts";
 import { translationFlagCodes, translationFlags } from "../qa/translation-flags.ts";
 import { defaultReadingDirection, detectSourceLanguage } from "../stages/lang/detect-language.ts";
 import { freezeGlossary } from "../terms/freeze.ts";
+import type { JapaneseDictionary } from "../terms/interfaces/index.ts";
+import { katakanaCorrector } from "../terms/katakana-fix.ts";
 import { composePage } from "../typeset/compose-page.ts";
 import type { Shaper } from "../typeset/interfaces/index.ts";
 import type { ModelHost, StageContext, StageRun, VolumeStage, VolumeText } from "./interfaces/index.ts";
@@ -45,7 +47,8 @@ const writingPrior = (volume: VolumeRecord) => {
 
 /**
  * The five stages of a translate_volume job over files in the volume folder. Model stages use whatever
- * `host` has loaded (the runner loads what each task needs first); `shaper` loads the lettering font once.
+ * `host` has loaded (the runner loads what each task needs first); `shaper` loads the lettering font once and
+ * `dictionary` the Japanese dictionary.
  */
 export const createVolumeStages = (
   paths: DataPaths,
@@ -53,6 +56,7 @@ export const createVolumeStages = (
   flags: FlagStore,
   host: ModelHost,
   shaper: () => Promise<Shaper>,
+  dictionary: () => JapaneseDictionary,
 ): Record<VolumeStage, StageRun> => {
   const imagePath = (page: PageRecord) => join(paths.pages, page.image_file);
   const originalAsPng = async (page: PageRecord) => new Uint8Array(await sharp(imagePath(page)).png().toBuffer());
@@ -79,7 +83,8 @@ export const createVolumeStages = (
       const language = detected?.language ?? fallbackLanguage;
       volumes.setLanguage(volume.id, language, detected?.confidence ?? 0, defaultReadingDirection(language));
       const direction = volume.reading_direction ?? defaultReadingDirection(language);
-      const text: VolumeText = { language, direction, pages: read.map(({ page, result }) => pageText(page.ordinal, result.regions, direction)) };
+      const correct = language === "ja" ? katakanaCorrector(dictionary()) : undefined;
+      const text: VolumeText = { language, direction, pages: read.map(({ page, result }) => pageText(page.ordinal, result.regions, direction, correct)) };
       writeFileAtomically(files.text, JSON.stringify(text));
 
       const { complete, modelSha } = host.llm();

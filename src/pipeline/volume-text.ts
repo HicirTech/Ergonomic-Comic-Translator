@@ -15,8 +15,14 @@ const unitKind = (region: RegionResult, utterance: RegionResult["utterances"][nu
  * Turns one page's vision result into translation units: regions in reading order, one unit per utterance
  * with text, ids "12" or "12a"/"12b". Kept SFX and utterances without text are not translated. Neither is
  * a region whose text could not be removed: its translation would be lettered over the source text.
+ * `correct` mends a reading (misread words) before it becomes a unit.
  */
-export const pageText = (page: number, regions: readonly RegionResult[], direction: "rtl" | "ltr"): VolumePageText => {
+export const pageText = (
+  page: number,
+  regions: readonly RegionResult[],
+  direction: "rtl" | "ltr",
+  correct: (text: string) => string = (text) => text,
+): VolumePageText => {
   const order = readingOrder(regions.map((region) => region.box), direction);
   const units: TranslationUnit[] = [];
   const lines: SourceLine[] = [];
@@ -27,8 +33,9 @@ export const pageText = (page: number, regions: readonly RegionResult[], directi
     const readable = region.utterances.map((utterance, utteranceIndex) => ({ utterance, utteranceIndex })).filter(({ utterance }) => utterance.text.trim() !== "");
     readable.forEach(({ utterance, utteranceIndex }, index) => {
       const id = unitId(position + 1, index, readable.length);
-      units.push({ id, kind: unitKind(region, utterance), source: utterance.text.trim() });
-      lines.push({ id: `${page}.${position + 1}.${index}`, page, text: utterance.text.trim(), nameTag: utterance.nameTag });
+      const source = correct(utterance.text.trim());
+      units.push({ id, kind: unitKind(region, utterance), source });
+      lines.push({ id: `${page}.${position + 1}.${index}`, page, text: source, nameTag: utterance.nameTag });
       refs[id] = { regionIndex, utteranceIndex };
     });
   });
