@@ -92,6 +92,7 @@ describe("regionTextMask", () => {
     expect(region.inkMedian).toEqual([10, 10, 10]);
     expect(region.outlineMedian).toEqual([255, 255, 255]);
     expect(region.ringMedian).toEqual([128, 128, 128]);
+    expect(region.hollow).toBe(false);
   });
 
   it("takes the whole band of an outline drawn wider than the mask may grow, and reads the paper beyond it", () => {
@@ -167,6 +168,7 @@ describe("regionTextMask", () => {
     expect(region.inkMedian).toEqual([17, 17, 17]);
     expect(region.outlineMedian).toEqual([255, 255, 255]);
     expect(region.ringMedian).toEqual([32, 32, 32]);
+    expect(region.hollow).toBe(true);
   });
 
   /**

@@ -14,4 +14,6 @@ export interface RegionMask {
   strokePixels: number;
   /** How tall the type of each line stands, measured across the line on its ink; null where a line holds hardly any. */
   inkHeights: (number | null)[];
+  /** The glyphs are drawn as outlines around a fill of another tone: the ink is that fill, the outline the strokes. */
+  hollow: boolean;
 }

@@ -491,6 +491,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     ringMedian,
     strokePixels,
     inkHeights,
+    hollow: outlinedFill,
   };
 };
 
