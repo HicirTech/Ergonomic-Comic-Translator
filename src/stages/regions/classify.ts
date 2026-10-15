@@ -36,9 +36,10 @@ export const soundLike = (text: string) => {
  * stands alone in what the detector took for a bubble is art when it is coloured and outlined, coloured
  * or outlined and the reader is not sure of it, or coloured and a sound; dialogue set large in a box of
  * its own is black or white, has no outline and reads well. Outside bubbles a coloured ink is one more cue, and a coloured ink with an
- * outline two. Measured on two volumes: this keeps the pieces of art lettering an earlier translation had
- * left alone, and none of the dialogue set in white in a bubble of its own, nor the captions set in black
- * with a white outline.
+ * outline two; glyphs drawn as outlines around a fill, as a title on the artwork is, are lettering by
+ * themselves, and a bottom box is dialogue unless its lettering says otherwise. Measured on two volumes:
+ * this keeps the pieces of art lettering an earlier translation had left alone, and none of the dialogue
+ * set in white in a bubble of its own, nor the captions set in black with a white outline.
  */
 export const classifyRegion = (
   region: PageRegion,
@@ -62,12 +63,12 @@ export const classifyRegion = (
       : { layout: "bubble", kind: thought ? "thought" : "dialogue", policy: "translate" };
   }
   const center = boxCenter(region.box);
-  if (boxWidth(region.box) >= bottomBoxWidthShare * pageWidth && center.y >= bottomBoxCenterShare * pageHeight) {
-    return { layout: "bottom_box", kind: thought ? "thought" : "dialogue", policy: "translate" };
-  }
+  const bottomBox = boxWidth(region.box) >= bottomBoxWidthShare * pageWidth && center.y >= bottomBoxCenterShare * pageHeight;
+  const layout = bottomBox ? "bottom_box" : "text_free";
 
   const thickness = region.lines.length > 0 ? Math.max(...region.lines.map((line) => line.rect.short)) : 0;
-  // An outline alone is no cue: captions on artwork are typeset in black or white with one.
+  // An outline alone is no cue: captions on artwork are typeset in black or white with one. Glyphs drawn
+  // as outlines around a fill are lettering by themselves: type is set solid.
   const cues = [
     dialogueThickness !== null && thickness >= sfxSizeFactor * dialogueThickness,
     drawn,
@@ -75,7 +76,7 @@ export const classifyRegion = (
     lettering?.coloured,
     lettering?.coloured && lettering.outlined,
   ].filter(Boolean).length;
-  return cues >= sfxMinCues
-    ? { layout: "text_free", kind: "sfx", policy: "keep" }
-    : { layout: "text_free", kind: thought ? "thought" : "free_text", policy: "translate" };
+  return cues >= sfxMinCues || lettering?.hollow
+    ? { layout, kind: "sfx", policy: "keep" }
+    : { layout, kind: thought ? "thought" : bottomBox ? "dialogue" : "free_text", policy: "translate" };
 };

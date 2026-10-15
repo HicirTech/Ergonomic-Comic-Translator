@@ -4,6 +4,8 @@ export interface LetteringCues {
   coloured: boolean;
   /** The glyphs carry an outline. */
   outlined: boolean;
+  /** The glyphs are drawn as outlines around a fill: type is set solid. */
+  hollow: boolean;
   /** Another region of the same bubble holds more text, and this one is not set in that text's ink. */
   otherInkThanBubble: boolean;
   /** No other region stands in the bubble: the "bubble" may be a shape the lettering is drawn on. */

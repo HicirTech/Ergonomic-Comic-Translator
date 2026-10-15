@@ -56,7 +56,8 @@ export const cleanPage = async (
     // The dialogue of a bubble is the region in it with the most text.
     const cuesOf = (regionIndex: number): LetteringCues | null => {
       const mask = masks[regionIndex];
-      if (!mask) return null;
+      // A mask without a stroke measured no ink: its colours and shape say nothing.
+      if (!mask || mask.strokePixels === 0) return null;
       const { bubble } = oriented[regionIndex]!.region;
       const dialogue = oriented.reduce<number | null>((best, other, index) => {
         const longer = index !== regionIndex && bubble !== null && other.region.bubble === bubble && masks[index] && textLength[index]! > textLength[regionIndex]!;
@@ -65,6 +66,7 @@ export const cleanPage = async (
       return {
         coloured: isColoured(mask.inkMedian) || (mask.outlineMedian !== null && isColoured(mask.outlineMedian)),
         outlined: mask.outlineMedian !== null,
+        hollow: mask.hollow,
         otherInkThanBubble: dialogue !== null && !sameInk(mask.inkMedian, masks[dialogue]!.inkMedian),
         aloneInBubble: bubble !== null && !oriented.some((other, index) => index !== regionIndex && other.region.bubble === bubble),
         readUnsure: utterancesOf(regionIndex).some((utterance) => utterance.meanProb < unsureReadingBelow),

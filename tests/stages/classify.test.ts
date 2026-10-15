@@ -14,7 +14,7 @@ const region = (overrides: Partial<PageRegion>): PageRegion => ({
 });
 
 /** Typeset text in plain ink that reads well, among other text of its bubble. */
-const plain: LetteringCues = { coloured: false, outlined: false, otherInkThanBubble: false, aloneInBubble: false, readUnsure: false };
+const plain: LetteringCues = { coloured: false, outlined: false, hollow: false, otherInkThanBubble: false, aloneInBubble: false, readUnsure: false };
 
 const classify = (target: PageRegion, text: string, dialogueThickness: number | null = 20) =>
   classifyRegion(target, estimateOrientation(target.lines, target.box), text, 1000, 1400, dialogueThickness);
@@ -76,5 +76,16 @@ describe("classifyRegion", () => {
     expect(withCues({ coloured: true, outlined: true })).toEqual({ layout: "text_free", kind: "sfx", policy: "keep" });
     // Black text with a white outline is how captions are set on artwork.
     expect(withCues({ outlined: true }).policy).toBe("translate");
+  });
+
+  it("keeps glyphs drawn as outlines around a fill, as a title on the artwork or in a bottom box is", () => {
+    const withCues = (target: PageRegion, lettering: Partial<LetteringCues>) =>
+      classifyRegion(target, estimateOrientation(target.lines, target.box), "森の悪魔", 1000, 1400, null, { ...plain, ...lettering });
+    const title = region({ box: { x0: 50, y0: 1200, x1: 950, y1: 1300 }, lines: [line(500, 1250, 800, 60, 0)] });
+    expect(withCues(title, { hollow: true, outlined: true })).toEqual({ layout: "bottom_box", kind: "sfx", policy: "keep" });
+    // Narration in a bottom bar is set solid, with or without an outline.
+    expect(withCues(title, { outlined: true })).toEqual({ layout: "bottom_box", kind: "dialogue", policy: "translate" });
+    const caption = region({ lines: [line(150, 150, 200, 20, 0)] });
+    expect(withCues(caption, { hollow: true, outlined: true }).policy).toBe("keep");
   });
 });
