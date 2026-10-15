@@ -10,7 +10,7 @@ import { letterable } from "../typeset/stand-ins.ts";
 import { pageOverlaySvg, placedBlockSvg } from "../typeset/svg.ts";
 import type { PageTranslationResult, PageVisionResult, RegionResult, UtteranceResult, VolumePageText } from "./interfaces/index.ts";
 
-/** The lettering box is the text frame grown by this much, where the bubble and the page leave room. */
+/** The lettering box of a bubble's text is the text frame grown by this much, where the bubble leaves room. */
 const frameGrowth = 1.15;
 /** Lettering stays this far inside the bubble box, as a share of the bubble's shorter side, and inside the page. */
 const bubbleInsetShare = 0.04;
@@ -103,8 +103,10 @@ export const typesetPage = (shaper: Shaper, vision: PageVisionResult, text: Volu
     const grownCenter = slot
       ? rotatePoint({ x: (slot.x0 + slot.x1) / 2, y: (slot.y0 + slot.y1) / 2 }, { x: frame.cx, y: frame.cy }, frame.angle)
       : { x: frame.cx, y: frame.cy };
-    const grownWidth = (slot ? slot.x1 - slot.x0 : frame.w) * frameGrowth;
-    const grownHeight = (slot ? slot.y1 - slot.y0 : frame.h) * frameGrowth;
+    // Free text has no bubble around it: its lettering stays within the frame of the text it replaces.
+    const growth = region.bubble ? frameGrowth : 1;
+    const grownWidth = (slot ? slot.x1 - slot.x0 : frame.w) * growth;
+    const grownHeight = (slot ? slot.y1 - slot.y0 : frame.h) * growth;
     const angle = Math.abs(frame.angle) < uprightBelowDegrees ? 0 : frame.angle;
     let box: Box = { x0: grownCenter.x - grownWidth / 2, y0: grownCenter.y - grownHeight / 2, x1: grownCenter.x + grownWidth / 2, y1: grownCenter.y + grownHeight / 2 };
     // Inside the bubble's frame where the page shows one beside the text; the detector's box also holds the tail.

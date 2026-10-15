@@ -256,6 +256,16 @@ describe("typesetPage", () => {
     expect(box.y1).toBeCloseTo(585, 1);
   });
 
+  it("keeps free text within the frame of the text it replaces", () => {
+    const region = vision.regions[0]!;
+    const free: PageVisionResult = {
+      ...vision,
+      regions: [{ ...region, cls: "text_free", bubble: null, classification: { layout: "text_free", kind: "free_text", policy: "translate" } }],
+    };
+    const box = placedBox(typesetPage(fakeShaper, free, text, translation).svg);
+    expect([box.x0, box.x1, box.y0, box.y1]).toEqual([100, 300, 100, 300]);
+  });
+
   it("sets the text smaller where its margin to the frame would not fit", () => {
     const region = vision.regions[0]!;
     // Nine characters of 40 px type are 360 px long, and the box of 400 px leaves 340 px between margins of 30 px.
