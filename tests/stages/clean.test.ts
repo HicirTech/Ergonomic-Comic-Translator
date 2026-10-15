@@ -108,6 +108,16 @@ describe("regionTextMask", () => {
     expect(region.ringMedian).toEqual([190, 190, 190]);
   });
 
+  it("reads the outline around the glyphs, not around a mark set beside them in their ink", () => {
+    // Grey paper, a dark bar with a white edge of 4 px, and two dark blobs beside the line that go with it as marks.
+    const rgb = page(300, 200, 128, 255, { cx: 100, cy: 80, long: 108, short: 20, angle: 0 });
+    for (let y = 74; y < 86; y += 1) rgb.data.fill(10, (y * 300 + 50) * 3, (y * 300 + 150) * 3);
+    for (let y = 40; y < 170; y += 1) if (y < 100 || y >= 110) rgb.data.fill(10, (y * 300 + 180) * 3, (y * 300 + 240) * 3);
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 150, 60, 0)])!;
+    expect(region.outlineMedian).toEqual([255, 255, 255]);
+    expect(region.ringMedian).toEqual([128, 128, 128]);
+  });
+
   it("tells a coloured fill from the light edge around it when both lie on the light side of a dark page", () => {
     // A thin pink bar in a thick white edge on a near-black page: both are the light side, white the lighter half.
     const rgb = page(200, 160, 20, 255, { cx: 100, cy: 80, long: 112, short: 18, angle: 0 });

@@ -372,13 +372,18 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
 
   // The shells around the ink, one pixel at a time; the one at the paper distance is the paper. An outline
   // lies against the ink: the shells from the ink outward that are not that paper yet, when one of them is
-  // as far from it as an outline is. A shell further out that differs again is the background.
+  // as far from it as an outline is. A shell further out that differs again is the background. The shells
+  // are read around the lines' own ink: what surrounds a mark beside them says nothing about the glyphs' edge.
   const paperDistance = bubble ? maxGrow + 1 : Math.max(maxGrow + 1, Math.round(paperSearchShare * thickness));
   const reached: Uint8Array[] = [ink];
-  for (let distance = 1; distance <= paperDistance; distance += 1) reached.push(dilateSquare(ink, width, height, distance));
-  const shells = reached.slice(1).map((outer, index) => {
+  const lineReached: Uint8Array[] = [lineInk];
+  for (let distance = 1; distance <= paperDistance; distance += 1) {
+    reached.push(dilateSquare(ink, width, height, distance));
+    lineReached.push(dilateSquare(lineInk, width, height, distance));
+  }
+  const shells = lineReached.slice(1).map((outer, index) => {
     const shell = new Uint8Array(width * height);
-    for (let pixel = 0; pixel < shell.length; pixel += 1) shell[pixel] = outer[pixel]! & (reached[index]![pixel]! ^ 1);
+    for (let pixel = 0; pixel < shell.length; pixel += 1) shell[pixel] = outer[pixel]! & (lineReached[index]![pixel]! ^ 1);
     return rgbOf(shell);
   });
   const luma = ([red, green, blue]: readonly number[]) => 0.299 * red! + 0.587 * green! + 0.114 * blue!;
