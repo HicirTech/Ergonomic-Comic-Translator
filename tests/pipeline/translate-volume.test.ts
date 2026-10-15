@@ -111,8 +111,8 @@ describe("buildGlossary", () => {
       { id: "1.1.0", page: 1, text: "リンちゃん、おはよう", nameTag: false },
       { id: "2.1.0", page: 2, text: "リン、行くよ", nameTag: false },
     ];
-    const result = await buildGlossary(lines, "ja", async (messages, schema) => {
-      if ("entities" in (schema.properties as object)) {
+    const result = await buildGlossary(lines, "ja", async ({ messages, schema }) => {
+      if ("entities" in (schema!.properties as object)) {
         return completion(JSON.stringify({ entities: [{ src: "リン", kind: "person", gender: "f", evidence: [userJson(messages).lines[0].id] }] }));
       }
       return completion(JSON.stringify({ items: userJson(messages).items.map((item: { src: string }) => ({ src: item.src, tgt: item.src === "リン" ? "琳" : "琳酱", gender: "f", note_zh: "", drop: false })) }));
@@ -163,11 +163,11 @@ describe("translateVolume", () => {
     modelSha: "m",
     historyBudget: 2000,
   });
-  const echo: CompleteFn = async (messages) => completion(JSON.stringify({ "1": `琳，第${userJson(messages).page}页` }));
+  const echo: CompleteFn = async ({ messages }) => completion(JSON.stringify({ "1": `琳，第${userJson(messages).page}页` }));
 
   it("feeds earlier pages as history, injects page terms and repairs names", async () => {
     const seen: ChatMessage[][] = [];
-    const results = await translateVolume(pages, context(async (messages) => {
+    const results = await translateVolume(pages, context(async ({ messages }) => {
       seen.push(messages);
       const page = userJson(messages).page;
       const answer = page === 1 ? "琳，第1页" : page === 2 ? "リン，第2页" : "小林，第3页";
@@ -183,9 +183,9 @@ describe("translateVolume", () => {
   it("re-translates one page with the same history the volume run used, skipping pages without a result", async () => {
     const volume = await translateVolume(pages, context(echo));
     const requests: ChatMessage[][] = [];
-    const record: CompleteFn = async (messages, ...rest) => {
-      requests.push(messages);
-      return echo(messages, ...rest);
+    const record: CompleteFn = async (request) => {
+      requests.push(request.messages);
+      return echo(request);
     };
     const again = await translateVolumePage(pages, 2, volume.slice(0, 2), context(record));
     expect(again).toEqual(volume[2]!);

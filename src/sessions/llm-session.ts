@@ -106,10 +106,10 @@ export const openLlmSession = async (paths: DataPaths, monitor: ResourceMonitor,
 
   const client = createChatClient(server.baseUrl, server.apiKey);
   const cliff = new ThroughputCliffDetector();
-  const complete: CompleteFn = async (messages, schema, maxTokens, seed) => {
+  const complete: CompleteFn = async (request) => {
     cliff.reset();
     try {
-      return await client.complete({ messages, schema, maxTokens, seed }, {
+      return await client.complete(request, {
         timeoutMs: requestTimeoutMs,
         signal: red.signal,
         onTokenRate: (atMs, rate) => {

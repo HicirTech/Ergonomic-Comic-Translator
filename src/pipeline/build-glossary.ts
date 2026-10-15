@@ -39,7 +39,7 @@ export const buildGlossary = async (lines: readonly SourceLine[], language: Sour
     const chunkHints = hints.filter((hint) => chunk.some((line) => line.text.includes(hint)));
     const seed = seedFromKey(cacheKey({ stage: "terms-extract", contract: extractContractVersion, modelSha, lines: chunk.map((line) => line.text) }));
     const entities = await withOneRetry(async (attemptSeed) => {
-      const result = await complete(extractMessages(language, index, chunk, chunkHints, known), extractSchema, extractMaxTokens, attemptSeed);
+      const result = await complete({ messages: extractMessages(language, index, chunk, chunkHints, known), schema: extractSchema, maxTokens: extractMaxTokens, seed: attemptSeed });
       return validateExtraction(result.content, chunk);
     }, seed);
     if (entities === null) {
@@ -56,7 +56,7 @@ export const buildGlossary = async (lines: readonly SourceLine[], language: Sour
   for (const batch of fixBatches(merged)) {
     const seed = seedFromKey(cacheKey({ stage: "terms-fix", contract: fixContractVersion, modelSha, batch: batch.map((term) => term.canonical) }));
     const answer = await withOneRetry(async (attemptSeed) => {
-      const result = await complete(fixMessages(language, batch, lines, fixed), fixSchema(batch), fixMaxTokens, attemptSeed);
+      const result = await complete({ messages: fixMessages(language, batch, lines, fixed), schema: fixSchema(batch), maxTokens: fixMaxTokens, seed: attemptSeed });
       return applyFixAnswer(result.content, batch);
     }, seed);
     if (answer === null) {

@@ -110,8 +110,8 @@ describe("translatePage", () => {
   it("retries only failing units: same seed, then a new seed, then one unit at a time", async () => {
     const calls: { ids: string[]; seed: number }[] = [];
     const units = [unit("1", "行く"), unit("2", "待って"), unit("3", "嫌だ")];
-    const result = await translatePage(request(units), async (messages, schema, _maxTokens, seed) => {
-      const ids = (schema.required as string[]);
+    const result = await translatePage(request(units), async ({ schema, seed }) => {
+      const ids = (schema!.required as string[]);
       calls.push({ ids, seed });
       const answers: Record<string, string> = {};
       for (const id of ids) {
@@ -141,8 +141,8 @@ describe("translatePage", () => {
   it("keeps a complete answer that is only doubtful, still reported as failing", async () => {
     const answers: Record<string, string> = { "1": "はぁ…走了", "2": "OK", "3": `${"啊".repeat(12)}！` };
     const units = [unit("1", "はぁ…行く"), unit("2", "ＯＫ"), unit("3", "ああっ！")];
-    const result = await translatePage(request(units), async (_messages, schema) =>
-      completion(JSON.stringify(Object.fromEntries((schema.required as string[]).map((id) => [id, answers[id]])))), 1);
+    const result = await translatePage(request(units), async ({ schema }) =>
+      completion(JSON.stringify(Object.fromEntries((schema!.required as string[]).map((id) => [id, answers[id]])))), 1);
     expect(result.targets).toEqual(answers);
     expect(result.failures).toEqual({ "1": ["G3_RESIDUE"], "2": ["G1B_ECHO"], "3": ["G5_REPEAT"] });
     expect(result.requests).toBe(6);

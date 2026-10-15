@@ -9,11 +9,16 @@ interface StreamChunk {
   timings?: { cache_n?: number; predicted_per_second?: number };
 }
 
+/** Sampling when the request sets none: greedy, reproducible through the seed derived from the cache key. */
+const greedyTemperature = 0;
+const everyTokenTopP = 1;
+
 /**
- * OpenAI-compatible streaming client for llama-server with the sampling every translation request uses:
- * temperature 0 with a seed derived from the cache key, all penalties neutral (presence_penalty 1.5 would
- * suppress repeated moans and sound effects, which reads as sanitising), reasoning disabled in the request
- * as well, and grammar-constrained JSON. Streaming lets the governor watch generation speed (tg_3s).
+ * OpenAI-compatible streaming client for llama-server. A request is greedy unless its contract samples (the
+ * seed keeps it reproducible either way), all penalties are neutral (presence_penalty 1.5 would suppress
+ * repeated moans and sound effects, which reads as sanitising), reasoning is disabled in the request as well,
+ * and the answer is grammar-constrained JSON when the request has a schema. Streaming lets the governor watch
+ * generation speed (tg_3s).
  */
 export const createChatClient = (baseUrl: string, apiKey: string, fetchImpl: typeof fetch = fetch) => ({
   complete: async (
@@ -30,14 +35,15 @@ export const createChatClient = (baseUrl: string, apiKey: string, fetchImpl: typ
         messages: request.messages,
         stream: true,
         stream_options: { include_usage: true },
-        temperature: 0,
+        temperature: request.temperature ?? greedyTemperature,
+        top_p: request.topP ?? everyTokenTopP,
         seed: request.seed,
         presence_penalty: 0,
         frequency_penalty: 0,
         repeat_penalty: 1,
         max_tokens: request.maxTokens,
         chat_template_kwargs: { enable_thinking: false },
-        response_format: { type: "json_schema", json_schema: { name: "output", strict: true, schema: request.schema } },
+        ...(request.schema ? { response_format: { type: "json_schema", json_schema: { name: "output", strict: true, schema: request.schema } } } : {}),
         cache_prompt: true,
       }),
     });

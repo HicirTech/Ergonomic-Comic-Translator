@@ -97,6 +97,7 @@ describe("createChatClient", () => {
     expect(requests.at(-1)).toMatchObject({
       stream: true,
       temperature: 0,
+      top_p: 1,
       seed: 7,
       presence_penalty: 0,
       frequency_penalty: 0,
@@ -105,6 +106,12 @@ describe("createChatClient", () => {
       chat_template_kwargs: { enable_thinking: false },
       response_format: { type: "json_schema", json_schema: { strict: true, schema: { type: "object" } } },
     });
+  });
+
+  it("sends the request's own sampling and no response format for a free-text answer", async () => {
+    await client.complete({ messages: [{ role: "user", content: "x" }], schema: null, maxTokens: 50, seed: 3, temperature: 0.3, topP: 0.8 }, { timeoutMs: 5000 });
+    expect(requests.at(-1)).toMatchObject({ temperature: 0.3, top_p: 0.8 });
+    expect(requests.at(-1)).not.toHaveProperty("response_format");
   });
 
   it("raises ChatHttpError on a non-2xx answer", async () => {

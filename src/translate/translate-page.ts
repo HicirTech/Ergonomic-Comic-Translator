@@ -42,7 +42,7 @@ export const translatePage = async (
     requests += 1;
     let result;
     try {
-      result = await complete(buildRequestMessages({ ...request, units }), outputSchema(ids), maxTokensFor(units.length), attemptSeed);
+      result = await complete({ messages: buildRequestMessages({ ...request, units }), schema: outputSchema(ids), maxTokens: maxTokensFor(units.length), seed: attemptSeed });
     } catch (error) {
       if (!isRetryableLlmError(error)) throw error;
       for (const id of ids) failures[id] = ["G0_TRANSPORT"];

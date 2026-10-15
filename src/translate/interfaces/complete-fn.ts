@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatResult } from "../../llm/interfaces/index.ts";
+import type { ChatRequest, ChatResult } from "../../llm/interfaces/index.ts";
 
-/** Sends one constrained completion; the translate stage does not care which server or model answers. */
-export type CompleteFn = (messages: ChatMessage[], schema: Record<string, unknown>, maxTokens: number, seed: number) => Promise<ChatResult>;
+/** Sends one completion; the translate stage does not care which server or model answers. */
+export type CompleteFn = (request: ChatRequest) => Promise<ChatResult>;
