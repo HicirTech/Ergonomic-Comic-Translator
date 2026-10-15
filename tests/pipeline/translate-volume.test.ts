@@ -209,6 +209,18 @@ describe("translateVolume", () => {
     expect(seen[0]!.messages.at(-1)!.content).toContain("リン->琳 #女主角");
   });
 
+  it("shows a long cry to the model as a few repeats and stretches the answer back", async () => {
+    const cry = [{ page: 1, units: [{ id: "1", kind: "dialogue" as const, source: "ふ".repeat(100) }], lines: [], refs: {} }];
+    const seen: string[] = [];
+    const results = await translateVolume(cry, context(async ({ messages }) => {
+      seen.push(userJson(messages).units[0].source);
+      return completion(JSON.stringify({ "1": "呵呵呵" }));
+    }));
+    expect(seen).toEqual(["ふふふ"]);
+    expect(results[0]!.targets["1"]).toBe("呵".repeat(100));
+    expect(results[0]!.units[0]!.source).toBe("ふ".repeat(100));
+  });
+
   it("re-translates one page with the same history the volume run used, skipping pages without a result", async () => {
     const volume = await translateVolume(pages, context(echo));
     const requests: ChatMessage[][] = [];

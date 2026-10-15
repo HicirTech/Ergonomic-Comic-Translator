@@ -4,6 +4,7 @@ import type { FixedTerm } from "../terms/interfaces/index.ts";
 import { noteOf } from "../terms/freeze.ts";
 import { createMatcher } from "../terms/matcher.ts";
 import { translationContracts } from "../translate/contracts.ts";
+import { cryOf, shownCry, stretchCry } from "../translate/cries.ts";
 import { historyWindowStart, sourceTokens } from "../translate/history-window.ts";
 import type { GlossaryEntry, HistoryPage, TranslationUnit } from "../translate/interfaces/index.ts";
 import { translatePage } from "../translate/translate-page.ts";
@@ -13,8 +14,9 @@ import type { PageTranslationResult, VolumePageText, VolumeTranslationContext } 
  * T wave, one page: the request carries the frozen role table, the terms found on the page, and a
  * history window of earlier pages chosen from source lengths alone (so re-translating one page sees
  * exactly what the volume run saw). `earlier` holds the results of pages before `index`, null where a
- * page has no result. Names the model left untranslated are replaced before the decisive checks
- * (post-dict); other glossary misses get one targeted re-request, the rest are flagged.
+ * page has no result. A long cry is shown to the model as a few repeats and its answer stretched back. Names
+ * the model left untranslated are replaced before the decisive checks (post-dict); other glossary misses get
+ * one targeted re-request, the rest are flagged.
  */
 export const translateVolumePage = async (
   pages: readonly VolumePageText[],
@@ -45,7 +47,15 @@ export const translateVolumePage = async (
     return { source: term.canonical, target: term.target, ...(note ? { note } : {}) };
   });
 
-  const request = { language, page: page.page, units: page.units, glossary: [...roleTable], matchingTerms, history };
+  const cries = new Map(page.units.flatMap((unit) => {
+    const cry = cryOf(unit.source);
+    return cry ? [[unit.id, cry] as const] : [];
+  }));
+  const units = page.units.map((unit) => {
+    const cry = cries.get(unit.id);
+    return cry ? { ...unit, source: shownCry(cry) } : unit;
+  });
+  const request = { language, page: page.page, units, glossary: [...roleTable], matchingTerms, history };
   const seed = seedFromKey(cacheKey({
     stage: "translate",
     contract: contract.version,
@@ -63,7 +73,7 @@ export const translateVolumePage = async (
   const flags: Record<string, string[]> = Object.fromEntries(Object.entries(translation.failures).map(([id, codes]) => [id, [...codes]]));
   let requests = translation.requests;
 
-  for (const unit of page.units) {
+  for (const unit of units) {
     const target = targets[unit.id];
     if (target === undefined) continue;
     const expected = expectedOf(unit);
@@ -85,6 +95,10 @@ export const translateVolumePage = async (
     }
     targets[unit.id] = repaired;
     if (missing.length > 0) flags[unit.id] = [...(flags[unit.id] ?? []), "TR_TERM_MISS"];
+  }
+  for (const [id, cry] of cries) {
+    const target = targets[id];
+    if (target !== undefined) targets[id] = stretchCry(target, cry);
   }
   return { page: page.page, units: page.units, targets, flags, requests };
 };

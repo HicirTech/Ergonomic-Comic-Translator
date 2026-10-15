@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { ChatResult } from "../../src/llm/interfaces/index.ts";
 import { checkCompletion, hasResidue, isDegenerate, isEcho, isRefusal } from "../../src/qa/decisive-checks.ts";
 import { buildMessages, buildSingleTurnMessages, maxTokensFor, outputSchema, unitId } from "../../src/translate/contract.ts";
+import { cryOf, shownCry, stretchCry } from "../../src/translate/cries.ts";
 import { historyWindowStart, sourceTokens } from "../../src/translate/history-window.ts";
 import type { PageRequest, TranslationUnit } from "../../src/translate/interfaces/index.ts";
 import { parseLineAnswer, sakuraContract } from "../../src/translate/sakura-contract.ts";
@@ -104,6 +105,23 @@ describe("tr-sakura@1 messages", () => {
   it("budgets the answer by the source length, up to a cap", () => {
     expect(sakuraContract.maxTokens([unit("1", "あ")])).toBeLessThan(sakuraContract.maxTokens([unit("1", "あいうえお")]));
     expect(sakuraContract.maxTokens([unit("1", "あ".repeat(5000))])).toBe(2048);
+  });
+});
+
+describe("cries", () => {
+  it("recognises a short unit repeated many times, with its tail, and shows it three times", () => {
+    const cry = cryOf("んっ♡".repeat(10) + "…")!;
+    expect(cry).toEqual({ unit: "んっ♡", repeats: 10, tail: "…" });
+    expect(shownCry(cry)).toBe("んっ♡んっ♡んっ♡…");
+    expect(cryOf("ふふふふふふふ")).toBeNull();
+    expect(cryOf("ふふふ、ふふふ、ふふふ")).toBeNull();
+  });
+
+  it("stretches a repeating answer to the source's count and leaves another answer alone", () => {
+    const cry = cryOf("ふ".repeat(100))!;
+    expect(stretchCry("呵呵呵", cry)).toBe("呵".repeat(100));
+    expect(stretchCry("嗯♡嗯♡嗯♡……", cryOf("んっ♡".repeat(9) + "…")!)).toBe("嗯♡".repeat(9) + "……");
+    expect(stretchCry("笑个不停", cry)).toBe("笑个不停");
   });
 });
 
