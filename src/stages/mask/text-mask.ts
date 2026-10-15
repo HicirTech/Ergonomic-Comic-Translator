@@ -207,6 +207,8 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   // Ink-toned pixels that are not text, whatever their colour: around the line rectangles, and the frame
   // lines that run through them. What the ink in a rectangle runs on into.
   const inkAround = new Uint8Array(width * height);
+  // The pixels on the paper side of a line's threshold, in its rectangle and its zone.
+  const paperSide = new Uint8Array(width * height);
   linePolygons.forEach((linePolygon, lineIndex) => {
     const withEdge = dilateSquare(linePolygon, width, height, edgeBand);
     const inside: number[] = [];
@@ -314,6 +316,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     };
     const lineZone = rasterized(zoneQuads[lineIndex]!);
     for (let index = 0; index < linePolygon.length; index += 1) {
+      if ((linePolygon[index] || lineZone[index]) && !isInk(index)) paperSide[index] = 1;
       if (linePolygon[index]) {
         if (ownInk[index]) ink[index] = 1;
         continue;
@@ -394,14 +397,20 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     reached.push(dilateSquare(ink, width, height, distance));
     lineReached.push(dilateSquare(lineInk, width, height, distance));
   }
-  const shells = lineReached.slice(1).map((outer, index) => {
+  const shellMasks = lineReached.slice(1).map((outer, index) => {
     const shell = new Uint8Array(width * height);
     for (let pixel = 0; pixel < shell.length; pixel += 1) shell[pixel] = outer[pixel]! & (lineReached[index]![pixel]! ^ 1);
-    return rgbOf(shell);
+    return shell;
   });
+  const shells = shellMasks.map(rgbOf);
   const luma = ([red, green, blue]: readonly number[]) => 0.299 * red! + 0.587 * green! + 0.114 * blue!;
   const apart = (a: readonly number[], b: readonly number[]) => a.some((value, channel) => Math.abs(value - b[channel]!) >= outlineContrast);
-  const paperShell = shells[paperDistance - 1]!;
+  // A line in a bubble stands on the bubble's paper: its paper shell is read from the shell's pixels inside
+  // the bubble on the paper side of the lines' thresholds. Art drawn over the bubble and the page beyond it
+  // are ink-toned and say nothing about that paper. On open artwork the shell is read as it is: there the
+  // band of an outline is as light as paper, and the ground beyond it is the paper.
+  const paperShellPixels = bubble ? shellMasks[paperDistance - 1]!.map((value, index) => value & paperSide[index]! & (inBubble(index) ? 1 : 0)) : null;
+  const paperShell = paperShellPixels?.some((value) => value === 1) ? rgbOf(paperShellPixels) : shells[paperDistance - 1]!;
   let outlineEnd = minGrowPixels;
   while (outlineEnd < paperDistance - 1 && Math.abs(luma(shells[outlineEnd]!) - luma(paperShell)) >= paperToneTolerance) outlineEnd += 1;
   const outlined = shells.slice(minGrowPixels, outlineEnd).some((shell) => apart(shell, paperShell));

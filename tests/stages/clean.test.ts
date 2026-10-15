@@ -278,6 +278,30 @@ describe("regionTextMask", () => {
     expect(region.inkMedian).toEqual([10, 10, 10]);
   });
 
+  it("reads the paper of a line in a bubble from the bubble's paper: not from art drawn over the bubble, nor from the page beyond it", () => {
+    // Black blocks in a white bubble on a purple page, pink bars drawn over the bubble beside them: the paper
+    // distance of the line reaches the bars, and the line rectangle reaches the page.
+    const width = 160;
+    const height = 400;
+    const data = new Uint8Array(width * height * 3);
+    const set = (x0: number, y0: number, x1: number, y1: number, colour: readonly number[]) => {
+      for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) data.set(colour, (y * width + x) * 3);
+    };
+    set(0, 0, width, height, [94, 78, 129]);
+    set(30, 40, 130, 360, [255, 255, 255]);
+    for (const x0 of [40, 112]) set(x0, 60, x0 + 8, 340, [200, 40, 100]);
+    for (const y0 of [100, 160, 220, 280]) set(60, y0, 100, y0 + 30, [10, 10, 10]);
+    const rgb = { data, width, height };
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(80, 200, 300, 120, 90)], { x0: 30, y0: 40, x1: 130, y1: 360 })!;
+    const pageMask = new Uint8Array(width * height);
+    addToPageMask(pageMask, width, region);
+    // The blocks and two pixels around them are masked; the white between them and the bars is not.
+    expect(pageMask[115 * width + 80]).toBe(1);
+    expect(pageMask[115 * width + 54]).toBe(0);
+    expect(region.outlineMedian).toBeNull();
+    expect(region.ringMedian).toEqual([255, 255, 255]);
+  });
+
   it("reads the paper from the line's own rectangle when the text sits on a plate", () => {
     // Light page, a dark plate barely larger than the line rectangle, light text on the plate.
     const rgb = page(200, 160, 220, 240, { cx: 100, cy: 80, long: 100, short: 12, angle: 0 });
