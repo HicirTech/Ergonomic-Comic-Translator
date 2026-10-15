@@ -9,7 +9,7 @@ import { isSplinter } from "./line-reading.ts";
  * The sentence readers squash a crop into a square, so every character of a line shares its side: a line
  * read whole holds at most this many characters, a longer one is read in pieces of at most maxPieceChars.
  */
-export const piecesFromChars = 13;
+export const piecesFromChars = 15;
 export const maxPieceChars = 9;
 /** Across the line, a piece is the detector's rectangle grown by this share of the thickness on each side. */
 const pieceMarginShare = 0.15;
