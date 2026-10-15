@@ -88,4 +88,12 @@ describe("classifyRegion", () => {
     const caption = region({ lines: [line(150, 150, 200, 20, 0)] });
     expect(withCues(caption, { hollow: true, outlined: true }).policy).toBe("keep");
   });
+
+  it("keeps a region whose text holds no letter or digit: a drawn mark leaves nothing to translate", () => {
+    const inBubble = region({ cls: "text_bubble", bubble: { x0: 0, y0: 0, x1: 300, y1: 300 }, lines: [line(150, 150, 100, 20, 90)] });
+    expect(classify(inBubble, "～～～")).toEqual({ layout: "bubble", kind: "sfx", policy: "keep" });
+    expect(classify(inBubble, "え？").policy).toBe("translate");
+    const caption = region({ lines: [line(150, 150, 200, 20, 0)] });
+    expect(classify(caption, "．．．")).toEqual({ layout: "text_free", kind: "sfx", policy: "keep" });
+  });
 });

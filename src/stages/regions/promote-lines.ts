@@ -7,6 +7,7 @@ import type { OcrReading } from "../ocr/interfaces/index.ts";
 import { lineBox } from "./assign-lines.ts";
 import { soundLike } from "./classify.ts";
 import type { PageRegion } from "./interfaces/index.ts";
+import { letterCount } from "./letters.ts";
 
 /**
  * A line of five characters is at least this many times longer than thick (measured: a DB rectangle is
@@ -41,7 +42,6 @@ const neighbourGapShare = 0.7;
 const sameDirectionDegrees = 15;
 
 const charCount = (text: string) => [...text.replace(/\s/gu, "")].length;
-const letterCount = (text: string) => [...text].filter((char) => /[\p{L}\p{N}]/u.test(char)).length;
 
 const longEnough = (line: TextLine) => line.rect.long >= minLengthToThickness * line.rect.short;
 const upright = (line: TextLine) =>

@@ -1,6 +1,7 @@
 import { boxCenter, boxWidth } from "../../geometry/box.ts";
 import { lineAngleDistance } from "../../geometry/angle.ts";
 import type { LetteringCues, PageRegion, RegionClass, RegionOrientation } from "./interfaces/index.ts";
+import { letterCount } from "./letters.ts";
 
 /** Bottom narration bars span most of the page width and sit in its lower part (spike-multispeaker rule). */
 const bottomBoxWidthShare = 0.6;
@@ -37,9 +38,11 @@ export const soundLike = (text: string) => {
  * or outlined and the reader is not sure of it, or coloured and a sound; dialogue set large in a box of
  * its own is black or white, has no outline and reads well. Outside bubbles a coloured ink is one more cue, and a coloured ink with an
  * outline two; glyphs drawn as outlines around a fill, as a title on the artwork is, are lettering by
- * themselves, and a bottom box is dialogue unless its lettering says otherwise. Measured on two volumes:
- * this keeps the pieces of art lettering an earlier translation had left alone, and none of the dialogue
- * set in white in a bubble of its own, nor the captions set in black with a white outline.
+ * themselves, and a bottom box is dialogue unless its lettering says otherwise. A text without a letter or
+ * digit (dots, dashes, waves) is a drawn mark wherever it stands: there is nothing to translate, so it
+ * stays. Measured on two volumes: this keeps the pieces of art lettering an earlier translation had left
+ * alone, and none of the dialogue set in white in a bubble of its own, nor the captions set in black with
+ * a white outline.
  */
 export const classifyRegion = (
   region: PageRegion,
@@ -51,6 +54,7 @@ export const classifyRegion = (
   lettering: LetteringCues | null = null,
 ): RegionClass => {
   const thought = /^[（(][\s\S]*[）)]$/u.test(text.trim());
+  const mark = letterCount(text) === 0;
   const angles = region.lines.map((line) => line.rect.angle);
   const spread = angles.length > 1 ? Math.max(...angles.map((angle) => lineAngleDistance(angle, angles[0]!))) : 0;
   const drawn = Math.abs(orientation.tilt) > sfxTilt || spread > sfxAngleSpread || region.lines.some((line) => line.curved);
@@ -58,7 +62,7 @@ export const classifyRegion = (
     const acrossDialogue = lettering !== null && lettering.otherInkThanBubble && (lettering.outlined || drawn || soundLike(text));
     const onItsOwn = lettering !== null && lettering.aloneInBubble
       && ((lettering.coloured && lettering.outlined) || ((lettering.coloured || lettering.outlined) && lettering.readUnsure) || (lettering.coloured && soundLike(text)));
-    return acrossDialogue || onItsOwn
+    return acrossDialogue || onItsOwn || mark
       ? { layout: "bubble", kind: "sfx", policy: "keep" }
       : { layout: "bubble", kind: thought ? "thought" : "dialogue", policy: "translate" };
   }
@@ -76,7 +80,7 @@ export const classifyRegion = (
     lettering?.coloured,
     lettering?.coloured && lettering.outlined,
   ].filter(Boolean).length;
-  return cues >= sfxMinCues || lettering?.hollow
+  return cues >= sfxMinCues || mark || lettering?.hollow
     ? { layout, kind: "sfx", policy: "keep" }
     : { layout, kind: thought ? "thought" : bottomBox ? "dialogue" : "free_text", policy: "translate" };
 };
