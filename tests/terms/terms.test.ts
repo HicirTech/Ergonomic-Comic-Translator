@@ -43,6 +43,7 @@ describe("norm keys", () => {
     expect(normKey("ユーーリ")).toBe("ユーリ");
     expect(normKey("ユーリ")).not.toBe(normKey("ユリ"));
     expect(normKey("リン・ハート")).toBe("リンハート");
+    expect(normKey("アンデツド")).toBe(normKey("アンデッド"));
     expect(splitHonorific("先輩")).toEqual({ base: "先輩", honorific: null });
   });
 });
