@@ -1,6 +1,7 @@
 import type { OcrCandidate, OcrCrop } from "../stages/ocr/interfaces/index.ts";
 import { preferLineReading } from "../stages/ocr/line-reading.ts";
 import { canProbeUpsideDown, chooseReading, isUpsideDown, preferFlippedReading } from "../stages/ocr/ocr-plan.ts";
+import { dropDakutenMarks } from "../stages/ocr/reading-marks.ts";
 import type { PlannedUtterance, StageTimer, UtteranceResult, VisionClient } from "./interfaces/index.ts";
 
 const engines = ["baberu", "manga-ocr"] as const;
@@ -66,7 +67,8 @@ export const readPlannedUtterances = async (
 /**
  * Result records of one region's utterances, with flag codes for unsure orientation and empty reads.
  * The text is the sentence reader's, or the utterance's lines joined when that reader lost text
- * (preferLineReading); the line recognizer reads along each line, so its text carries no orientation doubt.
+ * (preferLineReading), without the dakuten marks a reader turns into quotes; the line recognizer reads along
+ * each line, so its text carries no orientation doubt.
  */
 export const utteranceResults = (
   planned: readonly PlannedUtterance[],
@@ -76,7 +78,7 @@ export const utteranceResults = (
   planned.filter((item) => item.regionIndex === regionIndex).map((item) => {
     const choice = chosen.get(item);
     const lines = preferLineReading(choice?.reading ?? null, item.lineReading) ? item.lineReading : null;
-    const text = lines ? lines.text : choice?.reading.text ?? "";
+    const text = dropDakutenMarks(lines ? lines.text : choice?.reading.text ?? "");
     return {
       box: item.box,
       lineIndexes: item.lineIndexes,

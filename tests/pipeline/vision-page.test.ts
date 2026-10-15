@@ -206,6 +206,11 @@ const readOne = async (item: PlannedUtterance, upsideDown: number, flipMean: num
 };
 
 describe("planUtterances", () => {
+  it("drops the dakuten marks a reader turns into quotes from the stored text", async () => {
+    const { result } = await readOne({ ...plannedUtterance("h", 1), lineReading: { text: "おぐぅ\"あ\"!", meanProb: 0.96, lowestLineProb: 0.93 } }, 0.1, 0);
+    expect(result.text).toBe("おぐぅあ!");
+  });
+
   it("records where an utterance's lines stand in the region, whatever order they are read in", () => {
     // Two columns far enough apart to be two speakers, stored left to right; vertical text reads the right one first.
     const lines = [line(60, 140, 170, 26, 90), line(120, 140, 170, 26, 90)];
