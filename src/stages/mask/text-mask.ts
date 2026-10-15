@@ -148,6 +148,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     return null;
   }
   const maxGrow = Math.max(minGrowPixels, Math.round(maxGrowShare * thickness));
+  const glyphSide = markSideShare * thickness;
   const edgeBand = edgeBandOf(thickness);
   const along = bubble ? markAlongInBubbleShare : markAlongShare;
   const across = bubble ? markAcrossInBubbleShare : markAcrossShare;
@@ -235,37 +236,46 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     if (Math.min(lineAngleDistance(angle, 0), lineAngleDistance(angle, 90)) <= uprightWithinDegrees) {
       const beside = labelComponents(linePolygon.map((value, index) => (!value && isInk(index) ? 1 : 0)), width, height);
       const goesOn = beside.components.map(({ box }) =>
-        Math.max(box.x1 - box.x0, box.y1 - box.y0) > markSideShare * thickness || box.x0 === 0 || box.y0 === 0 || box.x1 === width || box.y1 === height);
+        Math.max(box.x1 - box.x0, box.y1 - box.y0) > glyphSide || box.x0 === 0 || box.y0 === 0 || box.x1 === width || box.y1 === height);
       notText(throughRuns(linePolygon, ownInk, (index) => beside.labels[index]! > 0 && goesOn[beside.labels[index]! - 1]!, width, height));
     }
     // Marks are set in the line's own ink: a blob of another colour is artwork, however dark.
     const lineInkRgb = rgbOf(ownInk);
     // In a bubble, ink of another colour than the line's is not its text either: the page where the
     // rectangle reaches beyond the bubble's shape, the bubble's frame, or lettering drawn across the bubble.
-    // The line's colour is that of the pieces that lie within the rectangle (the page enters at its edge);
-    // whole pieces are judged, so the blended edges of the glyphs stay with them, and a colour against
-    // black, white or grey, or two colours apart, tells them, not a lighter grey of a thin mark.
+    // The line's colour is the one that most pixels of its glyph-sized pieces within the rectangle and inside
+    // the bubble agree on (the page enters at the rectangle's edge and beyond the bubble, and art drawn over
+    // the bubble is larger than a glyph): the colour of one piece, never a blend of theirs. Whole pieces are
+    // judged, so the blended edges of the glyphs stay with them, and a colour against black, white or grey,
+    // or two colours apart, tells them, not a lighter grey of a thin mark.
     if (bubble) {
       const pieces = labelComponents(ownInk, width, height);
-      const touchesEdge = new Uint8Array(pieces.components.length);
+      const within = pieces.components.map((component) => (Math.max(component.box.x1 - component.box.x0, component.box.y1 - component.box.y0) <= glyphSide ? 1 : 0));
       const channels = pieces.components.map((): [number[], number[], number[]] => [[], [], []]);
       for (let index = 0; index < ownInk.length; index += 1) {
         const label = pieces.labels[index]!;
         if (!label) continue;
         const x = index % width;
         const y = Math.floor(index / width);
-        if (x === 0 || y === 0 || x === width - 1 || y === height - 1
-          || !linePolygon[index - 1] || !linePolygon[index + 1] || !linePolygon[index - width] || !linePolygon[index + width]) touchesEdge[label - 1] = 1;
+        if (!inBubble(index) || x === 0 || y === 0 || x === width - 1 || y === height - 1
+          || !linePolygon[index - 1] || !linePolygon[index + 1] || !linePolygon[index - width] || !linePolygon[index + width]) within[label - 1] = 0;
         const offset = pageIndex(index) * 3;
         for (let channel = 0; channel < 3; channel += 1) channels[label - 1]![channel]!.push(rgb.data[offset + channel]!);
       }
-      const within = rgbOf(ownInk.map((value, index) => (value && !touchesEdge[pieces.labels[index]! - 1] ? 1 : 0)));
-      const reference = touchesEdge.includes(0) ? within : lineInkRgb;
-      const otherInk = channels.map((piece) => {
-        const colour: [number, number, number] = [median(piece[0]), median(piece[1]), median(piece[2])];
-        return isColoured(colour) !== isColoured(reference) || (isColoured(colour) && !sameInk(colour, reference));
+      const colours = channels.map((piece): [number, number, number] => [median(piece[0]), median(piece[1]), median(piece[2])]);
+      const unlike = (colour: [number, number, number], other: [number, number, number]) =>
+        isColoured(colour) !== isColoured(other) || (isColoured(colour) && !sameInk(colour, other));
+      let reference = lineInkRgb;
+      let agreeing = 0;
+      colours.forEach((colour, label) => {
+        if (!within[label]) return;
+        const pixels = colours.reduce((sum, other, otherLabel) => sum + (within[otherLabel] && !unlike(other, colour) ? pieces.components[otherLabel]!.pixels : 0), 0);
+        if (pixels > agreeing) {
+          agreeing = pixels;
+          reference = colour;
+        }
       });
-      notText(ownInk.map((value, index) => (value && otherInk[pieces.labels[index]! - 1] ? 1 : 0)));
+      notText(ownInk.map((value, index) => (value && unlike(colours[pieces.labels[index]! - 1]!, reference) ? 1 : 0)));
     }
     // So is faint ink that runs on into such a frame, or out of the region's rectangles.
     const inkTone = median(Array.from(ownInk.keys()).filter((index) => ownInk[index]).map(at));
@@ -342,7 +352,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   if (bubble) {
     const shapes = labelComponents(ink.map((value, index) => value | inkAround[index]!), width, height);
     const largerThanGlyph = shapes.components.map((component) =>
-      Math.max(component.box.x1 - component.box.x0, component.box.y1 - component.box.y0) > markSideShare * thickness);
+      Math.max(component.box.x1 - component.box.x0, component.box.y1 - component.box.y0) > glyphSide);
     const pieces = labelComponents(ink, width, height);
     const inkInside = new Int32Array(pieces.components.length);
     const inkBeyond = new Int32Array(pieces.components.length);

@@ -211,6 +211,73 @@ describe("regionTextMask", () => {
     expect(pageMask[60 * rgb.width + 75]).toBe(0);
   });
 
+  it("reads the colour of a line in a bubble from its pieces inside the bubble, not from art that the rectangle holds beyond it", () => {
+    // A white bubble on a light page; the line rectangle runs out of the bubble at the top, where it holds a
+    // purple shape; the glyph blocks reach the sides of the rectangle, only a dot lies within it.
+    const width = 200;
+    const height = 440;
+    const data = new Uint8Array(width * height * 3).fill(230);
+    const set = (x0: number, y0: number, x1: number, y1: number, colour: readonly number[]) => {
+      for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) data.set(colour, (y * width + x) * 3);
+    };
+    set(20, 60, 140, 380, [255, 255, 255]);
+    set(60, 25, 100, 55, [94, 78, 129]);
+    for (const y0 of [100, 160, 220, 280]) set(50, y0, 110, y0 + 30, [10, 10, 10]);
+    set(76, 336, 84, 344, [10, 10, 10]);
+    const rgb = { data, width, height };
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(80, 220, 400, 60, 90)], { x0: 20, y0: 60, x1: 140, y1: 380 })!;
+    const pageMask = new Uint8Array(width * height);
+    addToPageMask(pageMask, width, region);
+    expect(pageMask[115 * width + 80]).toBe(1);
+    expect(pageMask[40 * width + 80]).toBe(0);
+    expect(region.inkMedian).toEqual([10, 10, 10]);
+    expect(region.ringMedian).toEqual([255, 255, 255]);
+  });
+
+  it("reads the colour of a line in a bubble from pieces no larger than a glyph: art drawn over the bubble is larger", () => {
+    // A white bubble on a light page with a tall pink shape drawn over it inside the line rectangle; the
+    // glyph blocks reach the sides of the rectangle, only a dot lies within it.
+    const width = 200;
+    const height = 460;
+    const data = new Uint8Array(width * height * 3).fill(230);
+    const set = (x0: number, y0: number, x1: number, y1: number, colour: readonly number[]) => {
+      for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) data.set(colour, (y * width + x) * 3);
+    };
+    set(20, 30, 140, 440, [255, 255, 255]);
+    set(60, 50, 100, 140, [200, 40, 100]);
+    for (const y0 of [250, 310, 370]) set(50, y0, 110, y0 + 30, [10, 10, 10]);
+    set(76, 220, 84, 228, [10, 10, 10]);
+    const rgb = { data, width, height };
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(80, 230, 400, 60, 90)], { x0: 20, y0: 30, x1: 140, y1: 440 })!;
+    const pageMask = new Uint8Array(width * height);
+    addToPageMask(pageMask, width, region);
+    expect(pageMask[265 * width + 80]).toBe(1);
+    expect(pageMask[95 * width + 80]).toBe(0);
+    expect(region.inkMedian).toEqual([10, 10, 10]);
+  });
+
+  it("takes the colour that most pieces of a line in a bubble agree on, not a blend of their colours", () => {
+    // Black glyph blocks with smaller pink and purple pieces, all within the rectangle and the bubble: black
+    // holds the most pixels, yet no channel of a median over all their pixels is black.
+    const width = 200;
+    const height = 460;
+    const data = new Uint8Array(width * height * 3).fill(230);
+    const set = (x0: number, y0: number, x1: number, y1: number, colour: readonly number[]) => {
+      for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) data.set(colour, (y * width + x) * 3);
+    };
+    set(20, 30, 140, 440, [255, 255, 255]);
+    for (const y0 of [40, 80, 120, 160]) set(65, y0, 95, y0 + 30, [10, 10, 10]);
+    for (const y0 of [200, 245, 290]) set(65, y0, 95, y0 + 35, [200, 40, 100]);
+    for (const y0 of [335, 383]) set(67, y0, 92, y0 + 42, [94, 78, 129]);
+    const rgb = { data, width, height };
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(80, 230, 400, 60, 90)], { x0: 20, y0: 30, x1: 140, y1: 440 })!;
+    const pageMask = new Uint8Array(width * height);
+    addToPageMask(pageMask, width, region);
+    expect(pageMask[55 * width + 80]).toBe(1);
+    expect(pageMask[217 * width + 80]).toBe(0);
+    expect(region.inkMedian).toEqual([10, 10, 10]);
+  });
+
   it("reads the paper from the line's own rectangle when the text sits on a plate", () => {
     // Light page, a dark plate barely larger than the line rectangle, light text on the plate.
     const rgb = page(200, 160, 220, 240, { cx: 100, cy: 80, long: 100, short: 12, angle: 0 });
