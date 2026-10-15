@@ -5,6 +5,8 @@ import { argmaxWithProbability, summarizeProbabilities } from "./token-math.ts";
 export const mangaOcrStartToken = 2;
 export const mangaOcrEndToken = 3;
 const lastSpecialToken = 4;
+/** A character may repeat at most this many times in a row: on a cry drawn large the decoder runs on to the length limit. */
+export const mangaOcrMaxCharRun = 12;
 
 /**
  * Post-processing of the reference manga-ocr package: drop whitespace, turn "…" into "...", normalise
@@ -23,7 +25,8 @@ export const decodeMangaOcrTokens = (ids: readonly number[], vocabulary: readonl
 
 /**
  * Greedy decoding for the manga-ocr ONNX export, whose decoder has no KV cache: every step feeds all
- * tokens so far. `nextLogits` returns the logits of the last position.
+ * tokens so far. `nextLogits` returns the logits of the last position. Decoding ends at [SEP], at the
+ * length limit, or when a character has run mangaOcrMaxCharRun times.
  */
 export const greedyDecodeMangaOcr = async (
   nextLogits: (ids: readonly number[]) => Promise<Float32Array>,
@@ -32,10 +35,13 @@ export const greedyDecodeMangaOcr = async (
 ): Promise<OcrReading> => {
   const ids = [mangaOcrStartToken];
   const probabilities: number[] = [];
+  let run = 0;
   for (let step = 0; step < maxLength; step += 1) {
     const logits = await nextLogits(ids);
     const { index, probability } = argmaxWithProbability(logits, 0, logits.length);
     if (index === mangaOcrEndToken) break;
+    run = index === ids[ids.length - 1] ? run + 1 : 1;
+    if (run > mangaOcrMaxCharRun) break;
     ids.push(index);
     probabilities.push(probability);
   }

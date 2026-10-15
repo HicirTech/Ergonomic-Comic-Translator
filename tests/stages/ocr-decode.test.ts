@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { baberuDecodeDefaults, createBaberuVocabulary, decodeBaberu, shapeBaberuLogits } from "../../src/stages/ocr/baberu-decode.ts";
 import { ctcCharacters, ctcGreedyDecode } from "../../src/stages/ocr/ctc-decode.ts";
-import { decodeMangaOcrTokens, greedyDecodeMangaOcr, mangaOcrPostProcess } from "../../src/stages/ocr/manga-ocr-decode.ts";
+import { decodeMangaOcrTokens, greedyDecodeMangaOcr, mangaOcrMaxCharRun, mangaOcrPostProcess } from "../../src/stages/ocr/manga-ocr-decode.ts";
 import { softmaxProbability } from "../../src/stages/ocr/token-math.ts";
 
 /** Logits over `size` classes with one clear winner. */
@@ -63,6 +63,11 @@ describe("manga-ocr decoding", () => {
   it("stops at the length limit", async () => {
     const reading = await greedyDecodeMangaOcr(async () => peaked(vocabulary.length, 5), vocabulary, 7);
     expect(reading.tokens).toBe(7);
+  });
+
+  it("stops a character that runs on, as the decoder does on a cry drawn large", async () => {
+    const reading = await greedyDecodeMangaOcr(async () => peaked(vocabulary.length, 5), vocabulary, 300);
+    expect(reading.tokens).toBe(mangaOcrMaxCharRun);
   });
 });
 
