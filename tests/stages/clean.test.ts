@@ -94,6 +94,20 @@ describe("regionTextMask", () => {
     expect(region.ringMedian).toEqual([128, 128, 128]);
   });
 
+  it("takes the whole band of an outline drawn wider than the mask may grow, and reads the paper beyond it", () => {
+    // Light paper, a dark bar with a white edge of 12 px all around it: wider than the growth of a 60 px line.
+    const rgb = page(200, 160, 190, 255, { cx: 100, cy: 80, long: 124, short: 36, angle: 0 });
+    for (let y = 74; y < 86; y += 1) rgb.data.fill(10, (y * 200 + 50) * 3, (y * 200 + 150) * 3);
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 150, 60, 0)])!;
+    const pageMask = new Uint8Array(200 * 160);
+    addToPageMask(pageMask, 200, region);
+    // The white edge covers rows 62 to 73 above the bar: all of it is masked, the paper two rows above it is not.
+    expect(pageMask[62 * 200 + 100]).toBe(1);
+    expect(pageMask[60 * 200 + 100]).toBe(0);
+    expect(region.outlineMedian).toEqual([255, 255, 255]);
+    expect(region.ringMedian).toEqual([190, 190, 190]);
+  });
+
   it("does not take paper that is lighter around the text for an outline", () => {
     // The artwork is 20 levels lighter within 8 px of the text than further out: nothing is drawn there.
     const rgb = page(200, 160, 180, 200, { cx: 100, cy: 80, long: 116, short: 28, angle: 0 });

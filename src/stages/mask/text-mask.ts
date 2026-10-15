@@ -46,6 +46,16 @@ const faintShare = 0.5;
  */
 const outlineContrast = 48;
 /**
+ * For free text the paper is read this far out, in line thicknesses: an outline drawn wider than the mask
+ * may grow has ended there. In a bubble it is read just past that growth: further out may lie beyond the
+ * bubble.
+ */
+const paperSearchShare = 0.3;
+/** The band of an outline is taken as far as this share of the thickness from the strokes. */
+const bandReachShare = 0.5;
+/** A pixel this close to the outline's colour on every channel is its band; below outlineContrast, so paper never is. */
+const bandTolerance = 40;
+/**
  * Marks are looked for this far past the ends of a line and beside it, in line thicknesses. Inside a
  * bubble the search goes further, because nothing but text is that dark in a bubble: along the line it
  * follows a leader of eight dots (on one volume the last dot of one lay 4.1 thicknesses past its line), and
@@ -78,6 +88,30 @@ const structureDensity = 0.12;
 const median = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[sorted.length >> 1] ?? 0;
+};
+
+/** The pixels for which `wanted` holds that are connected (8-neighbourhood) to the set pixels of `seed`, within `reach`. */
+const floodFrom = (seed: Uint8Array, reach: Uint8Array, wanted: (index: number) => boolean, width: number, height: number) => {
+  const found = new Uint8Array(seed.length);
+  const stack: number[] = [];
+  for (let index = 0; index < seed.length; index += 1) if (seed[index]) stack.push(index);
+  while (stack.length > 0) {
+    const index = stack.pop()!;
+    const x = index % width;
+    const y = Math.floor(index / width);
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const next = ny * width + nx;
+        if (seed[next] || found[next] || !reach[next] || !wanted(next)) continue;
+        found[next] = 1;
+        stack.push(next);
+      }
+    }
+  }
+  return found;
 };
 
 /**
@@ -320,11 +354,12 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     reachMask[index] = polygon[index]! | marks[index]!;
   }
 
-  // The shells around the ink, one pixel at a time; the one past the furthest the mask may grow is the paper.
-  // An outline lies against the ink: the shells from the ink outward that are not that paper yet, when one
-  // of them is as far from it as an outline is. A shell further out that differs again is the background.
+  // The shells around the ink, one pixel at a time; the one at the paper distance is the paper. An outline
+  // lies against the ink: the shells from the ink outward that are not that paper yet, when one of them is
+  // as far from it as an outline is. A shell further out that differs again is the background.
+  const paperDistance = bubble ? maxGrow + 1 : Math.max(maxGrow + 1, Math.round(paperSearchShare * thickness));
   const reached: Uint8Array[] = [ink];
-  for (let distance = 1; distance <= maxGrow + 1; distance += 1) reached.push(dilateSquare(ink, width, height, distance));
+  for (let distance = 1; distance <= paperDistance; distance += 1) reached.push(dilateSquare(ink, width, height, distance));
   const shells = reached.slice(1).map((outer, index) => {
     const shell = new Uint8Array(width * height);
     for (let pixel = 0; pixel < shell.length; pixel += 1) shell[pixel] = outer[pixel]! & (reached[index]![pixel]! ^ 1);
@@ -332,10 +367,11 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   });
   const luma = ([red, green, blue]: readonly number[]) => 0.299 * red! + 0.587 * green! + 0.114 * blue!;
   const apart = (a: readonly number[], b: readonly number[]) => a.some((value, channel) => Math.abs(value - b[channel]!) >= outlineContrast);
-  const paperShell = shells[maxGrow]!;
+  const paperShell = shells[paperDistance - 1]!;
   let outlineEnd = minGrowPixels;
-  while (outlineEnd < maxGrow && Math.abs(luma(shells[outlineEnd]!) - luma(paperShell)) >= paperToneTolerance) outlineEnd += 1;
-  const grow = shells.slice(minGrowPixels, outlineEnd).some((shell) => apart(shell, paperShell)) ? outlineEnd : minGrowPixels;
+  while (outlineEnd < paperDistance - 1 && Math.abs(luma(shells[outlineEnd]!) - luma(paperShell)) >= paperToneTolerance) outlineEnd += 1;
+  const outlined = shells.slice(minGrowPixels, outlineEnd).some((shell) => apart(shell, paperShell));
+  const grow = outlined ? Math.min(outlineEnd, maxGrow) : minGrowPixels;
   const grown = reached[grow]!.slice();
   const limit = dilateSquare(reachMask, width, height, grow);
   let strokePixels = 0;
@@ -344,16 +380,12 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     strokePixels += grown[index]!;
   }
 
-  // The paper next to the strokes: the colour the lettering has to stand on.
-  const around = dilateSquare(grown, width, height, paperBandPixels);
-  const ringMedian = rgbOf(around.map((value, index) => value & (grown[index]! ^ 1)));
-
   // The stroke colour comes from the half of the stroke pixels furthest from the paper: edge pixels are blends.
   const strokes = lineInk.map((value, index) => (value && !glyphFill[index] ? 1 : 0));
   const strokeLuma: number[] = [];
   for (let index = 0; index < strokes.length; index += 1) if (strokes[index]) strokeLuma.push(at(index));
   const strokeMiddle = median(strokeLuma);
-  const darkStrokes = strokeMiddle <= luma(ringMedian);
+  const darkStrokes = strokeMiddle <= luma(paperShell);
   const strokeMedian = rgbOf(strokes.map((value, index) => (value && (darkStrokes ? at(index) <= strokeMiddle : at(index) >= strokeMiddle) ? 1 : 0)));
   let fillPixels = 0;
   for (let index = 0; index < glyphFill.length; index += 1) fillPixels += glyphFill[index]!;
@@ -363,7 +395,28 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   const outlinedFill = fillPixels >= outlinedFillShare * strokeLuma.length;
   const halo = shells[minGrowPixels - 1]!;
   const inkMedian = outlinedFill ? rgbOf(glyphFill) : strokeMedian;
-  const outlineMedian = outlinedFill ? strokeMedian : grow > minGrowPixels && apart(halo, ringMedian) && apart(halo, strokeMedian) ? halo : null;
+  const outlineMedian = outlinedFill ? strokeMedian : outlined && apart(halo, paperShell) && apart(halo, strokeMedian) ? halo : null;
+
+  // An outline drawn wider than the mask may grow: the pixels of its colour that touch the strokes, and one
+  // more for their blended rim, go with the strokes, so the fill starts from the paper beyond the band.
+  if (outlineMedian !== null && !outlinedFill) {
+    const reach = dilateSquare(reachMask, width, height, Math.round(bandReachShare * thickness));
+    const ofBand = (index: number) => {
+      const offset = pageIndex(index) * 3;
+      return outlineMedian.every((value, channel) => Math.abs(rgb.data[offset + channel]! - value) <= bandTolerance);
+    };
+    const band = floodFrom(grown, reach, ofBand, width, height);
+    const rim = dilateSquare(band, width, height, 1);
+    for (let index = 0; index < grown.length; index += 1) {
+      if (grown[index] || !reach[index] || !(band[index] || rim[index])) continue;
+      grown[index] = 1;
+      strokePixels += 1;
+    }
+  }
+
+  // The paper next to the strokes: the colour the lettering has to stand on.
+  const around = dilateSquare(grown, width, height, paperBandPixels);
+  const ringMedian = rgbOf(around.map((value, index) => value & (grown[index]! ^ 1)));
 
   return {
     window,
