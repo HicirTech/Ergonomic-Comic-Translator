@@ -118,6 +118,20 @@ describe("regionTextMask", () => {
     expect(region.ringMedian).toEqual([128, 128, 128]);
   });
 
+  it("takes the band of an outline no further than twice its width: a shape of its colour that touches the band is artwork", () => {
+    // Light paper, a dark bar with a white edge of 4 px, and a white plate that touches the edge at the end of the bar.
+    const rgb = page(300, 200, 190, 255, { cx: 100, cy: 80, long: 108, short: 20, angle: 0 });
+    for (let y = 74; y < 86; y += 1) rgb.data.fill(10, (y * 300 + 50) * 3, (y * 300 + 150) * 3);
+    for (let y = 70; y < 90; y += 1) rgb.data.fill(255, (y * 300 + 154) * 3, (y * 300 + 240) * 3);
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 120, 60, 0)])!;
+    const pageMask = new Uint8Array(300 * 200);
+    addToPageMask(pageMask, 300, region);
+    // The edge ends at column 153 and the line at 159: the plate is masked past the line by twice the edge, not by half the thickness.
+    expect(pageMask[80 * 300 + 153]).toBe(1);
+    expect(pageMask[80 * 300 + 185]).toBe(0);
+    expect(region.outlineMedian).toEqual([255, 255, 255]);
+  });
+
   it("tells a coloured fill from the light edge around it when both lie on the light side of a dark page", () => {
     // A thin pink bar in a thick white edge on a near-black page: both are the light side, white the lighter half.
     const rgb = page(200, 160, 20, 255, { cx: 100, cy: 80, long: 112, short: 18, angle: 0 });

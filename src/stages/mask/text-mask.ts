@@ -51,7 +51,10 @@ const outlineContrast = 48;
  * bubble.
  */
 const paperSearchShare = 0.3;
-/** The band of an outline is taken as far as this share of the thickness from the strokes. */
+/**
+ * The band of an outline is taken as far as this share of the thickness from the strokes, and never further
+ * than twice the width the shells gave it: a shape of the outline's colour that touches the band is artwork.
+ */
 const bandReachShare = 0.5;
 /** A pixel this close to the outline's colour on every channel is its band; below outlineContrast, so paper never is. */
 const bandTolerance = 40;
@@ -443,7 +446,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   // An outline drawn wider than the mask may grow: the pixels of its colour that touch the strokes, and one
   // more for their blended rim, go with the strokes, so the fill starts from the paper beyond the band.
   if (outlineMedian !== null && !outlinedFill) {
-    const reach = dilateSquare(reachMask, width, height, Math.round(bandReachShare * thickness));
+    const reach = dilateSquare(reachMask, width, height, Math.min(Math.round(bandReachShare * thickness), 2 * outlineEnd));
     const ofBand = (index: number) => {
       const offset = pageIndex(index) * 3;
       return outlineMedian.every((value, channel) => Math.abs(rgb.data[offset + channel]! - value) <= bandTolerance);
