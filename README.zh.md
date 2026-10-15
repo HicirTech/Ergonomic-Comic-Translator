@@ -27,7 +27,8 @@
    或者读起来是排版文字，也会照常翻译。拟声词和艺术字保留原样，在对话框里也一样：框里墨色和对白不同、
    又是手绘样子的字就是艺术字；单独占着一块底、既有彩色又有描边的字也是（只占其一、又读不成文字的同样算）。检测到的文字框里如果找不到任何文字行，就没法清字，这一处保持原样，
    不会把译文叠在原文上。
-3. **先定人名和名词。** 收集全书的人名和反复出现的名词，结合全书上下文翻译后固定下来，保证每一页用同一个中文名。
+3. **先定人名和名词。** 日文本子先用 JMdict 词典校正识别只差一步的片假名词（漏了浊点、小假名读成大假名）。然后收集
+   全书的人名和反复出现的名词，结合全书上下文翻译后固定下来，保证每一页用同一个中文名。
    只有原文本身当作名字的词（后面带敬称、被引号括起、出现在名字牌上）、这些名字的称呼形式和地名会用来约束翻译；
    模型同时报上来的普通词和俚语不会。
 4. **翻译**（llama.cpp）。日文本子由专门做日译中的 Sakura-14B-Qwen2.5-v1.0 翻译：每句一行，连同本页出现的名词表
@@ -62,7 +63,7 @@
 
 ```bash
 bun install
-bun run models:fetch vision fonts llm llm-ja   # 8 GB 显卡和核显再加上 llm-small
+bun run models:fetch vision fonts llm llm-ja dictionary   # 8 GB 显卡和核显再加上 llm-small
 bun run runtimes:fetch                  # llama.cpp b11146（Vulkan 和 CPU 版）
 bun run build:frontend
 bun run doctor                          # 只读体检：显卡、内存、推荐档位
@@ -102,7 +103,7 @@ bun run start                           # 然后打开 http://127.0.0.1:3000
 |---|---|
 | `bun run start [--port 3000] [--cpu]` | 本地服务，含网页界面和作业调度 |
 | `bun run doctor [--seconds N] [--json]` | 只读的资源报告，从不加载模型 |
-| `bun run models:fetch [组合或模型 id ...]` | 下载并校验模型（组合：`vision`、`fonts`、`llm`、`llm-ja`、`llm-small`、`korean`；`--list` 列出全部） |
+| `bun run models:fetch [组合或模型 id ...]` | 下载并校验模型（组合：`vision`、`fonts`、`llm`、`llm-ja`、`dictionary`、`llm-small`、`korean`；`--list` 列出全部） |
 | `bun run runtimes:fetch [asset ...]` | 下载并解压 llama.cpp（默认：本平台的 Vulkan 和 CPU 版） |
 | `bun run vision <zip、cbz、文件夹或图片> [--out 目录] [--cpu] [--prior v\|h]` | 只做识别和清字，输出到一个结果文件夹 |
 | `bun run translate <结果文件夹> [--lang ja\|ko\|zh-Hant\|en] [--ltr] [--history 2000]` | 对识别结果做人名、名词和翻译 |
@@ -180,6 +181,7 @@ bun run dev:frontend   # Vite 跑在 5173 端口，把 /api 转发给 3000 端�
 | [Qwen3.5-9B GGUF](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF) | Apache-2.0 | 翻译（Q6_K、Q4_K_M、IQ3_XXS 档位） |
 | [Hy-MT2-7B GGUF](https://huggingface.co/tencent/Hy-MT2-7B-GGUF) | Apache-2.0 | 核显用的翻译档位 |
 | [Sakura-14B-Qwen2.5-v1.0 GGUF](https://huggingface.co/SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF) | CC BY-NC-SA 4.0 | 日文翻译（Q4_K_M）；仅限非商业使用 |
+| [JMdict](https://www.edrdg.org/jmdict/j_jmdict.html)（经 [jmdict-simplified](https://github.com/scriptin/jmdict-simplified)） | CC BY-SA 4.0（EDRDG） | 日文词典：用来校正读错的片假名词 |
 | [Noto Sans SC Bold](https://github.com/notofonts/noto-cjk) | OFL-1.1 | 中文嵌字字体 |
 | [korean PP-OCRv5 mobile rec](https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx) | Apache-2.0 | 韩语文字行识别（尚未使用） |
 

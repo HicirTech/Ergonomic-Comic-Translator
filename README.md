@@ -39,7 +39,9 @@ checking are automatic.
    not read as text either).
    A detected text box in which no text line is found cannot be cleaned, so it is left as it is instead of
    being lettered over.
-3. **Names and terms first.** Names and recurring terms of the whole volume are collected, translated with
+3. **Names and terms first.** In a Japanese volume, a katakana word the readers got one slip away from a
+   dictionary word (a dakuten dropped, a small kana read large) is first corrected against JMdict. Names and
+   recurring terms of the whole volume are then collected, translated with
    context from across the volume, and frozen so every page uses the same Chinese names. Only what the text
    itself treats as a name (an honorific after it, quotation marks around it, a name tag), the address forms of
    such names and places steer the translation; the common words and slang a model also reports as names do not.
@@ -84,7 +86,7 @@ set of models is loaded at a time, guarded by a machine-wide lock that the comma
 
 ```bash
 bun install
-bun run models:fetch vision fonts llm llm-ja   # add llm-small on 8 GB cards and integrated graphics
+bun run models:fetch vision fonts llm llm-ja dictionary   # add llm-small on 8 GB cards and integrated graphics
 bun run runtimes:fetch                  # llama.cpp b11146 (Vulkan and CPU builds)
 bun run build:frontend
 bun run doctor                          # read-only report: GPUs, memory, recommended tier
@@ -128,7 +130,7 @@ local disk.
 |---|---|
 | `bun run start [--port 3000] [--cpu]` | Local server with the web UI and the job runner |
 | `bun run doctor [--seconds N] [--json]` | Read-only resource report; never loads a model |
-| `bun run models:fetch [pack or model id ...]` | Download and verify models (packs: `vision`, `fonts`, `llm`, `llm-ja`, `llm-small`, `korean`; `--list` shows all) |
+| `bun run models:fetch [pack or model id ...]` | Download and verify models (packs: `vision`, `fonts`, `llm`, `llm-ja`, `dictionary`, `llm-small`, `korean`; `--list` shows all) |
 | `bun run runtimes:fetch [asset ...]` | Download and unpack llama.cpp (default: this platform's Vulkan and CPU builds) |
 | `bun run vision <zip, cbz, folder or images> [--out dir] [--cpu] [--prior v\|h]` | Reading and cleaning only, into a run folder |
 | `bun run translate <run folder> [--lang ja\|ko\|zh-Hant\|en] [--ltr] [--history 2000]` | Names, terms and translation of a vision run |
@@ -216,6 +218,7 @@ Rules for contributions:
 | [Qwen3.5-9B GGUF](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF) | Apache-2.0 | translation (Q6_K, Q4_K_M, IQ3_XXS tiers) |
 | [Hy-MT2-7B GGUF](https://huggingface.co/tencent/Hy-MT2-7B-GGUF) | Apache-2.0 | translation tier for integrated graphics |
 | [Sakura-14B-Qwen2.5-v1.0 GGUF](https://huggingface.co/SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF) | CC BY-NC-SA 4.0 | Japanese translation (Q4_K_M); non-commercial use only |
+| [JMdict](https://www.edrdg.org/jmdict/j_jmdict.html) via [jmdict-simplified](https://github.com/scriptin/jmdict-simplified) | CC BY-SA 4.0 (EDRDG) | Japanese dictionary: misread katakana words are corrected against it |
 | [Noto Sans SC Bold](https://github.com/notofonts/noto-cjk) | OFL-1.1 | Chinese lettering font |
 | [korean PP-OCRv5 mobile rec](https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx) | Apache-2.0 | Korean line recognition (not used yet) |
 
