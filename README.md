@@ -55,7 +55,8 @@ checking are automatic.
    recurring terms of the whole volume are then collected, translated with
    context from across the volume, and frozen so every page uses the same Chinese names. Only what the text
    itself treats as a name (an honorific after it, quotation marks around it, a name tag), the address forms of
-   such names and places steer the translation; the common words and slang a model also reports as names do not.
+   such names and places of two characters or more steer the translation; the common words and slang a model
+   also reports as names do not, nor a single character it takes for a place (a village, a forest).
 4. **Translate** (llama.cpp). A Japanese volume is translated by Sakura-14B-Qwen2.5-v1.0, a model trained for
    Japanese-to-Chinese translation, asked one line per utterance with the glossary entries that occur on the
    page; other languages by Qwen3.5-9B through a JSON contract. Page by page in reading order, with earlier
