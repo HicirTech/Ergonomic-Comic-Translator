@@ -192,6 +192,16 @@ describe("translateVolume", () => {
     expect(pageTwo.filter((message) => message.role === "assistant")).toHaveLength(1);
   });
 
+  it("finds a name whose syllables are stretched with wave dashes", async () => {
+    const stretched = [{ page: 1, units: [{ id: "1", kind: "dialogue" as const, source: "リ〜ン~、来て" }], lines: [], refs: {} }];
+    const seen: ChatRequest[] = [];
+    await translateVolume(stretched, context(async (request) => {
+      seen.push(request);
+      return completion(JSON.stringify({ "1": "琳～，来" }));
+    }));
+    expect(userJson(seen[0]!.messages).terms).toEqual([{ source: "リン", target: "琳" }]);
+  });
+
   it("keeps a page's seed when only the glossary changes", async () => {
     const seeds: number[] = [];
     const record: CompleteFn = async (request) => {

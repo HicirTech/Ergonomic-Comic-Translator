@@ -10,6 +10,9 @@ import type { GlossaryEntry, HistoryPage, TranslationUnit } from "../translate/i
 import { translatePage } from "../translate/translate-page.ts";
 import type { PageTranslationResult, VolumePageText, VolumeTranslationContext } from "./interfaces/index.ts";
 
+/** A wave dash stretches a syllable (か〜す〜み); it is never part of the name itself. */
+const stretchMarks = /[〜~～]/gu;
+
 /**
  * T wave, one page: the request carries the frozen role table, the terms found on the page, and a
  * history window of earlier pages chosen from source lengths alone (so re-translating one page sees
@@ -38,7 +41,7 @@ export const translateVolumePage = async (
 
   const matchesOf = (source: string) => {
     const found = new Map<FixedTerm, string>();
-    for (const match of matcher.findAll(source)) found.set(match.value, match.surface);
+    for (const match of matcher.findAll(source.replace(stretchMarks, ""))) found.set(match.value, match.surface);
     return [...found].map(([term, surface]) => ({ term, surface }));
   };
   const pageMatches = [...new Map(page.units.flatMap((unit) => matchesOf(unit.source)).map((entry) => [entry.term, entry])).values()];
