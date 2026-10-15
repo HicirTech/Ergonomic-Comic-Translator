@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { translationFlags } from "../../src/qa/translation-flags.ts";
+import { reviewFlags, translationFlags } from "../../src/qa/translation-flags.ts";
 
 describe("translationFlags", () => {
   it("raises an error for units without a translation and a warning for missed terms", () => {
@@ -14,6 +14,10 @@ describe("translationFlags", () => {
       { code: "TR_FAILED", severity: "error", class: "decisive", evidence: { unit: "2", checks: ["G1_REFUSAL"] } },
       { code: "TR_TERM_MISS", severity: "warn", class: "advisory", evidence: { unit: "3" } },
     ]);
+  });
+
+  it("marks the units the reviewer doubts, without the reviewer's words", () => {
+    expect(reviewFlags({ "2": "意思反了" })).toEqual([{ code: "TR_REVIEW", severity: "warn", class: "advisory", evidence: { unit: "2" } }]);
   });
 
   it("warns about a translation that was lettered although it failed a check", () => {

@@ -41,6 +41,7 @@ const stageFailedZh: Record<VolumeStage, string> = {
   vision: "识别这一页时出错，这一页保留原图",
   glossary: "整理人物和名词时出错，接下来不带名词表翻译",
   translate: "翻译这一页时出错，这一页保留原图",
+  review: "审校这一页时出错，这一页不带审校标记",
   render: "排版这一页时出错，这一页保留原图",
   export: "打包导出时出错",
 };

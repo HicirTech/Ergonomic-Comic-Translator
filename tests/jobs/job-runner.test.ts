@@ -87,7 +87,7 @@ const setup = (
     db,
     queue,
     volumes,
-    stages: { vision: stage("vision"), glossary: stage("glossary"), translate: stage("translate"), render: stage("render"), export: stage("export") },
+    stages: { vision: stage("vision"), glossary: stage("glossary"), translate: stage("translate"), review: stage("review"), render: stage("render"), export: stage("export") },
     host: fake.host,
     dispatchAllowed: () => true,
   }, { pollMs: 5, retryDelayMs: 10, llmIdleUnloadMs: 60_000 });
@@ -116,9 +116,9 @@ describe("JobRunner", () => {
     runner.submit(jobId);
     expect((await finished).state).toBe("succeeded");
 
-    const device = calls.filter((call) => ["vision", "glossary", "translate"].includes(call.stage));
-    expect(order(device)).toEqual(["vision1", "vision3", "glossary", "translate1", "translate3"]);
-    expect(device.map((call) => call.lane)).toEqual(["gpu", "gpu", "llm", "llm", "llm"]);
+    const device = calls.filter((call) => ["vision", "glossary", "translate", "review"].includes(call.stage));
+    expect(order(device)).toEqual(["vision1", "vision3", "glossary", "translate1", "translate3", "review1", "review3"]);
+    expect(device.map((call) => call.lane)).toEqual(["gpu", "gpu", "llm", "llm", "llm", "llm", "llm"]);
     expect(fake.opens).toEqual(["gpu", "llm:general"]);
     const at = (name: string) => order(calls).indexOf(name);
     expect(at("render2")).toBeLessThan(at("glossary"));
@@ -131,7 +131,7 @@ describe("JobRunner", () => {
     runner.start();
     runner.submit(jobId);
     expect((await finished).state).toBe("succeeded");
-    expect(fake.opens).toEqual(["gpu", "llm:general", "llm:japanese"]);
+    expect(fake.opens).toEqual(["gpu", "llm:general", "llm:japanese", "llm:general"]);
   });
 
   it("finishes the volume when a page fails and reports a partial failure", async () => {

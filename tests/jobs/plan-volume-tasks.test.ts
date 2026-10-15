@@ -35,17 +35,26 @@ describe("planVolumeTasks", () => {
     expect(planned(tasks)).toEqual(["translate:p1:llm"]);
   });
 
-  it("renders a page once its translation is final and exports after the last render", () => {
+  it("reviews a translated page, renders it once the review finished, and exports after the last render", () => {
     const tasks = [
       task("vision", "p1", "done"), task("vision", "p3", "done"), task("glossary", null, "done"),
       task("translate", "p1", "needs_review"), task("translate", "p3", "queued"), task("render", "p2", "done"),
     ];
+    expect(planned(tasks)).toEqual(["review:p1:llm"]);
+    tasks.push(task("review", "p1", "done"));
     expect(planned(tasks)).toEqual(["render:p1:cpu"]);
     tasks[4] = task("translate", "p3", "done");
     tasks.push(task("render", "p1", "done"));
+    expect(planned(tasks)).toEqual(["review:p3:llm"]);
+    tasks.push(task("review", "p3", "failed"));
     expect(planned(tasks)).toEqual(["render:p3:cpu"]);
     tasks.push(task("render", "p3", "failed"));
     expect(planned(tasks)).toEqual(["export:-:cpu"]);
+  });
+
+  it("renders a page whose translation failed without a review", () => {
+    const tasks = [task("vision", "p1", "done"), task("vision", "p3", "failed"), task("glossary", null, "done"), task("translate", "p1", "failed"), task("render", "p2", "done")];
+    expect(planned(tasks)).toEqual(["render:p1:cpu", "render:p3:cpu"]);
   });
 
   it("expects exactly the tasks a fully successful run plans", () => {

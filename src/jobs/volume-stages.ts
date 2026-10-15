@@ -10,11 +10,12 @@ import type { VolumeStore } from "../db/volumes.ts";
 import { exportVolume } from "../export/export-volume.ts";
 import { buildGlossary } from "../pipeline/build-glossary.ts";
 import type { PageTranslationResult, PageVisionResult, VolumeGlossary } from "../pipeline/interfaces/index.ts";
+import { reviewPage } from "../pipeline/review-page.ts";
 import { translateVolumePage } from "../pipeline/translate-volume.ts";
 import { typesetPage } from "../pipeline/typeset-page.ts";
 import { runVisionPage } from "../pipeline/vision-page.ts";
 import { pageText } from "../pipeline/volume-text.ts";
-import { translationFlagCodes, translationFlags } from "../qa/translation-flags.ts";
+import { reviewFlagCodes, reviewFlags, translationFlagCodes, translationFlags } from "../qa/translation-flags.ts";
 import { defaultReadingDirection, detectSourceLanguage } from "../stages/lang/detect-language.ts";
 import { freezeGlossary } from "../terms/freeze.ts";
 import type { JapaneseDictionary } from "../terms/interfaces/index.ts";
@@ -46,7 +47,7 @@ const writingPrior = (volume: VolumeRecord) => {
 };
 
 /**
- * The five stages of a translate_volume job over files in the volume folder. Model stages use whatever
+ * The six stages of a translate_volume job over files in the volume folder. Model stages use whatever
  * `host` has loaded (the runner loads what each task needs first); `shaper` loads the lettering font once and
  * `dictionary` the Japanese dictionary.
  */
@@ -117,6 +118,17 @@ export const createVolumeStages = (
       writeFileAtomically(files.translation(page.ordinal), json);
       flags.replacePageFlags(context.volume.id, page.id, translationFlagCodes, translationFlags(result));
       return sha256Hex(json);
+    },
+
+    review: async (context) => {
+      const page = pageOf(context);
+      const files = volumeFiles(paths, context.volume.id);
+      const translation = readJsonIfExists<PageTranslationResult>(files.translation(page.ordinal));
+      if (!translation) return null;
+      const { complete, modelSha } = host.llm();
+      const doubts = await reviewPage(translation.units, translation.targets, complete, modelSha);
+      flags.replacePageFlags(context.volume.id, page.id, reviewFlagCodes, reviewFlags(doubts));
+      return sha256Hex(JSON.stringify(doubts));
     },
 
     render: async (context) => {

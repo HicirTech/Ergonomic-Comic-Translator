@@ -13,6 +13,7 @@ import { buildGlossary } from "../pipeline/build-glossary.ts";
 import type { PageVisionResult } from "../pipeline/interfaces/index.ts";
 import { translateVolume } from "../pipeline/translate-volume.ts";
 import { openJapaneseDictionary } from "../pipeline/japanese-dictionary.ts";
+import { reviewPage } from "../pipeline/review-page.ts";
 import { pageText } from "../pipeline/volume-text.ts";
 import type { LlmSession } from "../sessions/interfaces/index.ts";
 import { openLlmSession } from "../sessions/llm-session.ts";
@@ -95,11 +96,22 @@ try {
       historyBudget,
     }));
     if (results) {
+      // The general model reads every line once more and marks what it doubts.
+      const doubted = await withSession("general", async ({ complete, modelSha }) => {
+        let count = 0;
+        for (const result of results) {
+          for (const unit of Object.keys(await reviewPage(result.units, result.targets, complete, modelSha))) {
+            result.flags[unit] = [...(result.flags[unit] ?? []), "TR_REVIEW"];
+            count += 1;
+          }
+        }
+        return count;
+      });
       for (const result of results) {
         writeFileSync(join(run, "translations", `${String(result.page).padStart(4, "0")}.json`), JSON.stringify(result));
       }
       const flagged = results.reduce((sum, result) => sum + Object.keys(result.flags).length, 0);
-      console.log(`完成：${results.length} 页，${results.reduce((sum, result) => sum + result.units.length, 0)} 句，需要看看 ${flagged} 句，请求 ${results.reduce((sum, result) => sum + result.requests, 0)} 次`);
+      console.log(`完成：${results.length} 页，${results.reduce((sum, result) => sum + result.units.length, 0)} 句，需要看看 ${flagged} 句（审校存疑 ${doubted ?? 0} 句），请求 ${results.reduce((sum, result) => sum + result.requests, 0)} 次`);
     }
   }
 } finally {

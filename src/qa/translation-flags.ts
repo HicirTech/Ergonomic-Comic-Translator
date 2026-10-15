@@ -27,3 +27,10 @@ export const translationFlags = (result: PageTranslationResult): NewFlag[] => {
   }
   return flags;
 };
+
+/** Flag code the review stage owns. */
+export const reviewFlagCodes = ["TR_REVIEW"] as const;
+
+/** The reviewer's doubts as advisory warnings on their units. */
+export const reviewFlags = (doubts: Readonly<Record<string, string>>): NewFlag[] =>
+  Object.keys(doubts).map((unit) => ({ code: "TR_REVIEW", severity: "warn", class: "advisory", evidence: { unit } }));
