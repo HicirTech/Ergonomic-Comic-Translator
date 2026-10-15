@@ -1,5 +1,6 @@
 import type { ChatMessage } from "../llm/interfaces/index.ts";
-import type { GlossaryEntry, HistoryPage, PageRequest, SourceLanguage, TranslationUnit } from "./interfaces/index.ts";
+import { parseJsonAnswer } from "../qa/decisive-checks.ts";
+import type { GlossaryEntry, HistoryPage, PageRequest, SourceLanguage, TranslationContract, TranslationUnit } from "./interfaces/index.ts";
 
 /** Bumped whenever prompt wording or message layout changes; part of every translation cache key. */
 export const contractVersion = "tr-contract@2";
@@ -104,3 +105,14 @@ export const maxTokensFor = (unitCount: number) => Math.min(2048, 64 + 40 * unit
 /** Utterance ids: the region's reading order, with a, b, c... when the region holds several utterances. */
 export const unitId = (regionOrder: number, utteranceIndex: number, utteranceCount: number) =>
   utteranceCount === 1 ? String(regionOrder) : `${regionOrder}${String.fromCharCode(97 + utteranceIndex)}`;
+
+/** tr-contract@2 as the contract the translate stage runs: JSON units in, one flat JSON object out, greedy. */
+export const jsonContract: TranslationContract = {
+  version: contractVersion,
+  buildMessages,
+  schema: (units) => outputSchema(units.map((unit) => unit.id)),
+  maxTokens: (units) => maxTokensFor(units.length),
+  temperature: 0,
+  topP: 1,
+  parse: parseJsonAnswer,
+};

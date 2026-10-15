@@ -1,7 +1,7 @@
 /**
  * Decisive checks (they trigger retries and fallbacks):
- * - G0 structure: unparsable JSON, missing or extra ids, empty values, truncation, leaked reasoning,
- *   or no answer at all (HTTP error or timeout);
+ * - G0 structure: an answer of another shape than asked for (invalid JSON, not one line per unit), missing or
+ *   extra ids, empty values, truncation, leaked reasoning, or no answer at all (HTTP error or timeout);
  * - G1 refusal or meta talk the source does not contain;
  * - G1b echo of the source instead of a translation;
  * - G3 untranslated kana or hangul left in the output;

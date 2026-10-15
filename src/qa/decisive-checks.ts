@@ -1,6 +1,6 @@
 import type { ChatResult } from "../llm/interfaces/index.ts";
 import type { TranslationUnit } from "../translate/interfaces/index.ts";
-import type { CheckCode, PageCheck } from "./interfaces/index.ts";
+import type { AnswerParser, CheckCode, PageCheck } from "./interfaces/index.ts";
 
 /**
  * Refusal and meta talk, per language the model might fall into. A match only counts when the source
@@ -65,36 +65,46 @@ export const isEcho = (source: string, target: string) => {
 /** G3: Japanese kana or Korean hangul left in a Chinese translation (SFX keep their lettering elsewhere). */
 export const hasResidue = (target: string) => kanaOrHangul.test(target.replace(keepableMarks, ""));
 
+/** The JSON contract's answer: one flat object by unit id; invalid JSON or any other value has another shape. */
+export const parseJsonAnswer: AnswerParser = (content, units) => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+  const values = parsed as Record<string, unknown>;
+  const ids = new Set(units.map((unit) => unit.id));
+  return { values, extraKeys: Object.keys(values).some((key) => !ids.has(key)) };
+};
+
 /**
  * Checks one completion against the units it was asked to translate. Structure failures concern the
  * whole response; unit failures name the ids to request again. `postDict` (the target-side dictionary,
- * e.g. names the model left untranslated) is applied to each value before the content checks.
+ * e.g. names the model left untranslated) is applied to each value before the content checks; `parse`
+ * reads the answer the way the contract that asked for it expects.
  */
 export const checkCompletion = (
   units: readonly TranslationUnit[],
   result: ChatResult,
   postDict: (unit: TranslationUnit, target: string) => string = (_, target) => target,
+  parse: AnswerParser = parseJsonAnswer,
 ): PageCheck => {
   const pageFailures: CheckCode[] = [];
   if (result.reasoningContent.trim() !== "" || /<think>/iu.test(result.content)) pageFailures.push("G0_REASONING");
   if (result.finishReason === "length") pageFailures.push("G0_TRUNCATED");
 
-  let parsed: unknown = null;
-  try {
-    parsed = JSON.parse(result.content);
-  } catch {
-    pageFailures.push("G0_JSON");
-  }
-  const record = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
-  if (parsed !== null && !record) pageFailures.push("G0_JSON");
+  const answer = parse(result.content, units);
+  if (!answer) pageFailures.push("G0_JSON");
 
-  const ids = new Set(units.map((unit) => unit.id));
   const targets: Record<string, string> = {};
   const unitFailures: Record<string, CheckCode[]> = {};
-  if (record) {
-    if (Object.keys(record).some((key) => !ids.has(key))) pageFailures.push("G0_KEYS");
+  if (answer) {
+    if (answer.extraKeys) pageFailures.push("G0_KEYS");
     for (const unit of units) {
-      const raw = record[unit.id];
+      const raw = answer.values[unit.id];
       const value = typeof raw === "string" && raw.trim() !== "" ? postDict(unit, raw) : raw;
       const failures: CheckCode[] = [];
       if (typeof value !== "string") {

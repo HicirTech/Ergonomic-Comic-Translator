@@ -1,9 +1,8 @@
-import type { ChatMessage } from "../llm/interfaces/index.ts";
 import { isRetryableLlmError } from "../llm/retryable.ts";
 import { checkCompletion } from "../qa/decisive-checks.ts";
 import type { CheckCode } from "../qa/interfaces/index.ts";
-import { buildMessages, maxTokensFor, outputSchema } from "./contract.ts";
-import type { CompleteFn, PageRequest, PageTranslation, TranslationUnit } from "./interfaces/index.ts";
+import { jsonContract } from "./contract.ts";
+import type { CompleteFn, PageRequest, PageTranslation, TranslationContract, TranslationUnit } from "./interfaces/index.ts";
 
 /**
  * A complete answer that failed only these checks is still better on the page than the placeholder: some
@@ -19,19 +18,19 @@ const usableDespite: readonly CheckCode[] = ["G1B_ECHO", "G3_RESIDUE", "G5_REPEA
  * A unit that never passes but whose last attempt failed only the checks in `usableDespite` keeps that
  * attempt as its target and stays in `failures`, so it is lettered and flagged instead of replaced by the
  * placeholder.
- * `buildMessages` picks the contract (tr-contract@2 or the single-turn @2s); `postDict` repairs targets
- * (e.g. untranslated names) before the decisive checks.
+ * `contract` says how the model is asked and how its answer is read (tr-contract@2 unless given); `postDict`
+ * repairs targets (e.g. untranslated names) before the decisive checks.
  */
 export const translatePage = async (
   request: PageRequest,
   complete: CompleteFn,
   seed: number,
   options: {
-    buildMessages?: (request: PageRequest) => ChatMessage[];
+    contract?: TranslationContract;
     postDict?: (unit: TranslationUnit, target: string) => string;
   } = {},
 ): Promise<PageTranslation> => {
-  const buildRequestMessages = options.buildMessages ?? buildMessages;
+  const contract = options.contract ?? jsonContract;
   const targets: Record<string, string> = {};
   const failures: Record<string, CheckCode[]> = {};
   const lastResort: Record<string, string> = {};
@@ -42,13 +41,20 @@ export const translatePage = async (
     requests += 1;
     let result;
     try {
-      result = await complete({ messages: buildRequestMessages({ ...request, units }), schema: outputSchema(ids), maxTokens: maxTokensFor(units.length), seed: attemptSeed });
+      result = await complete({
+        messages: contract.buildMessages({ ...request, units }),
+        schema: contract.schema(units),
+        maxTokens: contract.maxTokens(units),
+        seed: attemptSeed,
+        temperature: contract.temperature,
+        topP: contract.topP,
+      });
     } catch (error) {
       if (!isRetryableLlmError(error)) throw error;
       for (const id of ids) failures[id] = ["G0_TRANSPORT"];
       return;
     }
-    const check = checkCompletion(units, result, options.postDict);
+    const check = checkCompletion(units, result, options.postDict, contract.parse);
     for (const id of ids) {
       if (check.retryIds.includes(id)) {
         const codes = check.unitFailures[id] ?? check.pageFailures;

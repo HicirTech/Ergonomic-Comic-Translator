@@ -93,6 +93,19 @@ describe("decisive checks", () => {
     expect(isDegenerate("あああああああああああ", "啊".repeat(12))).toBe(false);
   });
 
+  it("fails the whole page when the answer has another shape than asked for", () => {
+    const units = [unit("1", "行く")];
+    expect(checkCompletion(units, completion("[\"走\"]")).pageFailures).toEqual(["G0_JSON"]);
+    expect(checkCompletion(units, completion("null")).retryIds).toEqual(["1"]);
+  });
+
+  it("reads the answer through the parser of the contract that asked for it", () => {
+    const units = [unit("1", "行く")];
+    const byLine = checkCompletion(units, completion("走"), undefined, (content, asked) => ({ values: { [asked[0]!.id]: content }, extraKeys: false }));
+    expect(byLine.targets).toEqual({ "1": "走" });
+    expect(byLine.pageFailures).toEqual([]);
+  });
+
   it("fails the whole page on structure problems and single units on content problems", () => {
     const units = [unit("1", "行く"), unit("2", "待って"), unit("3", "ドン", "sfx")];
     expect(checkCompletion(units, completion("{\"1\":\"走")).pageFailures).toContain("G0_JSON");
