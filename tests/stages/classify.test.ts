@@ -54,11 +54,14 @@ describe("classifyRegion", () => {
 
   it("keeps lettering that stands alone in a bubble when it is drawn in colour or outline and does not read as text", () => {
     const inBubble = region({ cls: "text_bubble", bubble: { x0: 0, y0: 0, x1: 300, y1: 300 }, lines: [line(150, 150, 280, 250, 0)] });
-    const withCues = (lettering: Partial<LetteringCues>) =>
-      classifyRegion(inBubble, estimateOrientation(inBubble.lines, inBubble.box), "ゆらり", 1000, 1400, 250, { ...plain, aloneInBubble: true, ...lettering });
+    const withCues = (lettering: Partial<LetteringCues>, text = "ゆらり") =>
+      classifyRegion(inBubble, estimateOrientation(inBubble.lines, inBubble.box), text, 1000, 1400, 250, { ...plain, aloneInBubble: true, ...lettering });
     expect(withCues({ coloured: true, readUnsure: true })).toEqual({ layout: "bubble", kind: "sfx", policy: "keep" });
     expect(withCues({ outlined: true, readUnsure: true }).policy).toBe("keep");
     expect(withCues({ coloured: true, outlined: true }).policy).toBe("keep");
+    // A sound drawn in colour on its own is lettering, however well it reads; in black or white it may be dialogue.
+    expect(withCues({ coloured: true }, "ああ、").policy).toBe("keep");
+    expect(withCues({ outlined: true }, "ああ、").policy).toBe("translate");
     // Dialogue set large in a box of its own is black or white without an outline, however badly it reads;
     // dialogue in colour reads well.
     expect(withCues({ readUnsure: true }).policy).toBe("translate");

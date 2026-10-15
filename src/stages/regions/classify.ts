@@ -33,9 +33,9 @@ export const soundLike = (text: string) => {
  *
  * Art lettering is kept, also inside a bubble: there it is what is not set in the ink of the bubble's
  * dialogue and is drawn rather than typeset (outlined, slanted or curved, or a sound). Lettering that
- * stands alone in what the detector took for a bubble is art when it is coloured and outlined, or coloured
- * or outlined and the reader is not sure of it; dialogue set large in a box of its own is black or white,
- * has no outline and reads well. Outside bubbles a coloured ink is one more cue, and a coloured ink with an
+ * stands alone in what the detector took for a bubble is art when it is coloured and outlined, coloured
+ * or outlined and the reader is not sure of it, or coloured and a sound; dialogue set large in a box of
+ * its own is black or white, has no outline and reads well. Outside bubbles a coloured ink is one more cue, and a coloured ink with an
  * outline two. Measured on two volumes: this keeps the pieces of art lettering an earlier translation had
  * left alone, and none of the dialogue set in white in a bubble of its own, nor the captions set in black
  * with a white outline.
@@ -56,7 +56,7 @@ export const classifyRegion = (
   if (region.bubble) {
     const acrossDialogue = lettering !== null && lettering.otherInkThanBubble && (lettering.outlined || drawn || soundLike(text));
     const onItsOwn = lettering !== null && lettering.aloneInBubble
-      && ((lettering.coloured && lettering.outlined) || ((lettering.coloured || lettering.outlined) && lettering.readUnsure));
+      && ((lettering.coloured && lettering.outlined) || ((lettering.coloured || lettering.outlined) && lettering.readUnsure) || (lettering.coloured && soundLike(text)));
     return acrossDialogue || onItsOwn
       ? { layout: "bubble", kind: "sfx", policy: "keep" }
       : { layout: "bubble", kind: thought ? "thought" : "dialogue", policy: "translate" };
