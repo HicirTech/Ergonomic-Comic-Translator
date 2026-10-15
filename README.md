@@ -51,7 +51,8 @@ checking are automatic.
    pages as rolling context. Every answer is checked automatically (structure, refusals, echoed source text,
    untranslated kana or hangul, repetition); failed lines are retried, and glossary names are enforced. A
    complete answer that is still doubtful after the retries (some kana left, a short text returned as it was, a
-   much-repeated cry) is used and marked for review.
+   much-repeated cry) is used and marked for review. The general model then reads every line once more and
+   marks what it doubts (meaning lost or reversed, not readable as Chinese) for review.
 5. **Letter.** Chinese text is set horizontally or vertically in the original box at the original angle, with
    Chinese line-breaking rules, in Noto Sans SC Bold. It stays inside its bubble and the page (inside the
    bubble's frame where the page shows one beside the text, not just inside the detected bubble, which also
