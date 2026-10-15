@@ -79,6 +79,7 @@ export const formatSummaryZh = (report: OcrEvalReport) => {
     `误检 ${summary.falsePositiveCount}（气泡 ${summary.falsePositivesOnBubble}，纹理或噪声 ${summary.falsePositivesOnTextureOrNoise}，白纸 ${summary.falsePositivesOnPlainPaper}）`,
     `掩膜外变化归属：命中区域 ${summary.meanDamageInsideMatched.toFixed(1)}，误检区域 ${summary.meanDamageInsideFalsePositive.toFixed(1)}，区域外 ${summary.meanDamageOutsideRegions.toFixed(1)}；膜式填充 ${summary.meanDamageMembrane.toFixed(1)}，修补 ${summary.meanDamageInpaint.toFixed(1)}`,
     `横穿气泡的拟声词 ${summary.sfxMarks} 个：并进对白区域的行 ${summary.sfxAbsorbedLines}，单独成区送译 ${summary.sfxTranslatedRegions}、保留 ${summary.sfxKeptRegions}，被改动的像素 ${ratio(summary.sfxDamageShare)}`,
+    `描边艺术字块：保留 ${summary.artBlocksKept}、送译 ${summary.artBlocksTranslated}（保留的块只计读取，不计扣字）`,
     `纵向字错率不超过横向 ${thresholds.verticalCerGapLimit}：${mark(checks.verticalCer)}`,
     `逐行所选旋转至少 ${thresholds.rotationBestShareMin}：${mark(checks.lineRotation)}`,
     `句子所选旋转至少 ${thresholds.sentenceRotationBestShareMin}：${mark(checks.sentenceRotation)}`,

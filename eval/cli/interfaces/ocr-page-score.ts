@@ -33,7 +33,10 @@ export interface OcrBlockScore {
    */
   searchCandidates: SearchCandidate[] | null;
   reference: string;
+  /** The text the product would translate; the reading alone when the product keeps the block as lettering. */
   predicted: string;
+  /** The product keeps every region the block matched as lettering: its ink stays, so it counts in no removal score. */
+  kept: boolean;
   cer: number;
   /** Null when the block has fewer than 2 or more than 4 lines. */
   lineOrderMatch: boolean | null;

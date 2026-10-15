@@ -57,6 +57,9 @@ export interface OcrEvalReport {
     sfxTranslatedRegions: number;
     sfxKeptRegions: number;
     sfxDamageShare: number;
+    /** Blocks of the outlined art kinds that the product keeps as lettering, and those it translates. */
+    artBlocksKept: number;
+    artBlocksTranslated: number;
     byKind: Record<LayoutKind, OcrKindSummary>;
   };
   pages: {

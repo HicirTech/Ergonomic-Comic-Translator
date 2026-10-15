@@ -1,10 +1,14 @@
 import { boundingBoxOfPoints } from "../../src/geometry/box.ts";
+import type { Point } from "../../src/geometry/interfaces/index.ts";
+import { rasterizeConvexQuad } from "../../src/geometry/raster.ts";
+import { labelComponents } from "../../src/imaging/components.ts";
 import type { RgbImage } from "../../src/imaging/interfaces/index.ts";
 import { dilateSquare } from "../../src/imaging/morphology.ts";
 import type { PageVisionResult } from "../../src/pipeline/interfaces/index.ts";
 import { pageText } from "../../src/pipeline/volume-text.ts";
 import type { OcrCandidate } from "../../src/stages/ocr/interfaces/index.ts";
 import { readingOrder } from "../../src/stages/order/reading-order.ts";
+import type { RegionClass } from "../../src/stages/regions/interfaces/index.ts";
 import { maskedMae, regionPrecision } from "../metrics/vision-metrics.ts";
 import {
   bestQuarterTurn,
@@ -18,6 +22,7 @@ import {
   strongResidualShare,
   writingModeMatches,
 } from "../metrics/ocr-metrics.ts";
+import { artOutlineWidthPx, outlinedKinds } from "../synthetic/constants.ts";
 import { chosenLineQuarterTurns } from "../synthetic/line-geometry.ts";
 import type { SyntheticPage } from "../synthetic/interfaces/index.ts";
 import type { OcrBlockScore, OcrLineRotation, OcrRemovalScore, SearchCandidate } from "./interfaces/index.ts";
@@ -26,6 +31,44 @@ import { evalReadingDirection, plannedSearchReads } from "./search-reads.ts";
 
 const minOrderLines = 2;
 const maxOrderLines = 4;
+
+/** Whether the product keeps every region a block matched as lettering: it is neither translated nor cleaned. */
+export const keptAsLettering = (classes: readonly RegionClass[]) => classes.length > 0 && classes.every((item) => item.policy === "keep");
+
+/**
+ * The page area of the blocks the product keeps: each layout box with the margin its outline stroke adds,
+ * and every piece of the text mask that reaches into it, since a glyph may stand out of its box.
+ */
+export const keptLetteringMask = (mask: Uint8Array, width: number, height: number, blocks: readonly { polygon: readonly Point[]; margin: number }[]) => {
+  const kept = new Uint8Array(width * height);
+  for (const block of blocks) {
+    const area = new Uint8Array(width * height);
+    rasterizeConvexQuad(area, width, height, block.polygon);
+    const grown = dilateSquare(area, width, height, block.margin);
+    for (let index = 0; index < kept.length; index += 1) kept[index] = kept[index]! | grown[index]!;
+  }
+  const pieces = labelComponents(mask, width, height);
+  const reaching = new Uint8Array(pieces.components.length);
+  for (let index = 0; index < mask.length; index += 1) {
+    if (kept[index] && pieces.labels[index]) reaching[pieces.labels[index]! - 1] = 1;
+  }
+  for (let index = 0; index < mask.length; index += 1) {
+    if (pieces.labels[index] && reaching[pieces.labels[index]! - 1]) kept[index] = 1;
+  }
+  return kept;
+};
+
+/** The mask without the kept area: ink that is meant to stay is no residue. */
+export const maskWithout = (mask: Uint8Array, kept: Uint8Array) => mask.map((value, index) => value & (kept[index]! ^ 1));
+
+/** The cleaned page as it is judged: where lettering is kept, the page is taken as it should look, so kept ink is no damage. */
+const judgedPage = (cleaned: RgbImage, background: RgbImage, kept: Uint8Array): RgbImage => {
+  const data = cleaned.data.slice();
+  for (let index = 0; index < kept.length; index += 1) {
+    if (kept[index]) data.set(background.data.subarray(index * 3, index * 3 + 3), index * 3);
+  }
+  return { data, width: cleaned.width, height: cleaned.height };
+};
 
 const quarterTurns = [0, 1, 2, 3] as const;
 
@@ -139,7 +182,12 @@ export const scoreSyntheticPage = (
     const sameClass = classes.length > 0 && classes.every((item) =>
       item.layout === classes[0]!.layout && item.kind === classes[0]!.kind && item.policy === classes[0]!.policy);
     const reference = references[index]!;
-    const predicted = missed ? "" : pageText(page.index + 1, ordered, evalReadingDirection).units.map((unit) => unit.source).join("");
+    const kept = !missed && keptAsLettering(classes);
+    const predicted = missed
+      ? ""
+      : kept
+        ? utterances.map((utterance) => utterance.text).join("")
+        : pageText(page.index + 1, ordered, evalReadingDirection).units.map((unit) => unit.source).join("");
     const lineTexts = [...block.lines].sort((a, b) => a.order - b.order).map((line) => line.text);
     const baberu = turnsOf(reference, baberuReads[index]);
     const manga = turnsOf(reference, mangaReads[index]);
@@ -164,6 +212,7 @@ export const scoreSyntheticPage = (
       searchCandidates: searchByBlock.get(index) ?? null,
       reference,
       predicted,
+      kept,
       cer: missed ? 1 : characterErrorRate(reference, predicted),
       lineOrderMatch: lineTexts.length >= minOrderLines && lineTexts.length <= maxOrderLines
         ? referenceOrderIsClosest(lineTexts, predicted)
@@ -185,12 +234,15 @@ export const scoreSyntheticPage = (
   }));
   if (lineCursor !== lineReads.length) throw new Error(`${page.id}: ${lineReads.length} line reads for ${lineCursor} lines`);
   const claimed = new Set(matches.flatMap((match) => match.predictedIndexes));
+  const kept = keptLetteringMask(mask, background.width, background.height, page.blocks
+    .filter((_block, index) => blocks[index]!.kept)
+    .map((block) => ({ polygon: block.polygon, margin: outlinedKinds.has(block.kind) ? Math.ceil(artOutlineWidthPx(block.fontSize)) : 0 })));
   return {
     id: page.id,
     predictedBoxes,
     detectionRecall: gtBoxes.length === 0 ? 1 : matches.filter((match) => match.matchType !== "missed").length / gtBoxes.length,
     detectionPrecision: regionPrecision(gtBoxes, predictedBoxes),
-    removal: removalOf(background, cleaned, mask, vision.regions.map((region, index) => ({
+    removal: removalOf(background, judgedPage(cleaned, background, kept), maskWithout(mask, kept), vision.regions.map((region, index) => ({
       box: region.box,
       clean: region.clean,
       matched: claimed.has(index),

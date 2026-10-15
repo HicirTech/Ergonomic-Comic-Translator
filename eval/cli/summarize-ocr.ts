@@ -9,6 +9,7 @@ import {
   verticalCerWithinLimit,
   writingModeAccuracyMin,
 } from "../metrics/ocr-metrics.ts";
+import { outlinedKinds } from "../synthetic/constants.ts";
 import type { LayoutKind } from "../synthetic/interfaces/index.ts";
 import type { OcrEvalReport, OcrKindSummary } from "./interfaces/index.ts";
 
@@ -132,6 +133,8 @@ export const buildOcrReport = (seed: number, gpu: boolean, pages: readonly PageS
         pages.reduce((sum, page) => sum + page.sfx.damagedPixels, 0),
         pages.reduce((sum, page) => sum + page.sfx.pixels, 0),
       ),
+      artBlocksKept: blocks.filter((block) => outlinedKinds.has(block.kind) && block.kept).length,
+      artBlocksTranslated: blocks.filter((block) => outlinedKinds.has(block.kind) && !block.kept && block.matchType !== "missed").length,
       byKind,
     },
     pages: pages.map((page) => page),

@@ -120,6 +120,8 @@ describe("ocr eval summary", () => {
       sfxTranslatedRegions: 1,
       sfxKeptRegions: 0,
       sfxDamageShare: 0.25,
+      artBlocksKept: 0,
+      artBlocksTranslated: 0,
       byKind: {
         "h-line": { ...emptyKind, blocks: 1, cer: 0.1, baberuProductCer: 0.4, baberuBestCer: 0.1 },
         "h-block": emptyKind,
@@ -149,6 +151,7 @@ describe("ocr eval summary", () => {
     sentenceRotationMatch: true,
     reference: "same",
     predicted: "same",
+    kept: false,
     cer: 0,
     lineOrderMatch: null,
     classification: null,

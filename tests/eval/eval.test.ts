@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { keptAsLettering, keptLetteringMask, maskWithout } from "../../eval/cli/score-page.ts";
 import { deriveTextAreas, median3x3 } from "../../eval/ground-truth/textless-diff.ts";
 import { changesOutsideMask, maskedMae, regionPrecision, regionRecall } from "../../eval/metrics/vision-metrics.ts";
 import { erodeSquare } from "../../src/imaging/morphology.ts";
@@ -59,5 +60,31 @@ describe("erodeSquare", () => {
     for (let y = 3; y < 7; y += 1) for (let x = 3; x < 7; x += 1) mask[y * 10 + x] = 1;
     const eroded = erodeSquare(mask, 10, 10, 1);
     expect(eroded.reduce((sum, value) => sum + value, 0)).toBe(4);
+  });
+});
+
+describe("kept lettering", () => {
+  it("keeps a block only when every region it matched is kept", () => {
+    const keep = { layout: "text_free", kind: "sfx", policy: "keep" } as const;
+    const translate = { layout: "text_free", kind: "free_text", policy: "translate" } as const;
+    expect(keptAsLettering([keep])).toBe(true);
+    expect(keptAsLettering([keep, translate])).toBe(false);
+    expect(keptAsLettering([])).toBe(false);
+  });
+
+  it("takes a kept block with the margin of its outline and the mask pieces that reach into it, and leaves the rest", () => {
+    // A glyph piece that sticks out of the box to the right, and a separate piece far below it.
+    const mask = new Uint8Array(100);
+    for (let x = 3; x < 9; x += 1) mask[3 * 10 + x] = 1;
+    mask[8 * 10 + 4] = 1;
+    const polygon = [{ x: 2, y: 2 }, { x: 6, y: 2 }, { x: 6, y: 5 }, { x: 2, y: 5 }];
+
+    const kept = keptLetteringMask(mask, 10, 10, [{ polygon, margin: 1 }]);
+    const removal = maskWithout(mask, kept);
+
+    expect(kept[1 * 10 + 1]).toBe(1);
+    expect(kept[3 * 10 + 8]).toBe(1);
+    expect(kept[8 * 10 + 4]).toBe(0);
+    expect(removal.reduce((sum, value) => sum + value, 0)).toBe(1);
   });
 });
