@@ -253,6 +253,19 @@
         }
       ]
     },
+    "sakura-14b-q4km": {
+      "role": "Japanese translation LLM, tier J2 (Sakura-14B-Qwen2.5-v1.0; non-commercial licence)",
+      "repo": "SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF",
+      "revision": "f370f85114971e556ba9ab7cdfd00fe9fe88dd53",
+      "license": "cc-by-nc-sa-4.0",
+      "files": [
+        {
+          "path": "sakura-14b-qwen2.5-v1.0-q4km.gguf",
+          "size": 8988110144,
+          "sha256": "c87697cd9c7898464426cb7a1ec5e220755affaa08096766e8d20de1853c2063"
+        }
+      ]
+    },
     "font-noto-sans-sc-bold": {
       "role": "Chinese lettering font (Noto Sans SC Bold, subset OTF)",
       "source": "github",

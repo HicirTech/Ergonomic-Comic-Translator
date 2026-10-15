@@ -13,10 +13,11 @@ const validModel = {
 };
 
 describe("models.lock.json", () => {
-  it("is valid and pins only permissively licensed models and OFL fonts", () => {
+  it("pins permissively licensed models and OFL fonts, and non-commercial models only as the Japanese translator", () => {
     const lock = readModelsLock();
-    for (const model of Object.values(lock.models)) {
-      expect(["apache-2.0", "mit", "ofl-1.1"]).toContain(model.license);
+    for (const [id, model] of Object.entries(lock.models)) {
+      if (model.license === "cc-by-nc-sa-4.0") expect(modelPacks["llm-ja"]).toContain(id);
+      else expect(["apache-2.0", "mit", "ofl-1.1"]).toContain(model.license);
     }
   });
 

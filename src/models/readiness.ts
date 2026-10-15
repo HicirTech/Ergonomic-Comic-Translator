@@ -5,8 +5,8 @@ import { modelDownloadItems } from "./lock.ts";
 import { expandModelSelection } from "./packs.ts";
 import { defaultRuntimeAssets, isRuntimeAssetInstalled } from "./runtime-install.ts";
 
-/** What a translate job needs on disk: the vision models, the lettering font and the default LLM tiers. */
-export const requiredModelPacks = ["vision", "fonts", "llm"] as const;
+/** What a translate job needs on disk: the vision models, the lettering font, the default LLM tiers and the Japanese translator. */
+export const requiredModelPacks = ["vision", "fonts", "llm", "llm-ja"] as const;
 
 /** Model ids and llama.cpp builds that are not on disk yet (sizes only, so it is fast enough per request). */
 export const missingDownloads = (paths: DataPaths, modelsLock: ModelsLock, runtimesLock: RuntimesLock) => ({
