@@ -106,6 +106,12 @@ describe("S7c merge", () => {
     expect(terms.find((term) => term.kind === "address")).toMatchObject({ canonical: "リンちゃん", honorific: "ちゃん", votes: 2 });
   });
 
+  it("makes an address term from the text's own uses of a name with an honorific", () => {
+    const terms = mergeEntities([[{ src: "リン", kind: "person", evidence: ["1.1.0"] }]], lines);
+    expect(terms.find((term) => term.kind === "address")).toMatchObject({ canonical: "リンちゃん", honorific: "ちゃん", votes: 2, occurrences: 2 });
+    expect(terms.find((term) => term.kind === "person")!.surfaces).toEqual(["リン"]);
+  });
+
   it("leaves the address form to the address term, so a match of it is never the bare name", () => {
     const terms = mergeEntities([
       [{ src: "リンちゃん", kind: "person", base: "リン", honorific: "ちゃん", evidence: ["1.1.0"] }],

@@ -1,10 +1,11 @@
 import type { ExtractedEntity, MergedTerm, SourceLine, TermKind } from "./interfaces/index.ts";
-import { normKey, splitHonorific } from "./norm-key.ts";
+import { japaneseHonorifics, koreanHonorifics, normKey, splitHonorific } from "./norm-key.ts";
 
 /** Non-person kinds need this much support; a person with evidence is kept even if seen once. */
 const minSupport = 2;
 /** A (name, honorific) pair used this often becomes an address term with a fixed Chinese form. */
 const addressMinUses = 2;
+const honorifics = [...japaneseHonorifics, ...koreanHonorifics];
 
 const pageOf = (lineId: string) => Number(lineId.split(".")[0]);
 
@@ -22,7 +23,8 @@ const countOccurrences = (lines: readonly SourceLine[], surface: string) => {
  * S7c: merges per-chunk entities into terms by normalised key (same key, or alias_of pointing at an
  * existing term), counts votes per chunk, decides kind by votes (ties favour person), and keeps a person
  * seen once while other kinds need two votes or occurrences. Full names split on "・" or spaces link their
- * parts. (name, honorific) pairs used at least twice become address terms.
+ * parts. (name, honorific) pairs used at least twice, as the chunks report them or as the text itself shows
+ * them, become address terms.
  */
 export const mergeEntities = (chunks: readonly ExtractedEntity[][], lines: readonly SourceLine[]): MergedTerm[] => {
   const terms = new Map<string, MergedTerm & { kindVotes: Map<TermKind, number> }>();
@@ -88,6 +90,19 @@ export const mergeEntities = (chunks: readonly ExtractedEntity[][], lines: reado
     for (const part of parts) {
       const partTerm = merged.find((candidate) => candidate.normKey === normKey(part));
       if (partTerm && !partTerm.partOf.includes(term.normKey)) partTerm.partOf.push(term.normKey);
+    }
+  }
+
+  // The text's own count of an address form stands whether or not the chunks reported it.
+  for (const term of merged.filter((candidate) => candidate.kind === "person")) {
+    for (const honorific of honorifics) {
+      const surface = `${term.canonical}${honorific}`;
+      const occurrences = countOccurrences(lines, surface.normalize("NFKC"));
+      if (occurrences < addressMinUses) continue;
+      const addressKey = `${term.normKey}+${honorific}`;
+      const use = addressUses.get(addressKey) ?? { base: term.canonical, honorific, surface, uses: 0, firstPage: term.firstPage };
+      use.uses = Math.max(use.uses, occurrences);
+      addressUses.set(addressKey, use);
     }
   }
 
