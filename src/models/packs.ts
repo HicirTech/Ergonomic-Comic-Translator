@@ -18,6 +18,7 @@ export const modelPacks: Record<string, readonly string[]> = {
   "llm-small": ["qwen3.5-9b-iq3xxs", "hy-mt2-7b-q4km"],
   // Japanese volumes translate with Sakura where it fits the card; the general tiers stay the fallback.
   "llm-ja": ["sakura-14b-q4km"],
+  dictionary: ["jmdict"],
 };
 
 /** Expands pack names and model ids, keeping the first occurrence of each id. */

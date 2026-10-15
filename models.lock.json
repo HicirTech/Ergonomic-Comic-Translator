@@ -266,6 +266,20 @@
         }
       ]
     },
+    "jmdict": {
+      "role": "Japanese dictionary (JMdict, EDRDG) for correcting misread katakana words before translation",
+      "source": "github-release",
+      "repo": "scriptin/jmdict-simplified",
+      "revision": "3.6.2+20261012204142",
+      "license": "cc-by-sa-4.0",
+      "files": [
+        {
+          "path": "jmdict-eng-3.6.2+20261012204142.json.zip",
+          "size": 11531465,
+          "sha256": "9a04fc1d0facf87645f8ec7cdaa370647d4a8f59131f6e2a614bcd680f855b85"
+        }
+      ]
+    },
     "font-noto-sans-sc-bold": {
       "role": "Chinese lettering font (Noto Sans SC Bold, subset OTF)",
       "source": "github",

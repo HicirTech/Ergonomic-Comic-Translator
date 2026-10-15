@@ -13,10 +13,11 @@ const validModel = {
 };
 
 describe("models.lock.json", () => {
-  it("pins permissively licensed models and OFL fonts, and non-commercial models only as the Japanese translator", () => {
+  it("pins permissive models and OFL fonts, non-commercial models only as the Japanese translator, share-alike data only as a dictionary", () => {
     const lock = readModelsLock();
     for (const [id, model] of Object.entries(lock.models)) {
       if (model.license === "cc-by-nc-sa-4.0") expect(modelPacks["llm-ja"]).toContain(id);
+      else if (model.license === "cc-by-sa-4.0") expect(modelPacks.dictionary).toContain(id);
       else expect(["apache-2.0", "mit", "ofl-1.1"]).toContain(model.license);
     }
   });
@@ -52,6 +53,14 @@ describe("models.lock.json", () => {
     const [item] = modelDownloadItems(lock, ["f"], dataPaths("/data"), "https://hf-mirror.example");
     expect(item!.url).toBe(`https://raw.githubusercontent.com/org/name/${"a".repeat(40)}/onnx/model.onnx`);
     expect(() => parseModelsLock({ version: 1, models: { f: { ...validModel, source: "ftp" } } })).toThrow("source");
+  });
+
+  it("fetches a release asset from its GitHub release, tag and name encoded", () => {
+    const asset = { ...validModel, source: "github-release" as const, revision: "1.0+2", files: [{ path: "dict-1.0+2.json.zip", size: 1, sha256: "b".repeat(64) }] };
+    const lock = parseModelsLock({ version: 1, models: { d: asset } });
+    const [item] = modelDownloadItems(lock, ["d"], dataPaths("/data"));
+    expect(item!.url).toBe("https://github.com/org/name/releases/download/1.0%2B2/dict-1.0%2B2.json.zip");
+    expect(() => parseModelsLock({ version: 1, models: { d: { ...asset, revision: "v 1" } } })).toThrow("release tag");
   });
 
   it("honours HF_ENDPOINT", () => {

@@ -9,7 +9,15 @@ export const runtimesLockPath = join(repoRoot, "runtimes.lock.json");
 
 const sha256Pattern = /^[0-9a-f]{64}$/;
 const revisionPattern = /^[0-9a-f]{40}$/;
+const releaseTagPattern = /^[\w.+-]+$/;
 const repoPattern = /^[\w.-]+\/[\w.-]+$/;
+
+/** Where a file of each source lives; a release asset's tag and name are encoded the way GitHub links them. */
+const sourceUrl: Record<NonNullable<LockedModel["source"]>, (model: LockedModel, path: string, endpoint: string) => string> = {
+  huggingface: (model, path, endpoint) => `${endpoint}/${model.repo}/resolve/${model.revision}/${path}`,
+  github: (model, path) => `https://raw.githubusercontent.com/${model.repo}/${model.revision}/${path}`,
+  "github-release": (model, path) => `https://github.com/${model.repo}/releases/download/${encodeURIComponent(model.revision)}/${encodeURIComponent(path)}`,
+};
 
 const fail = (message: string): never => {
   throw new Error(`models.lock.json: ${message}`);
@@ -29,9 +37,10 @@ const checkFile = (modelId: string, file: LockedFile) => {
 };
 
 const checkModel = (modelId: string, model: LockedModel) => {
-  if (model.source !== undefined && model.source !== "huggingface" && model.source !== "github") fail(`${modelId}: unknown source "${model.source}"`);
+  if (model.source !== undefined && !(model.source in sourceUrl)) fail(`${modelId}: unknown source "${model.source}"`);
   if (!repoPattern.test(model.repo)) fail(`${modelId}: invalid repo "${model.repo}"`);
-  if (!revisionPattern.test(model.revision)) fail(`${modelId}: revision must be a full commit sha`);
+  if (model.source === "github-release" && !releaseTagPattern.test(model.revision)) fail(`${modelId}: revision must be a release tag`);
+  if (model.source !== "github-release" && !revisionPattern.test(model.revision)) fail(`${modelId}: revision must be a full commit sha`);
   if (!model.license) fail(`${modelId}: licence is required`);
   if (!Array.isArray(model.files) || model.files.length === 0) fail(`${modelId}: files are required`);
   for (const file of model.files) checkFile(modelId, file);
@@ -81,9 +90,7 @@ export const modelDownloadItems = (
   modelIds.flatMap((modelId) => {
     const model = lock.models[modelId] ?? fail(`unknown model id "${modelId}"`);
     return model.files.map((file) => ({
-      url: model.source === "github"
-        ? `https://raw.githubusercontent.com/${model.repo}/${model.revision}/${file.path}`
-        : `${endpoint}/${model.repo}/resolve/${model.revision}/${file.path}`,
+      url: sourceUrl[model.source ?? "huggingface"](model, file.path, endpoint),
       destination: modelFilePath(paths.models, modelId, file.path),
       size: file.size,
       sha256: file.sha256,
