@@ -27,9 +27,12 @@ checking are automatic.
    rectangle and on stays, and so does a faint line that leaves it (the picture seen through a translucent
    box), while a full stop set against such a line is still taken. Neither is a short line set light among
    dark text (lettering drawn across the box). A line set to the edge of a bubble is read against the
-   bubble's own paper, and what its rectangle holds of the page beyond the bubble's shape, or of lettering
-   drawn across the bubble in another colour, is not its text. A wide outline drawn around free text goes
-   with the strokes whole, so the fill starts from the picture beyond it. The strokes are filled from the
+   bubble's own paper, its ink is the colour that most of its glyph-sized pieces inside the bubble agree on,
+   and what its rectangle holds of the page beyond the bubble's shape, or of lettering drawn across the
+   bubble in another colour, is not its text; the paper beyond its glyphs is the bubble's, not the art drawn
+   over it. An outline is looked for around the glyphs' own ink, not around the marks beside them, and a
+   wide outline drawn around free text goes with the strokes whole, though no further than twice its width,
+   so the fill starts from the picture beyond it. The strokes are filled from the
    paper around them, which is exact on plain paper. Where the picture meets the text (a line, the edge of a shape,
    screentone, artwork seen through a dialogue box) that fill would smear it, so there, and only on that
    part of the strokes, an inpainting model's fill of the page is used: LaMa where the reading models run
@@ -42,7 +45,9 @@ checking are automatic.
    lettering, also inside a dialogue box: there it is what is drawn in another ink than the box's dialogue,
    or what stands alone on a shape of its own in colour and with an outline (in one of the two, when it does
    not read as text either), or a sound drawn in colour on its own; a coloured fill edged in a lighter
-   colour on a dark page counts as that colour.
+   colour on a dark page counts as that colour. Glyphs drawn as outlines around a fill, as a title is, are
+   lettering wherever they stand, and a text without a letter or digit (dots, dashes, waves) is a drawn mark
+   with nothing to translate, so it stays.
    A detected text box in which no text line is found cannot be cleaned, so it is left as it is instead of
    being lettered over.
 3. **Names and terms first.** In a Japanese volume, a katakana word the readers got one slip away from a
