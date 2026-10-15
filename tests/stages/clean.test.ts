@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { bubbleInside } from "../../src/stages/clean/bubble-inside.ts";
 import { applyInpaint, inpaintTileSize, planInpaintTiles } from "../../src/stages/clean/inpaint-tiles.ts";
 import { membraneFill } from "../../src/stages/clean/membrane-fill.ts";
-import { pictureShare } from "../../src/stages/clean/picture-share.ts";
+import { modelFillTrust, pictureShare } from "../../src/stages/clean/picture-share.ts";
 import { rgbToGray } from "../../src/imaging/gray.ts";
 import { addToPageMask, regionTextMask } from "../../src/stages/mask/text-mask.ts";
 import { line } from "./fixtures.ts";
@@ -545,7 +545,7 @@ describe("pictureShare", () => {
     for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) data[y * width + x] = paperAt(x, y);
     const mask = new Uint8Array(width * height);
     for (let y = 24; y < 36; y += 1) mask.fill(1, y * width + 50, y * width + 150);
-    const share = pictureShare({ data, width, height }, mask);
+    const { share } = pictureShare({ data, width, height }, mask);
     return columns.map((x) => share[30 * width + x]);
   };
 
@@ -572,8 +572,32 @@ describe("pictureShare", () => {
     const data = new Uint8Array(width * height).map((_, index) => (index % 4 < 2 ? 120 : 230));
     const mask = new Uint8Array(width * height);
     mask[30 * width + 100] = 1;
-    const share = pictureShare({ data, width, height }, mask);
+    const { share } = pictureShare({ data, width, height }, mask);
     expect(share.filter((value) => value > 0)).toHaveLength(1);
+  });
+
+  it("reports the tone and the spread of the rim as the membrane weights them", () => {
+    // A dark line three pixels wide crosses the stroke near its left end on light paper.
+    const data = new Uint8Array(width * height);
+    for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) data[y * width + x] = Math.abs(x - 60) <= 1 ? 60 : 230;
+    const mask = new Uint8Array(width * height);
+    for (let y = 24; y < 36; y += 1) mask.fill(1, y * width + 50, y * width + 150);
+
+    const { rimTone, rimSpread } = pictureShare({ data, width, height }, mask);
+
+    expect(Math.abs(rimTone[30 * width + 145]! - 230)).toBeLessThan(2);
+    expect(rimTone[30 * width + 145]! - rimTone[30 * width + 60]!).toBeGreaterThan(16);
+    expect(rimSpread[30 * width + 60]).toBeGreaterThan(16);
+    expect(rimSpread[30 * width + 145]).toBeLessThan(rimSpread[30 * width + 60]! / 4);
+  });
+});
+
+describe("modelFillTrust", () => {
+  it("trusts a fill no lighter than the rim allows, and none that is a grain lighter than that", () => {
+    expect(modelFillTrust(40, 90, 20)).toBe(1);
+    expect(modelFillTrust(138, 90, 20)).toBe(1);
+    expect(modelFillTrust(146, 90, 20)).toBe(0);
+    expect(modelFillTrust(142, 90, 20)).toBeCloseTo(0.5);
   });
 });
 describe("bubbleInside", () => {

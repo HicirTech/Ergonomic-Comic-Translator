@@ -36,7 +36,10 @@ checking are automatic.
    paper around them, which is exact on plain paper. Where the picture meets the text (a line, the edge of a shape,
    screentone, artwork seen through a dialogue box) that fill would smear it, so there, and only on that
    part of the strokes, an inpainting model's fill of the page is used: LaMa where the reading models run
-   on a GPU, MI-GAN on the CPU. A line of fifteen characters or more is read in pieces of at most nine, cut
+   on a GPU, MI-GAN on the CPU. The model's fill is taken only where it is no lighter than the paper around
+   the hole allows (its tones, their spread and the grain of plain paper): a model trained on white pages
+   paints a wide hole on dark artwork as a light block, and there the fill from the paper around stands.
+   A line of fifteen characters or more is read in pieces of at most nine, cut
    between its characters where the picture is flat: the sentence reader squashes a crop into a square and
    misreads a long line read whole. Horizontal Japanese text is read line by line where every line reads with
    confidence, other horizontal text when the sentence reader drops part of it or is unsure of it. A line the

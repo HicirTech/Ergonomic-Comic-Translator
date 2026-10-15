@@ -125,4 +125,38 @@ describe("cleanPage", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("keeps the membrane where the model paints lighter than the paper around the strokes allows", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ct-clean-"));
+    try {
+      // Light text on dark paper that a drawn edge crosses at x = 150; the model paints every hole near white.
+      const width = 300;
+      const height = 120;
+      const data = new Uint8Array(width * height * 3);
+      for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) data.fill(x < 150 ? 40 : 90, (y * width + x) * 3, (y * width + x) * 3 + 3);
+      for (let y = 54; y < 66; y += 1) data.fill(250, (y * width + 50) * 3, (y * width + 250) * 3);
+      const image = join(root, "page.png");
+      await sharp(data, { raw: { width, height, channels: 3 } }).png().toFile(image);
+      const lines = [line(150, 60, 230, 36, 0)];
+      const box = { x0: 35, y0: 42, x1: 265, y1: 78 };
+      const client = {
+        inpaint: async (task: InpaintTask) => {
+          const page = await sharp(task.imagePath).raw().toBuffer();
+          readFileSync(task.maskPath).forEach((hole, index) => {
+            if (hole) page.fill(245, index * 3, index * 3 + 3);
+          });
+          await sharp(page, { raw: { width, height, channels: 3 } }).png().toFile(task.outputPath);
+        },
+      } as unknown as VisionClient;
+      const result = await cleanPage(client, image, "page", root, [{ region: { box, cls: "text_free", score: 0.9, bubble: null, lines }, orientation: estimateOrientation(lines, box) }], () => [utterance("ここは静かだね")], passthrough);
+
+      expect(result.regions[0]!.clean).toBe("inpaint");
+      const cleaned = await sharp(result.cleanedPath).raw().toBuffer();
+      // At the edge the membrane's blend of the two papers stands, not the invented light fill.
+      expect(cleaned[(60 * width + 150) * 3]).toBeGreaterThanOrEqual(40);
+      expect(cleaned[(60 * width + 150) * 3]).toBeLessThanOrEqual(90);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

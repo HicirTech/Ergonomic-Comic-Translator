@@ -26,7 +26,7 @@ const picturedSpread = 16;
  * a balloon's outline at one end is plain paper everywhere else, where the model is less exact than the
  * membrane.
  */
-export const pictureShare = (gray: GrayImage, mask: Uint8Array) => {
+export const pictureShare = (gray: GrayImage, mask: Uint8Array): PictureShare => {
   const { width, height } = gray;
   const tones = new Float32Array(mask.length * 2);
   for (let index = 0; index < mask.length; index += 1) {
@@ -36,11 +36,31 @@ export const pictureShare = (gray: GrayImage, mask: Uint8Array) => {
   }
   const { holes, value } = solveMembrane(tones, 2, dilateSquare(mask, width, height, rimAwayPixels), width, height, settledBelow, maxSweeps);
   const share = new Float32Array(mask.length);
+  const rimTone = new Float32Array(mask.length);
+  const rimSpread = new Float32Array(mask.length);
   holes.forEach((index, hole) => {
     if (!mask[index]) return;
     const mean = value[hole * 2]!;
     const spread = Math.sqrt(Math.max(0, value[hole * 2 + 1]! * midTone - mean * mean));
     share[index] = Math.max(0, Math.min(1, (spread - plainSpread) / (picturedSpread - plainSpread)));
+    rimTone[index] = mean + midTone;
+    rimSpread[index] = spread;
   });
-  return share;
+  return { share, rimTone, rimSpread };
 };
+
+/**
+ * The lightest tone a rim commonly holds is this many spreads above its mean: one spread cut the model's
+ * light paper beside dark lines (transplant lab, book 2: structure error 17 to 27), two leave it (17 to 19).
+ */
+const rimSpreadAllowance = 2;
+
+/**
+ * How far a model's fill of a pixel is trusted against the rim it was drawn from: fully as long as it is
+ * no lighter than the rim's tones allow (their mean, two spreads and the grain of plain paper), fading to
+ * nothing over one more grain. A model trained on white pages paints a wide hole on dark artwork as a
+ * light block, a paper it invents; the lines it continues through the hole are darker than the rim's mean
+ * and keep its fill.
+ */
+export const modelFillTrust = (luma: number, rimTone: number, rimSpread: number) =>
+  Math.max(0, Math.min(1, 1 - (luma - rimTone - rimSpreadAllowance * rimSpread - plainSpread) / plainSpread));

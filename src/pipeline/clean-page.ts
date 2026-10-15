@@ -6,7 +6,7 @@ import { decodeRgb } from "../imaging/page-image.ts";
 import { bubbleInside } from "../stages/clean/bubble-inside.ts";
 import { planInpaintTiles } from "../stages/clean/inpaint-tiles.ts";
 import { membraneFill } from "../stages/clean/membrane-fill.ts";
-import { pictureShare } from "../stages/clean/picture-share.ts";
+import { modelFillTrust, pictureShare } from "../stages/clean/picture-share.ts";
 import { isColoured, sameInk } from "../stages/mask/ink.ts";
 import type { RegionMask } from "../stages/mask/interfaces/index.ts";
 import { addToPageMask, regionTextMask } from "../stages/mask/text-mask.ts";
@@ -50,7 +50,7 @@ export const cleanPage = async (
   const gray = rgbToGray(rgb);
   const dialogueThickness = median(oriented.filter(({ region }) => region.bubble).flatMap(({ region }) => region.lines.map((line) => line.rect.short)));
 
-  const { regions, strokes, share } = await timed("mask_fill", async () => {
+  const { regions, strokes, pictured } = await timed("mask_fill", async () => {
     const masks = oriented.map(({ region }) => regionTextMask(rgb, gray, region.lines, region.bubble));
     const textLength = oriented.map(({ region }) => region.lines.reduce((sum, line) => sum + line.rect.long, 0));
     // The dialogue of a bubble is the region in it with the most text.
@@ -85,7 +85,7 @@ export const cleanPage = async (
     const results = oriented.map(({ region, orientation }, regionIndex): RegionResult => {
       const classification = classifications[regionIndex]!;
       const mask = erased[regionIndex];
-      const clean = classification.policy === "keep" ? "kept" : !mask ? "none" : meetsPicture(pictured, width, mask) ? "inpaint" : "membrane";
+      const clean = classification.policy === "keep" ? "kept" : !mask ? "none" : meetsPicture(pictured.share, width, mask) ? "inpaint" : "membrane";
       const { frame } = orientation;
       const textBox = { x0: frame.cx - frame.w / 2, y0: frame.cy - frame.h / 2, x1: frame.cx + frame.w / 2, y1: frame.cy + frame.h / 2 };
       return {
@@ -105,8 +105,9 @@ export const cleanPage = async (
         inkHeights: masks[regionIndex]?.inkHeights ?? null,
       };
     });
-    return { regions: results, strokes: pageStrokes, share: pictured };
+    return { regions: results, strokes: pageStrokes, pictured };
   });
+  const { share, rimTone, rimSpread } = pictured;
 
   // sharp does not create the parent. The web job never mkdir'd volumes/<id>/work, so every page died here.
   mkdirSync(workDirectory, { recursive: true });
@@ -127,7 +128,9 @@ export const cleanPage = async (
   const cleanedPath = await timed("blend", async () => {
     const model = await decodeRgb(modelPath);
     for (let index = 0; index < share.length; index += 1) {
-      const weight = share[index]!;
+      if (share[index] === 0) continue;
+      const luma = 0.299 * model.data[index * 3]! + 0.587 * model.data[index * 3 + 1]! + 0.114 * model.data[index * 3 + 2]!;
+      const weight = share[index]! * modelFillTrust(luma, rimTone[index]!, rimSpread[index]!);
       if (weight === 0) continue;
       for (let offset = index * 3; offset < index * 3 + 3; offset += 1) {
         rgb.data[offset] = Math.round(rgb.data[offset]! + weight * (model.data[offset]! - rgb.data[offset]!));
