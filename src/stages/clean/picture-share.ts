@@ -1,9 +1,8 @@
 import type { GrayImage } from "../../imaging/interfaces/index.ts";
 import { dilateSquare } from "../../imaging/morphology.ts";
-import { solveMembrane } from "./membrane-solve.ts";
+import type { PictureShare } from "./interfaces/index.ts";
+import { rimAwayPixels, solveMembrane } from "./membrane-solve.ts";
 
-/** The rim is read this far outside the mask: nearer pixels still carry a trace of the ink. */
-const rimAwayPixels = 2;
 /** Tones are counted from mid-grey, and their squares in units of it, so both stay within 128. */
 const midTone = 128;
 /** With this stopping rule the spread is exact to a tenth of a level on text of ordinary size. */

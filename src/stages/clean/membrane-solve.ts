@@ -1,6 +1,9 @@
 /** Successive over-relaxation factor; 1 is plain Gauss-Seidel. */
 const overRelaxation = 1.6;
 
+/** The rim of a hole is read this far outside the mask: the pixels nearer still carry a trace of the ink. */
+export const rimAwayPixels = 2;
+
 const neighbours = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
 
 /**

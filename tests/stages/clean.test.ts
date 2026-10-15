@@ -640,6 +640,27 @@ describe("membraneFill", () => {
     membraneFill({ data, width: 4, height: 4 }, mask);
     expect([...data.subarray(0, 3)]).toEqual([200, 200, 200]);
   });
+
+  it("reads its rim past the blended edge of the ink, and leaves that edge as it is", () => {
+    // A white bar on a dark page, masked without the two pixels of light blend around it.
+    const width = 60;
+    const height = 40;
+    const data = new Uint8Array(width * height * 3).fill(40);
+    const mask = new Uint8Array(width * height);
+    for (let y = 13; y < 27; y += 1) for (let x = 18; x < 42; x += 1) data.fill(150, (y * width + x) * 3, (y * width + x) * 3 + 3);
+    for (let y = 15; y < 25; y += 1) {
+      for (let x = 20; x < 40; x += 1) {
+        mask[y * width + x] = 1;
+        data.fill(255, (y * width + x) * 3, (y * width + x) * 3 + 3);
+      }
+    }
+
+    membraneFill({ data, width, height }, mask);
+
+    expect(data[(20 * width + 30) * 3]).toBeLessThanOrEqual(42);
+    expect(data[(14 * width + 30) * 3]).toBe(150);
+    expect(data[(10 * width + 30) * 3]).toBe(40);
+  });
 });
 
 describe("inpaint tiles", () => {
