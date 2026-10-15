@@ -28,7 +28,8 @@ const requestTimeoutMs = 90_000;
  * `role` picks the tier table: the general model, or the Japanese translator with the general tiers as fallback.
  */
 export const openLlmSession = async (paths: DataPaths, monitor: ResourceMonitor, purpose: string, role: LlmRole): Promise<SessionOpening<LlmSession>> => {
-  const host = (monitor.latest ?? monitor.tick()).sample.host;
+  // Read afresh: the last sample may still show the memory of a model that was just unloaded.
+  const host = monitor.tick().sample.host;
   const hostAvailable = Math.max(0, host.availPhysBytes - hostHeadroomBytes(host.totalPhysBytes));
   const modelsLock = readModelsLock();
   const gpu = supportedAdaptersByBudget(monitor)
