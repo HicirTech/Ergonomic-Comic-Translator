@@ -579,6 +579,17 @@ describe("regionTextMask", () => {
     expect(pageMask[61 * 400 + 100]).toBe(0);
   });
 
+  it("leaves the frame of a small bubble that lies farther inside the detector's box than a twentieth of its side", () => {
+    // A box of 130 x 100 px with a frame line of 3 px eight pixels inside its top edge, and a line rectangle
+    // that reaches over it; the frame runs on past the rectangle by less than a glyph on either side.
+    const rgb = page(400, 220, 250, 10, { cx: 195, cy: 110, long: 60, short: 14, angle: 0 });
+    for (let y = 68; y < 71; y += 1) rgb.data.fill(10, (y * 400 + 130) * 3, (y * 400 + 260) * 3);
+    const pageMask = new Uint8Array(400 * 220);
+    addToPageMask(pageMask, 400, regionTextMask(rgb, rgbToGray(rgb), [line(195, 100, 70, 80, 0)], { x0: 130, y0: 60, x1: 260, y1: 160 })!);
+    expect(pageMask[110 * 400 + 195]).toBe(1);
+    expect(pageMask[69 * 400 + 195]).toBe(0);
+  });
+
   it("takes a glyph that touches the frame its rectangle reaches over, and leaves the frame", () => {
     // A box of 320 x 100 px with a frame of 3 px all around, and a stroke of the text that stands 55 px tall
     // and reaches up to the frame's top line.

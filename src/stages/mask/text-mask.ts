@@ -9,6 +9,7 @@ import { dilateSquare, erodeSquare } from "../../imaging/morphology.ts";
 import type { TextLine } from "../lines/interfaces/index.ts";
 import { textThickness } from "../lines/text-thickness.ts";
 import { bandHugsStrokes } from "./band-hug.ts";
+import { bubbleFrameReachOf, bubbleOrnamentBandOf } from "./bubble-frame.ts";
 import { faintRunsOut } from "./faint-runs.ts";
 import { inkHeight } from "./ink-height.ts";
 import { isColoured, sameInk } from "./ink.ts";
@@ -85,12 +86,6 @@ const markAlongShare = 4;
 const markAlongInBubbleShare = 6;
 const markAcrossShare = 0.5;
 const markAcrossInBubbleShare = 1.5;
-/**
- * A bubble's own outline and its ornaments lie within this share of the bubble's shorter side from the
- * detector's box, and no marks are looked for there. Measured on one volume: the frame of a dialogue box
- * lies 3 to 10 px inside a box 190 to 230 px high, and pieces of it beside the text were taken for dots.
- */
-const bubbleFrameShare = 0.05;
 /** A mark has the colour of its line's ink, within this much on every channel. */
 const markInkTolerance = 24;
 /** An area enclosed by ink is a glyph's fill, not paper, when its tone is this far from the line's paper. */
@@ -114,6 +109,8 @@ const secondToneOpenShare = 0.2;
  */
 const structureLengthShare = 3;
 const structureDensity = 0.12;
+/** A frame line is drawn no thicker than this; a mark or a glyph is wider. */
+const frameStrokeMaxPixels = 4;
 
 const median = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
@@ -207,13 +204,14 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   }
   const pageIndex = (index: number) => (window.y0 + Math.floor(index / width)) * gray.width + window.x0 + (index % width);
   const at = (index: number) => gray.data[pageIndex(index)]!;
-  const frame = bubble ? bubbleFrameShare * Math.min(bubble.x1 - bubble.x0, bubble.y1 - bubble.y0) : 0;
-  const inBubble = (index: number) => {
+  const withinBubble = (index: number, band: number) => {
     if (!bubble) return true;
     const x = window.x0 + (index % width);
     const y = window.y0 + Math.floor(index / width);
-    return x >= bubble.x0 + frame && x < bubble.x1 - frame && y >= bubble.y0 + frame && y < bubble.y1 - frame;
+    return x >= bubble.x0 + band && x < bubble.x1 - band && y >= bubble.y0 + band && y < bubble.y1 - band;
   };
+  const inBubble = (index: number) => withinBubble(index, bubble ? bubbleOrnamentBandOf(bubble) : 0);
+  const insideFrame = (index: number) => withinBubble(index, bubble ? bubbleFrameReachOf(bubble) : 0);
 
   const rgbOf = (picked: Uint8Array): [number, number, number] => {
     const channels: [number[], number[], number[]] = [[], [], []];
@@ -418,7 +416,8 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   // rectangle larger than its text reaches over both. A piece of ink that lies mostly there, and belongs to
   // a shape larger than a glyph when counted with what it runs on into, is the frame or the picture. Text
   // that touches the frame has most of its ink inside the bubble and stays text, with the bit of frame it
-  // touches.
+  // touches. The band is as wide as the frame's reach, which on a small bubble is more than the ornament
+  // band in which no marks are looked for.
   if (bubble) {
     const shapes = labelComponents(ink.map((value, index) => value | inkAround[index]!), width, height);
     const largerThanGlyph = shapes.components.map((component) =>
@@ -426,15 +425,25 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     const pieces = labelComponents(ink, width, height);
     const inkInside = new Int32Array(pieces.components.length);
     const inkBeyond = new Int32Array(pieces.components.length);
+    const inkWithinReach = new Int32Array(pieces.components.length);
+    const inkBeyondReach = new Int32Array(pieces.components.length);
     for (let index = 0; index < ink.length; index += 1) {
       const label = pieces.labels[index]!;
       if (!label) continue;
       if (inBubble(index)) inkInside[label - 1]! += 1;
       else inkBeyond[label - 1]! += 1;
+      if (insideFrame(index)) inkWithinReach[label - 1]! += 1;
+      else inkBeyondReach[label - 1]! += 1;
     }
+    // Within the frame's reach but beyond the ornament band, a thin piece is the frame itself and a solid one
+    // a mark set against it.
+    const thin = pieces.components.map(({ box, pixels }) =>
+      Math.min(box.x1 - box.x0, box.y1 - box.y0) <= frameStrokeMaxPixels || pixels < structureDensity * (box.x1 - box.x0) * (box.y1 - box.y0));
+    const frameLike = pieces.components.map((_component, label) =>
+      inkBeyond[label]! > inkInside[label]! || (inkBeyondReach[label]! > inkWithinReach[label]! && thin[label]!));
     for (let index = 0; index < ink.length; index += 1) {
       const label = pieces.labels[index]!;
-      if (!label || inkBeyond[label - 1]! <= inkInside[label - 1]! || !largerThanGlyph[shapes.labels[index]! - 1]) continue;
+      if (!label || !frameLike[label - 1] || !largerThanGlyph[shapes.labels[index]! - 1]) continue;
       ink[index] = 0;
       glyphFill[index] = 0;
     }
@@ -617,7 +626,7 @@ export const sameTextInk = (rgb: RgbImage, gray: GrayImage, first: readonly Text
 export const holdsInkOf = (rgb: RgbImage, gray: GrayImage, lines: readonly TextLine[], others: readonly TextLine[], bubble: Box, minPixels: number) => {
   const ink = regionTextMask(rgb, gray, others)?.inkMedian;
   if (!ink) return false;
-  const frame = bubbleFrameShare * Math.min(bubble.x1 - bubble.x0, bubble.y1 - bubble.y0);
+  const frame = bubbleOrnamentBandOf(bubble);
   const window = clampToImage(boundingBoxOfPoints(lines.flatMap((line) => line.quad)), rgb.width, rgb.height);
   const width = window.x1 - window.x0;
   const height = window.y1 - window.y0;
