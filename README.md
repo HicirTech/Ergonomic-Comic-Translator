@@ -25,7 +25,9 @@ checking are automatic.
    line, and nothing of the paper beside them. The frame of a dialogue box and the picture beyond it are not
    text, also where the rectangle of a line reaches over them: a line that runs straight through the
    rectangle and on stays, and so does a faint line that leaves it (the picture seen through a translucent
-   box), while a full stop set against such a line is still taken. Neither is a short line set light among
+   box), while a full stop set against such a line is still taken; along a bubble's edge, where the frame of
+   a small bubble lies farther inside the detector's box than its share of the side, a thin piece of ink is
+   the frame and a solid one a mark. Neither is a short line set light among
    dark text (lettering drawn across the box). A line set to the edge of a bubble is read against the
    bubble's own paper, its ink is the colour that most of its glyph-sized pieces inside the bubble agree on,
    and what its rectangle holds of the page beyond the bubble's shape, or of lettering drawn across the
@@ -76,9 +78,10 @@ checking are automatic.
    Japanese-to-Chinese translation, asked one line per utterance with the glossary entries that occur on the
    page; other languages by Qwen3.5-9B through a JSON contract. Page by page in reading order, with earlier
    pages as rolling context. Every answer is checked automatically (structure, refusals, echoed source text,
-   untranslated kana or hangul, repetition); failed lines are retried, and glossary names are enforced. A
-   complete answer that is still doubtful after the retries (some kana left, a short text returned as it was, a
-   much-repeated cry) is used and marked for review. The general model then reads every line once more and
+   untranslated kana or hangul, repetition); failed lines are retried, and glossary names are enforced. An
+   answer that is still doubtful after the retries (some kana left, a short text returned as it was, a cry
+   repeated beyond the source's measure, cut back to it even when the repeat ran the answer past the length
+   limit) is used and marked for review. The general model then reads every line once more and
    marks what it doubts (meaning lost or reversed, not readable as Chinese) for review.
 5. **Letter.** Chinese text is set horizontally or vertically in the original box at the original angle, with
    Chinese line-breaking rules, in Noto Sans SC Bold. It stays inside its bubble and the page (inside the
