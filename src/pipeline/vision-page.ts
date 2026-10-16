@@ -2,11 +2,12 @@ import { rgbToGray } from "../imaging/gray.ts";
 import { decodeRgb } from "../imaging/page-image.ts";
 import type { TextLine } from "../stages/lines/interfaces/index.ts";
 import { lineTone } from "../stages/mask/line-tone.ts";
-import { sameTextInk } from "../stages/mask/text-mask.ts";
+import { holdsInkOf, sameTextInk } from "../stages/mask/text-mask.ts";
 import type { LineRecognition } from "../stages/ocr/interfaces/index.ts";
 import { lineChars, pieceCount } from "../stages/ocr/line-pieces.ts";
 import { assignLines } from "../stages/regions/assign-lines.ts";
 import { consolidateDetections } from "../stages/regions/consolidate.ts";
+import { isBlockRegion, joinCutColumns } from "../stages/regions/join-cut-columns.ts";
 import { promoteLines, worthReading } from "../stages/regions/promote-lines.ts";
 import { splitStrayLines } from "../stages/regions/stray-lines.ts";
 import { cleanPage } from "./clean-page.ts";
@@ -42,16 +43,17 @@ export const runVisionPage = async (
   const assigned = assignLines(candidates, bubbles, cropLines, pageLines);
   // The ink of a line tells whether it is text of its region and whether the gate may take it; a page whose
   // regions hold one line each and that has no unclaimed line needs no pixels for that.
-  const needsInk = assigned.uncovered.length > 0 || assigned.regions.some((region) => region.lines.length > 1);
+  const needsInk = assigned.uncovered.length > 0 || assigned.regions.some((region) => region.lines.length > 1 || (region.bubble !== null && isBlockRegion(region)));
   const pixels = needsInk ? await timed("decode", () => decodeRgb(imagePath)) : null;
   const gray = pixels ? rgbToGray(pixels) : null;
   const strays: TextLine[] = [];
-  const textRegions = assigned.regions.map((region) => {
+  const splitRegions = assigned.regions.map((region) => {
     if (gray === null) return region;
     const { text, stray } = splitStrayLines(region.lines, (line, paper) => lineTone(gray, line, paper));
     strays.push(...stray);
     return stray.length === 0 ? region : { ...region, lines: text };
   });
+  const textRegions = pixels && gray ? joinCutColumns(splitRegions, (block, host, minPixels) => holdsInkOf(pixels, gray, block.lines, host.lines, block.bubble!, minPixels)) : splitRegions;
   const unclaimed = [...assigned.uncovered, ...strays];
   const gateLines = unclaimed.filter((line) => worthReading(line, bubbles));
   const gateReads = gateLines.length > 0 ? await timed("gate_ocr", () => client.recognizeLines(imagePath, gateLines.map(lineCrop))) : [];

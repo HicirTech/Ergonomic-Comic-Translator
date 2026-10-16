@@ -526,6 +526,33 @@ export const sameTextInk = (rgb: RgbImage, gray: GrayImage, first: readonly Text
   return !one || !other || sameInk(one, other);
 };
 
+/**
+ * True when the rectangles of `lines` hold at least `minPixels` pixels inside `bubble` (less its frame band)
+ * set in the ink the strokes of `others` are set in: whatever else the rectangles hold, lettering or the
+ * page beyond the bubble, that much of the others' text is in them.
+ */
+export const holdsInkOf = (rgb: RgbImage, gray: GrayImage, lines: readonly TextLine[], others: readonly TextLine[], bubble: Box, minPixels: number) => {
+  const ink = regionTextMask(rgb, gray, others)?.inkMedian;
+  if (!ink) return false;
+  const frame = bubbleFrameShare * Math.min(bubble.x1 - bubble.x0, bubble.y1 - bubble.y0);
+  const window = clampToImage(boundingBoxOfPoints(lines.flatMap((line) => line.quad)), rgb.width, rgb.height);
+  const width = window.x1 - window.x0;
+  const height = window.y1 - window.y0;
+  if (width <= 0 || height <= 0) return false;
+  const inside = new Uint8Array(width * height);
+  for (const line of lines) rasterizeConvexQuad(inside, width, height, line.quad.map((point) => ({ x: point.x - window.x0, y: point.y - window.y0 })));
+  let hits = 0;
+  for (let index = 0; index < inside.length; index += 1) {
+    if (!inside[index]) continue;
+    const x = window.x0 + (index % width);
+    const y = window.y0 + Math.floor(index / width);
+    if (x < bubble.x0 + frame || x >= bubble.x1 - frame || y < bubble.y0 + frame || y >= bubble.y1 - frame) continue;
+    const offset = (y * rgb.width + x) * 3;
+    if (sameInk([rgb.data[offset]!, rgb.data[offset + 1]!, rgb.data[offset + 2]!], ink)) hits += 1;
+  }
+  return hits >= minPixels;
+};
+
 /** ORs a region's strokes into a page-sized mask. */
 export const addToPageMask = (pageMask: Uint8Array, pageWidth: number, region: RegionMask) => {
   const width = region.window.x1 - region.window.x0;

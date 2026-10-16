@@ -4,7 +4,7 @@ import { applyInpaint, inpaintTileSize, planInpaintTiles } from "../../src/stage
 import { membraneFill } from "../../src/stages/clean/membrane-fill.ts";
 import { modelFillTrust, pictureShare } from "../../src/stages/clean/picture-share.ts";
 import { rgbToGray } from "../../src/imaging/gray.ts";
-import { addToPageMask, regionTextMask } from "../../src/stages/mask/text-mask.ts";
+import { addToPageMask, holdsInkOf, regionTextMask } from "../../src/stages/mask/text-mask.ts";
 import { line } from "./fixtures.ts";
 
 /** A page of `paper` colour with a dark (or light) bar of "text" drawn along a tilted line. */
@@ -549,6 +549,36 @@ describe("regionTextMask", () => {
     expect(pageMask[100 * 400 + 255]).toBe(1);
     expect(pageMask[100 * 400 + 285]).toBe(1);
     expect(pageMask[72 * 400 + 285]).toBe(1);
+  });
+});
+
+describe("holdsInkOf", () => {
+  /** A dark bar (the lines' ink) at the top of a white page, and a block below it holding `darkShare` of its ink dark and the rest pink. */
+  const pageWith = (darkShare: number) => {
+    const rgb = page(200, 200, 255, 10, { cx: 100, cy: 30, long: 120, short: 12, angle: 0 });
+    for (let y = 80; y < 160; y += 1) {
+      for (let x = 40; x < 160; x += 1) {
+        if ((y - 80) % 10 >= 5) continue;
+        rgb.data.set(x < 40 + 120 * darkShare ? [10, 10, 10] : [200, 40, 100], (y * 200 + x) * 3);
+      }
+    }
+    return rgb;
+  };
+  const bar = [line(100, 30, 150, 36, 0)];
+  const blockLine = [line(100, 120, 130, 90, 0)];
+  const bubble = { x0: 0, y0: 0, x1: 200, y1: 200 };
+
+  it("finds a glyph's worth of the lines' ink in a block that holds it, and not in one of another colour", () => {
+    const mixed = pageWith(0.5);
+    expect(holdsInkOf(mixed, rgbToGray(mixed), blockLine, bar, bubble, 2000)).toBe(true);
+    expect(holdsInkOf(mixed, rgbToGray(mixed), blockLine, bar, bubble, 3000)).toBe(false);
+    const pink = pageWith(0);
+    expect(holdsInkOf(pink, rgbToGray(pink), blockLine, bar, bubble, 100)).toBe(false);
+  });
+
+  it("counts only the ink inside the bubble, not the page its rectangle reaches over", () => {
+    const mixed = pageWith(0.5);
+    expect(holdsInkOf(mixed, rgbToGray(mixed), blockLine, bar, { x0: 0, y0: 0, x1: 200, y1: 80 }, 100)).toBe(false);
   });
 });
 

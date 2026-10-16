@@ -30,7 +30,9 @@ checking are automatic.
    bubble's own paper, its ink is the colour that most of its glyph-sized pieces inside the bubble agree on,
    and what its rectangle holds of the page beyond the bubble's shape, or of lettering drawn across the
    bubble in another colour, is not its text; the paper beyond its glyphs is the bubble's, not the art drawn
-   over it. An outline is looked for around the glyphs' own ink, not around the marks beside them, and a
+   over it. Lettering drawn across a bubble also cuts its lines in two: the parts beyond the lettering, which
+   the detector draws as one block, are joined back to their lines when they hold a glyph's worth of the
+   lines' ink, so the dialogue is read and cleaned whole. An outline is looked for around the glyphs' own ink, not around the marks beside them, and a
    wide outline drawn around free text goes with the strokes whole, though no further than twice its width,
    so the fill starts from the picture beyond it. The strokes are filled from the
    paper around them, which is exact on plain paper. Where the picture meets the text (a line, the edge of a shape,
