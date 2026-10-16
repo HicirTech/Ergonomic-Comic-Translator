@@ -363,6 +363,39 @@ describe("regionTextMask", () => {
     expect(pageMask[375 * width + 80]).toBe(1);
   });
 
+  it("leaves a line of another colour than the bubble's text that joins a larger shape: a bubble's tail, drawn as a line too", () => {
+    // Black text in a white bubble on a grey page, and a short blue stroke beside it found as a line of its
+    // own; the stroke joins a blue frame line that runs down past its rectangle.
+    const width = 200;
+    const height = 300;
+    const blue = [107, 139, 205];
+    const build = (frame: boolean) => {
+      const data = new Uint8Array(width * height * 3).fill(230);
+      const set = (x0: number, y0: number, x1: number, y1: number, colour: readonly number[]) => {
+        for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) data.set(colour, (y * width + x) * 3);
+      };
+      set(20, 20, 180, 280, [255, 255, 255]);
+      for (const y0 of [40, 120, 200]) set(65, y0, 95, y0 + 30, [20, 18, 40]);
+      set(130, 150, 146, 166, blue);
+      if (frame) set(144, 150, 146, 275, blue);
+      return { data, width, height };
+    };
+    const lines = [line(80, 140, 220, 60, 90), line(138, 158, 24, 24, 0)];
+    const masked = (frame: boolean, bubble: { x0: number; y0: number; x1: number; y1: number } | null) => {
+      const rgb = build(frame);
+      const pageMask = new Uint8Array(width * height);
+      addToPageMask(pageMask, width, regionTextMask(rgb, rgbToGray(rgb), lines, bubble)!);
+      return pageMask;
+    };
+    const bubble = { x0: 20, y0: 20, x1: 180, y1: 280 };
+    expect(masked(true, bubble)[158 * width + 138]).toBe(0);
+    expect(masked(true, bubble)[55 * width + 80]).toBe(1);
+    // A stroke of another colour on its own may be a mark set in a second ink; on open artwork the lines
+    // stand each for itself.
+    expect(masked(false, bubble)[158 * width + 138]).toBe(1);
+    expect(masked(true, null)[158 * width + 138]).toBe(1);
+  });
+
   it("takes the colour that most pieces of a line in a bubble agree on, not a blend of their colours", () => {
     // Black glyph blocks with smaller pink and purple pieces, all within the rectangle and the bubble: black
     // holds the most pixels, yet no channel of a median over all their pixels is black.
