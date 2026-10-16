@@ -93,6 +93,18 @@ describe("assignLines", () => {
     const { regions } = assignLines([candidate], bubbles, [[line(100, 100, 120, 20, 90), line(300, 100, 120, 20, 90)]], []);
     expect(regions.map((region) => region.bubble)).toEqual(bubbles);
   });
+
+  it("keeps a line centred outside the candidate's one bubble out of the bubble's region: a title boxed with the panel below it", () => {
+    const bubbles = [{ x0: 0, y0: 40, x1: 170, y1: 500 }];
+    const candidate = { box: { x0: 0, y0: 0, x1: 410, y1: 480 }, cls: "text_bubble" as const, score: 0.9, bubbles: [0] };
+    const title = line(200, 30, 400, 60, 0);
+    const label = line(50, 90, 70, 36, 0);
+    const { regions } = assignLines([candidate], bubbles, [[title, label]], []);
+    expect(regions.map((region) => [region.cls, region.bubble, region.lines])).toEqual([
+      ["text_bubble", bubbles[0], [label]],
+      ["text_free", null, [title]],
+    ]);
+  });
 });
 
 describe("estimateOrientation", () => {

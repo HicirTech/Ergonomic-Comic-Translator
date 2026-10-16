@@ -66,8 +66,18 @@ export const assignLines = (
   candidates.forEach((candidate, index) => {
     const lines = owned.get(index) ?? [];
     if (lines.length === 0 && underOtherLines(index) >= duplicateTextShare) return;
-    if (candidate.bubbles.length <= 1) {
-      regions.push(regionFrom(candidate, candidate.bubbles.length === 1 ? bubbles[candidate.bubbles[0]!]! : null, lines));
+    if (candidate.bubbles.length === 0) {
+      regions.push(regionFrom(candidate, null, lines));
+      return;
+    }
+    if (candidate.bubbles.length === 1) {
+      // A line whose centre lies outside the candidate's bubble is not the bubble's text: a title the
+      // detector boxed together with the panel below it.
+      const bubble = bubbles[candidate.bubbles[0]!]!;
+      const inside = lines.filter((line) => containsPoint(bubble, line.rect.center));
+      const outside = lines.filter((line) => !containsPoint(bubble, line.rect.center));
+      regions.push(regionFrom(candidate, bubble, inside));
+      if (outside.length > 0) regions.push(regionFrom({ ...candidate, cls: "text_free" }, null, outside));
       return;
     }
     // One detector box over several bubbles: one region per bubble that received lines.
