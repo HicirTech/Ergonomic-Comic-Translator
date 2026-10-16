@@ -285,6 +285,25 @@ describe("regionTextMask", () => {
     expect(region.inkMedian).toEqual([10, 10, 10]);
   });
 
+  it("keeps the pieces of a dark blue ink that fall on either side of the colouredness line", () => {
+    // Glyph blocks in two dark blues, one a colour by its spread of channels and one just short of it.
+    const width = 200;
+    const height = 460;
+    const data = new Uint8Array(width * height * 3).fill(230);
+    const set = (x0: number, y0: number, x1: number, y1: number, colour: readonly number[]) => {
+      for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) data.set(colour, (y * width + x) * 3);
+    };
+    set(20, 30, 140, 440, [255, 255, 255]);
+    for (const y0 of [40, 120, 200]) set(65, y0, 95, y0 + 30, [14, 11, 41]);
+    for (const y0 of [280, 360]) set(65, y0, 95, y0 + 30, [30, 27, 50]);
+    const rgb = { data, width, height };
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(80, 230, 400, 60, 90)], { x0: 20, y0: 30, x1: 140, y1: 440 })!;
+    const pageMask = new Uint8Array(width * height);
+    addToPageMask(pageMask, width, region);
+    expect(pageMask[55 * width + 80]).toBe(1);
+    expect(pageMask[375 * width + 80]).toBe(1);
+  });
+
   it("takes the colour that most pieces of a line in a bubble agree on, not a blend of their colours", () => {
     // Black glyph blocks with smaller pink and purple pieces, all within the rectangle and the bubble: black
     // holds the most pixels, yet no channel of a median over all their pixels is black.

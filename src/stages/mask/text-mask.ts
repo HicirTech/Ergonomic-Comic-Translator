@@ -273,8 +273,10 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
         for (let channel = 0; channel < 3; channel += 1) channels[label - 1]![channel]!.push(rgb.data[offset + channel]!);
       }
       const colours = channels.map((piece): [number, number, number] => [median(piece[0]), median(piece[1]), median(piece[2])]);
+      // Two inks are unlike when they are apart and one of them is a colour: a dark blue ink has pieces on
+      // both sides of the colouredness line, and a grey mark beside black text is on the same side as it.
       const unlike = (colour: [number, number, number], other: [number, number, number]) =>
-        isColoured(colour) !== isColoured(other) || (isColoured(colour) && !sameInk(colour, other));
+        !sameInk(colour, other) && (isColoured(colour) || isColoured(other));
       let reference = lineInkRgb;
       let agreeing = 0;
       colours.forEach((colour, label) => {
