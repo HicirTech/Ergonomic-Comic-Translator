@@ -85,6 +85,16 @@ describe("classifyRegion", () => {
     expect(withCues({ coloured: true, typesetInk: true, outlined: true, readUnsure: true }).policy).toBe("keep");
   });
 
+  it("judges whether the text is drawn by its lines, not by a mark shorter than the text is thick", () => {
+    const withMark = (mark: PageRegion["lines"][number]) => {
+      const target = region({ lines: [line(150, 100, 200, 40, 0), line(150, 150, 200, 40, 0), mark] });
+      return classifyRegion(target, estimateOrientation(target.lines, target.box), "明日の朝に散歩する", 1000, 1400, 40, { ...plain, coloured: true });
+    };
+    expect(withMark(line(260, 150, 14, 13, 90)).policy).toBe("translate");
+    expect(withMark({ ...line(260, 150, 14, 13, 0), curved: true }).policy).toBe("translate");
+    expect(withMark(line(260, 150, 60, 40, 90)).policy).toBe("keep");
+  });
+
   it("keeps glyphs drawn as outlines around a fill, as a title on the artwork or in a bottom box is", () => {
     const withCues = (target: PageRegion, lettering: Partial<LetteringCues>) =>
       classifyRegion(target, estimateOrientation(target.lines, target.box), "森の悪魔", 1000, 1400, null, { ...plain, ...lettering });

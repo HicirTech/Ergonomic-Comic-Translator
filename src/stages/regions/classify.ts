@@ -1,5 +1,6 @@
 import { boxCenter, boxWidth } from "../../geometry/box.ts";
 import { lineAngleDistance } from "../../geometry/angle.ts";
+import { textThickness } from "../lines/text-thickness.ts";
 import type { LetteringCues, PageRegion, RegionClass, RegionOrientation } from "./interfaces/index.ts";
 import { letterCount } from "./letters.ts";
 
@@ -56,9 +57,12 @@ export const classifyRegion = (
 ): RegionClass => {
   const thought = /^[（(][\s\S]*[）)]$/u.test(text.trim());
   const mark = letterCount(text) === 0;
-  const angles = region.lines.map((line) => line.rect.angle);
+  // A line shorter than the text is thick is a dot or a dash: it says nothing about the text's slant or curve.
+  const textLineLength = textThickness(region.lines) ?? 0;
+  const textLines = region.lines.filter((line) => line.rect.long >= textLineLength);
+  const angles = textLines.map((line) => line.rect.angle);
   const spread = angles.length > 1 ? Math.max(...angles.map((angle) => lineAngleDistance(angle, angles[0]!))) : 0;
-  const drawn = Math.abs(orientation.tilt) > sfxTilt || spread > sfxAngleSpread || region.lines.some((line) => line.curved);
+  const drawn = Math.abs(orientation.tilt) > sfxTilt || spread > sfxAngleSpread || textLines.some((line) => line.curved);
   // A colour that the page's typeset text is set in is no cue on text that reads well: the short cries of such
   // a page are its dialogue too, while lettering drawn in that colour still reads badly.
   const ownColour = lettering !== null && lettering.coloured && (!lettering.typesetInk || lettering.readUnsure);
