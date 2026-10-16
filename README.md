@@ -36,7 +36,9 @@ checking are automatic.
    paper around them, which is exact on plain paper. Where the picture meets the text (a line, the edge of a shape,
    screentone, artwork seen through a dialogue box) that fill would smear it, so there, and only on that
    part of the strokes, an inpainting model's fill of the page is used: LaMa where the reading models run
-   on a GPU, MI-GAN on the CPU. The model's fill is taken only where it is no lighter than the paper around
+   on a GPU, MI-GAN on the CPU. The picture is told from the paper's shading by the tones around the hole
+   counted against their own mean along the hole's rim, so a sky or a wall shaded along a wide column stays
+   with the fill from the paper. The model's fill is taken only where it is no lighter than the paper around
    the hole allows (its tones, their spread and the grain of plain paper): a model trained on white pages
    paints a wide hole on dark artwork as a light block, and there the fill from the paper around stands.
    A line of fifteen characters or more is read in pieces of at most nine, cut

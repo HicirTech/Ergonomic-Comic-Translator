@@ -579,6 +579,20 @@ describe("pictureShare", () => {
     expect(shareOn((x) => (x < 140 ? 150 : 210), [55, 100, 140])).toEqual([0, 0, 1]);
   });
 
+  it("finds no picture in a wide hole over a shading that the membrane follows", () => {
+    // A hole as wide as a column of large lettering on a page that darkens by 0.6 levels per row.
+    const side = 300;
+    const data = new Uint8Array(side * side);
+    for (let y = 0; y < side; y += 1) data.fill(Math.round(40 + 0.6 * y), y * side, (y + 1) * side);
+    const mask = new Uint8Array(side * side);
+    for (let y = 70; y < 230; y += 1) mask.fill(1, y * side + 90, y * side + 210);
+
+    const { share } = pictureShare({ data, width: side, height: side }, mask);
+
+    expect(share[150 * side + 150]).toBe(0);
+    expect(share[75 * side + 150]).toBe(0);
+  });
+
   it("finds the picture all along a stroke on screentone", () => {
     // Dots of two pixels on a pitch of four.
     expect(shareOn((x, y) => (x % 4 < 2 && y % 4 < 2 ? 120 : 230), [55, 100, 145])).toEqual([1, 1, 1]);
