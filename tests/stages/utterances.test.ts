@@ -24,6 +24,15 @@ describe("splitUtterances", () => {
     expect(groups(splitUtterances([row(0), row(22), row(44)], "h"))).toEqual([[0, 1, 2]]);
   });
 
+  it("makes each row of a list its own utterance: rows that are all short are labels, not a paragraph", () => {
+    const splits = splitUtterances([row(0, "髪型", 0.95, 50), row(46, "輪郭", 0.95, 50), row(92, "目", 0.95, 30)], "h");
+    expect(groups(splits)).toEqual([[0], [1], [2]]);
+    expect(splits.map((split) => split.startReasons)).toEqual([[], ["list"], ["list"]]);
+    // A paragraph whose last line is short, and short columns of vertical text, stay together.
+    expect(groups(splitUtterances([row(0), row(22, "", 0, 50)], "h"))).toEqual([[0, 1]]);
+    expect(groups(splitUtterances([{ box: { x0: 280, y0: 0, x1: 300, y1: 50 }, text: "", conf: 0 }, { box: { x0: 256, y0: 0, x1: 276, y1: 50 }, text: "", conf: 0 }], "v"))).toEqual([[0, 1]]);
+  });
+
   it("cuts at a blank-line gap of 0.3 line thickness or more, for rows and columns", () => {
     expect(groups(splitUtterances([row(0), row(22), row(50), row(72)], "h"))).toEqual([[0, 1], [2, 3]]);
     expect(groups(splitUtterances([column(300), column(278), column(250)], "v"))).toEqual([[0, 1], [2]]);

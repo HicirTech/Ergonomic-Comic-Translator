@@ -15,6 +15,8 @@ const sizeJumpWithOcr = 1.4;
 const sizeJumpWithoutOcr = 1.5;
 const trustedConf = 0.8;
 const fragmentLengthShare = 1.5;
+/** Every row of a list is at most this many line thicknesses long: a label of a few characters. */
+const listLineLengthShare = 3;
 
 const openBracket = /^[「『（(【［〈《“"]/u;
 const closeBracket = /[」』）)】］〉》”"]$/u;
@@ -68,9 +70,14 @@ export const splitUtterances = (lines: readonly UtteranceLine[], mode: "h" | "v"
   const styleBreaks = new Set<number>();
   let depth = 0;
 
+  // Rows that are all short are a list of labels (a menu, a table), each row an item of its own, not the
+  // lines of a paragraph: a paragraph has long lines with at most a short last one.
+  const list = mode === "h" && lines.length >= 2 && lines.every((line) => axis.length(line.box) <= listLineLengthShare * thicknessMedian);
+  if (list) lines.forEach((_, index) => index > 0 && cuts.set(index, ["list"]));
+
   considered.forEach((index, position) => {
     const next = considered[position + 1];
-    if (next === undefined) return;
+    if (next === undefined || list) return;
     const a = lines[index]!;
     const b = lines[next]!;
     const textA = a.text.trim();
