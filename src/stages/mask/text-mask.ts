@@ -8,6 +8,7 @@ import type { GrayImage, RgbImage } from "../../imaging/interfaces/index.ts";
 import { dilateSquare, erodeSquare } from "../../imaging/morphology.ts";
 import type { TextLine } from "../lines/interfaces/index.ts";
 import { textThickness } from "../lines/text-thickness.ts";
+import { bandHugsStrokes } from "./band-hug.ts";
 import { faintRunsOut } from "./faint-runs.ts";
 import { inkHeight } from "./ink-height.ts";
 import { isColoured, sameInk } from "./ink.ts";
@@ -63,6 +64,15 @@ const bandTolerance = 40;
  * lighter rim that the membrane and the model carried into the hole as a light block.
  */
 const bandRimPixels = 2;
+/**
+ * A band told from the paper by its shape rather than its contrast differs from the paper by at least this
+ * much on a channel (the grain of plain paper is less) ...
+ */
+const bandStepContrast = 16;
+/** ... and runs on over at least this many shells beyond the growth over anti-aliasing. */
+const bandMinShells = 2;
+/** The zone of the band's colour is flooded this many band widths out: a hugging band ends well within it. */
+const bandHugReachShells = 3;
 /**
  * Marks are looked for this far past the ends of a line and beside it, in line thicknesses. Inside a
  * bubble the search goes further, because nothing but text is that dark in a bubble: along the line it
@@ -424,7 +434,29 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   let outlineEnd = minGrowPixels;
   while (outlineEnd < paperDistance - 1 && Math.abs(luma(shells[outlineEnd]!) - luma(paperShell)) >= paperToneTolerance) outlineEnd += 1;
   const outlined = shells.slice(minGrowPixels, outlineEnd).some((shell) => apart(shell, paperShell));
-  const grow = outlined ? Math.min(outlineEnd, maxGrow) : minGrowPixels;
+  // An edge only a few tones lighter than the paper, which the contrast cannot tell from the paper, is an
+  // outline when it hugs the glyphs: its colour runs on for a few shells, and the zone of that colour
+  // around the strokes has its boundary at one distance from them, as a drawn edge has and a lighter patch
+  // of the picture has not.
+  const hugging = (() => {
+    if (outlined || shells.length <= minGrowPixels) return null;
+    const colour = shells[minGrowPixels]!;
+    const step = Math.max(...colour.map((value, channel) => Math.abs(value - paperShell[channel]!)));
+    let end = minGrowPixels + 1;
+    while (end < paperDistance - 1 && Math.abs(luma(shells[end]!) - luma(colour)) <= paperToneTolerance) end += 1;
+    if (step < bandStepContrast || end - minGrowPixels < bandMinShells) return null;
+    const seed = reached[minGrowPixels]!;
+    const within = dilateSquare(seed, width, height, bandHugReachShells * (end - minGrowPixels));
+    const tolerance = Math.min(bandTolerance, Math.floor(step / 2));
+    const ofZone = (index: number) => {
+      const offset = pageIndex(index) * 3;
+      return colour.every((value, channel) => Math.abs(rgb.data[offset + channel]! - value) <= tolerance);
+    };
+    const zone = floodFrom(seed, within, ofZone, width, height);
+    return bandHugsStrokes(zone, seed, within, width, height) ? { colour, end, tolerance } : null;
+  })();
+  if (hugging !== null) outlineEnd = hugging.end;
+  const grow = outlined || hugging !== null ? Math.min(outlineEnd, maxGrow) : minGrowPixels;
   const grown = reached[grow]!.slice();
   const limit = dilateSquare(reachMask, width, height, grow);
   let strokePixels = 0;
@@ -448,7 +480,7 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   const outlinedFill = fillPixels >= outlinedFillShare * strokeLuma.length;
   const halo = shells[minGrowPixels - 1]!;
   let inkMedian = outlinedFill ? rgbOf(glyphFill) : strokeMedian;
-  let outlineMedian = outlinedFill ? strokeMedian : outlined && apart(halo, paperShell) && apart(halo, strokeMedian) ? halo : null;
+  let outlineMedian = outlinedFill ? strokeMedian : outlined && apart(halo, paperShell) && apart(halo, strokeMedian) ? halo : hugging?.colour ?? null;
   if (outlineMedian === null && !outlinedFill) {
     const secondTone = strokes.map((value, index) => {
       if (!value) return 0;
@@ -490,9 +522,11 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
   // their blended rim, go with the strokes, so the fill starts from the paper beyond the band.
   if (outlineMedian !== null && !outlinedFill) {
     const reach = dilateSquare(reachMask, width, height, Math.min(Math.round(bandReachShare * thickness), 2 * outlineEnd));
+    // A band told from the paper by its shape lies within half its step of the paper: the usual tolerance would run into it.
+    const tolerance = hugging?.tolerance ?? bandTolerance;
     const ofBand = (index: number) => {
       const offset = pageIndex(index) * 3;
-      return outlineMedian.every((value, channel) => Math.abs(rgb.data[offset + channel]! - value) <= bandTolerance);
+      return outlineMedian.every((value, channel) => Math.abs(rgb.data[offset + channel]! - value) <= tolerance);
     };
     const band = floodFrom(grown, reach, ofBand, width, height);
     // The rim surrounds every pixel of the band's colour, also those the strokes' growth already holds.

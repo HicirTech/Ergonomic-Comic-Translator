@@ -170,16 +170,51 @@ describe("regionTextMask", () => {
   });
 
   it("does not take paper that is lighter around the text for an outline", () => {
-    // The artwork is 20 levels lighter within 8 px of the text than further out: nothing is drawn there.
+    // The artwork is 20 levels lighter in a rectangle around the glyphs than further out: nothing is drawn
+    // there, and the rectangle's edge runs far from the glyphs over the gaps between them.
     const rgb = page(200, 160, 180, 200, { cx: 100, cy: 80, long: 116, short: 28, angle: 0 });
+    for (let y = 74; y < 86; y += 1) for (const x0 of [50, 106]) rgb.data.fill(10, (y * 200 + x0) * 3, (y * 200 + x0 + 24) * 3);
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 150, 60, 0)])!;
+    const pageMask = new Uint8Array(200 * 160);
+    addToPageMask(pageMask, 200, region);
+    // The blocks cover rows 74 to 85: two rows above them are masked, the lighter paper above that is not.
+    expect(pageMask[72 * 200 + 110]).toBe(1);
+    expect(pageMask[71 * 200 + 110]).toBe(0);
+    expect(region.outlineMedian).toBeNull();
+  });
+
+  it("does not take a lighter patch that the text touches on one side for an outline", () => {
+    // The artwork is lighter above the bar and up to its lower edge: a band drawn around glyphs surrounds them.
+    const rgb = page(200, 160, 180, 200, { cx: 100, cy: 76, long: 116, short: 20, angle: 0 });
     for (let y = 74; y < 86; y += 1) rgb.data.fill(10, (y * 200 + 50) * 3, (y * 200 + 150) * 3);
     const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 150, 60, 0)])!;
     const pageMask = new Uint8Array(200 * 160);
     addToPageMask(pageMask, 200, region);
-    // The bar covers rows 74 to 85: two rows above it are masked, the lighter paper above them is not.
     expect(pageMask[72 * 200 + 100]).toBe(1);
     expect(pageMask[71 * 200 + 100]).toBe(0);
     expect(region.outlineMedian).toBeNull();
+  });
+
+  it("takes a band around the glyphs that is lighter than the paper by less than an outline's contrast, when it hugs them", () => {
+    // A navy bar with a white edge of 5 px on a pale blue box: the edge is a few tones lighter than the box.
+    const width = 200;
+    const height = 160;
+    const data = new Uint8Array(width * height * 3);
+    const set = (x0: number, y0: number, x1: number, y1: number, colour: readonly number[]) => {
+      for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) data.set(colour, (y * width + x) * 3);
+    };
+    set(0, 0, width, height, [223, 234, 254]);
+    set(45, 69, 155, 91, [252, 255, 255]);
+    set(50, 74, 150, 86, [20, 15, 71]);
+    const rgb = { data, width, height };
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 150, 60, 0)])!;
+    const pageMask = new Uint8Array(width * height);
+    addToPageMask(pageMask, width, region);
+    // The edge covers rows 69 to 73 above the bar: all of it and its rim are masked, the box beyond is not.
+    expect(pageMask[69 * width + 100]).toBe(1);
+    expect(pageMask[66 * width + 100]).toBe(0);
+    expect(region.outlineMedian).toEqual([252, 255, 255]);
+    expect(region.ringMedian).toEqual([223, 234, 254]);
   });
 
   it("masks the fill of glyphs that are drawn as an outline, and tells the ink from the outline", () => {
