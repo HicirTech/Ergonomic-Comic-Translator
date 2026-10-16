@@ -111,6 +111,18 @@ const structureLengthShare = 3;
 const structureDensity = 0.12;
 /** A frame line is drawn no thicker than this; a mark or a glyph is wider. */
 const frameStrokeMaxPixels = 4;
+/** A piece of a frame line is at least this many times longer than it is thick; a dot is not. */
+const frameLineAspect = 3;
+
+/**
+ * Whether a piece of ink is a piece of a bubble's frame by its shape: a line no thicker than a frame stroke
+ * and several times longer, or a corner too sparse for a glyph or a mark.
+ */
+const shapedLikeFrame = ({ box, pixels }: { box: Box; pixels: number }) => {
+  const long = Math.max(box.x1 - box.x0, box.y1 - box.y0);
+  const short = Math.min(box.x1 - box.x0, box.y1 - box.y0);
+  return (short <= frameStrokeMaxPixels && long >= frameLineAspect * short) || pixels < structureDensity * long * short;
+};
 
 const median = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
@@ -435,12 +447,10 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
       if (insideFrame(index)) inkWithinReach[label - 1]! += 1;
       else inkBeyondReach[label - 1]! += 1;
     }
-    // Within the frame's reach but beyond the ornament band, a thin piece is the frame itself and a solid one
-    // a mark set against it.
-    const thin = pieces.components.map(({ box, pixels }) =>
-      Math.min(box.x1 - box.x0, box.y1 - box.y0) <= frameStrokeMaxPixels || pixels < structureDensity * (box.x1 - box.x0) * (box.y1 - box.y0));
-    const frameLike = pieces.components.map((_component, label) =>
-      inkBeyond[label]! > inkInside[label]! || (inkBeyondReach[label]! > inkWithinReach[label]! && thin[label]!));
+    // Within the frame's reach but beyond the ornament band, a piece shaped like a frame is the frame itself
+    // and a solid one a mark set against it.
+    const frameLike = pieces.components.map((component, label) =>
+      inkBeyond[label]! > inkInside[label]! || (inkBeyondReach[label]! > inkWithinReach[label]! && shapedLikeFrame(component)));
     for (let index = 0; index < ink.length; index += 1) {
       const label = pieces.labels[index]!;
       if (!label || !frameLike[label - 1] || !largerThanGlyph[shapes.labels[index]! - 1]) continue;
@@ -455,6 +465,24 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
     const box = boundingBoxOfPoints(line.quad);
     return { x0: box.x0 - window.x0, y0: box.y0 - window.y0, x1: box.x1 - window.x0, y1: box.y1 - window.y0 };
   });
+  // Within the frame's reach, a candidate shaped like a frame is a piece of the bubble's frame, which the
+  // text's own colour tolerance cuts into mark-sized bits; a dot set against the frame is still a mark.
+  if (bubble) {
+    const pieces = labelComponents(candidate, width, height);
+    const withinReach = new Int32Array(pieces.components.length);
+    const beyondReach = new Int32Array(pieces.components.length);
+    for (let index = 0; index < candidate.length; index += 1) {
+      const label = pieces.labels[index]!;
+      if (!label) continue;
+      if (insideFrame(index)) withinReach[label - 1]! += 1;
+      else beyondReach[label - 1]! += 1;
+    }
+    const frameBit = pieces.components.map((component, label) => beyondReach[label]! > withinReach[label]! && shapedLikeFrame(component));
+    for (let index = 0; index < candidate.length; index += 1) {
+      const label = pieces.labels[index]!;
+      if (label && frameBit[label - 1]) candidate[index] = 0;
+    }
+  }
   const marks = keepLineMarks(candidate, zone, polygon, width, height, lineBoxes, thickness);
   const reachMask = new Uint8Array(width * height);
   for (let index = 0; index < ink.length; index += 1) {

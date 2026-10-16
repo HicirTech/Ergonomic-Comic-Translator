@@ -534,6 +534,17 @@ describe("regionTextMask", () => {
     expect(pageMask[80 * 400 + 230]).toBe(0);
   });
 
+  it("leaves the bits of a small bubble's frame beside the text, within the frame's reach: a dot there is still a mark", () => {
+    // The frame of the bubble below runs 8 px inside its box, drawn in the text's ink as dashes (as the colour
+    // tolerance cuts an anti-aliased line); a dot stands at the same distance from the box.
+    const rgb = withDots([186]);
+    for (let y = 44; y < 116; y += 14) for (let row = y; row < y + 12; row += 1) rgb.data.fill(10, (row * 400 + 191) * 3, (row * 400 + 193) * 3);
+    const pageMask = maskOf(rgb, { x0: 30, y0: 40, x1: 200, y1: 120 });
+    expect(pageMask[80 * 400 + 186]).toBe(1);
+    expect(pageMask[60 * 400 + 191]).toBe(0);
+    expect(pageMask[100 * 400 + 191]).toBe(0);
+  });
+
   it("leaves what lies along the bubble's edge: its outline and ornaments are not marks", () => {
     // The bubble is 80 px high, so its frame is the outer 4 px. The second dot reaches into it.
     const pageMask = maskOf(withDots([186, 196]), { x0: 30, y0: 40, x1: 200, y1: 120 });
