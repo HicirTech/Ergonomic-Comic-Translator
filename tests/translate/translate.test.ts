@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { ChatResult } from "../../src/llm/interfaces/index.ts";
 import { checkCompletion, hasResidue, isDegenerate, isEcho, isRefusal } from "../../src/qa/decisive-checks.ts";
 import { buildMessages, buildSingleTurnMessages, maxTokensFor, outputSchema, unitId } from "../../src/translate/contract.ts";
-import { cryOf, shownCry, stretchCry } from "../../src/translate/cries.ts";
+import { collapseRuns, cryOf, shownCry, sourceRepeats, stretchCry } from "../../src/translate/cries.ts";
 import { historyWindowStart, sourceTokens } from "../../src/translate/history-window.ts";
 import type { PageRequest, TranslationUnit } from "../../src/translate/interfaces/index.ts";
 import { parseLineAnswer, sakuraContract } from "../../src/translate/sakura-contract.ts";
@@ -123,6 +123,14 @@ describe("cries", () => {
     expect(stretchCry("嗯♡嗯♡嗯♡……", cryOf("んっ♡".repeat(9) + "…")!)).toBe("嗯♡".repeat(9) + "……");
     expect(stretchCry("笑个不停", cry)).toBe("笑个不停");
   });
+
+  it("cuts the runs of a repeated unit in an answer back to a measure, longest first, and leaves the rest", () => {
+    expect(collapseRuns(`来了♥要去了${"啊".repeat(60)}`, 3)).toBe("来了♥要去了啊啊啊");
+    expect(collapseRuns(`${"来了".repeat(24)}♥${"啊".repeat(9)}`, 3)).toBe("来了来了来了♥啊啊啊");
+    expect(collapseRuns("走吧", 3)).toBe("走吧");
+    expect(sourceRepeats("キてるっ♥キちゃううう〜っ♥♥♥")).toBe(3);
+    expect(sourceRepeats("行く")).toBe(1);
+  });
 });
 
 describe("history window", () => {
@@ -217,7 +225,8 @@ describe("translatePage", () => {
     const units = [unit("1", "はぁ…行く"), unit("2", "ＯＫ"), unit("3", "ああっ！")];
     const result = await translatePage(request(units), async ({ schema }) =>
       completion(JSON.stringify(Object.fromEntries((schema!.required as string[]).map((id) => [id, answers[id]])))), 1);
-    expect(result.targets).toEqual(answers);
+    // The cry repeated beyond the source's measure is kept at that measure.
+    expect(result.targets).toEqual({ ...answers, "3": "啊啊！" });
     expect(result.failures).toEqual({ "1": ["G3_RESIDUE"], "2": ["G1B_ECHO"], "3": ["G5_REPEAT"] });
     expect(result.requests).toBe(6);
   });
@@ -226,5 +235,16 @@ describe("translatePage", () => {
     const result = await translatePage(request([unit("1", "行く")]), async () => completion("{\"1\":\"作为AI我无法翻译です\"}"), 1);
     expect(result.targets).toEqual({});
     expect(result.failures).toEqual({ "1": ["G1_REFUSAL", "G3_RESIDUE"] });
+  });
+
+  it("keeps an answer that ran on repeating a cry until the length limit cut it off, with the repeat cut back to the source's measure", async () => {
+    const units = [unit("1", "キてるっ♥キちゃううう〜っ♥♥♥")];
+    const looping = await translatePage(request(units), async () => completion(`来了♥要去了${"啊".repeat(60)}`, { finishReason: "length" }), 1, { contract: sakuraContract });
+    expect(looping.targets).toEqual({ "1": "来了♥要去了啊啊啊" });
+    expect(looping.failures).toEqual({ "1": ["G5_REPEAT"] });
+    // A sentence the limit cut off is incomplete, not a runaway repeat.
+    const cut = await translatePage(request(units), async () => completion("来了♥要去了，然后", { finishReason: "length" }), 1, { contract: sakuraContract });
+    expect(cut.targets).toEqual({});
+    expect(cut.failures).toEqual({ "1": ["G0_TRUNCATED"] });
   });
 });

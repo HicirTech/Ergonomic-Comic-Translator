@@ -2,12 +2,13 @@ import { isRetryableLlmError } from "../llm/retryable.ts";
 import { checkCompletion } from "../qa/decisive-checks.ts";
 import type { CheckCode } from "../qa/interfaces/index.ts";
 import { jsonContract } from "./contract.ts";
+import { collapseRuns, sourceRepeats } from "./cries.ts";
 import type { CompleteFn, PageRequest, PageTranslation, TranslationContract, TranslationUnit } from "./interfaces/index.ts";
 
 /**
- * A complete answer that failed only these checks is still better on the page than the placeholder: some
- * kana left in place, a short text returned as it was ("OK"), or a cry repeated more often than the source
- * repeats anything. A refusal or a broken answer is not.
+ * An answer that failed only these checks is still better on the page than the placeholder: some kana left
+ * in place, a short text returned as it was ("OK"), or a cry repeated more often than the source repeats
+ * anything, cut back to the source's measure. A refusal or a broken answer is not.
  */
 const usableDespite: readonly CheckCode[] = ["G1B_ECHO", "G3_RESIDUE", "G5_REPEAT"];
 
@@ -17,7 +18,8 @@ const usableDespite: readonly CheckCode[] = ["G1B_ECHO", "G3_RESIDUE", "G5_REPEA
  * unit alone. Accepted translations are never requested again, so retries cost only the failing part.
  * A unit that never passes but whose last attempt failed only the checks in `usableDespite` keeps that
  * attempt as its target and stays in `failures`, so it is lettered and flagged instead of replaced by the
- * placeholder.
+ * placeholder; an answer the length limit cut off counts when the unit's own failure is the repeat that
+ * ran it past the limit.
  * `contract` says how the model is asked and how its answer is read (tr-contract@2 unless given); `postDict`
  * repairs targets (e.g. untranslated names) before the decisive checks.
  */
@@ -55,12 +57,15 @@ export const translatePage = async (
       return;
     }
     const check = checkCompletion(units, result, options.postDict, contract.parse);
-    for (const id of ids) {
+    for (const unit of units) {
+      const { id } = unit;
       if (check.retryIds.includes(id)) {
         const codes = check.unitFailures[id] ?? check.pageFailures;
         failures[id] = codes;
         const candidate = check.targets[id];
-        if (candidate !== undefined && codes.every((code) => usableDespite.includes(code))) lastResort[id] = candidate;
+        if (candidate !== undefined && codes.every((code) => usableDespite.includes(code))) {
+          lastResort[id] = codes.includes("G5_REPEAT") ? collapseRuns(candidate, sourceRepeats(unit.source)) : candidate;
+        }
       } else {
         targets[id] = check.targets[id]!;
         delete failures[id];

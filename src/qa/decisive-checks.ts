@@ -122,7 +122,9 @@ export const checkCompletion = (
     }
   }
 
+  // After a structural failure every unit is asked again; what the answer held is still reported, since a
+  // unit's own runaway repeat is what runs an answer past the length limit.
   const structural = pageFailures.includes("G0_JSON") || pageFailures.includes("G0_TRUNCATED") || pageFailures.includes("G0_REASONING");
   const retryIds = structural ? units.map((unit) => unit.id) : Object.keys(unitFailures);
-  return { targets: structural ? {} : targets, pageFailures, unitFailures, retryIds };
+  return { targets, pageFailures, unitFailures, retryIds };
 };
