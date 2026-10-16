@@ -29,9 +29,12 @@ checking are automatic.
    dark text (lettering drawn across the box). A line set to the edge of a bubble is read against the
    bubble's own paper, its ink is the colour that most of its glyph-sized pieces inside the bubble agree on,
    and what its rectangle holds of the page beyond the bubble's shape, or of lettering drawn across the
-   bubble in another colour, is not its text; the paper beyond its glyphs is the bubble's, not the art drawn
-   over it. Lettering drawn across a bubble also cuts its lines in two: the parts beyond the lettering, which
-   the detector draws as one block, are joined back to their lines when they hold a glyph's worth of the
+   bubble in another colour, is not its text; nor is a line of another colour than the bubble's text whose
+   ink runs on into a larger shape beyond its rectangle, as the detector draws a bubble's tail, which joins
+   the frame, or art across the bubble as a line too; the paper beyond its glyphs is the bubble's, not the
+   art drawn over it. Lettering drawn across a bubble also cuts its lines in two: the parts beyond the
+   lettering, which the detector draws as one block, are joined back to their lines when they hold a
+   glyph's worth of the
    lines' ink, so the dialogue is read and cleaned whole. An outline is looked for around the glyphs' own
    ink, not around the marks beside them; an edge only a few tones lighter than the paper is an outline too
    when it keeps one distance from the glyphs all round, as an edge drawn around them does and a lighter
