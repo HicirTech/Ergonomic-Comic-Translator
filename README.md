@@ -32,9 +32,11 @@ checking are automatic.
    bubble in another colour, is not its text; the paper beyond its glyphs is the bubble's, not the art drawn
    over it. Lettering drawn across a bubble also cuts its lines in two: the parts beyond the lettering, which
    the detector draws as one block, are joined back to their lines when they hold a glyph's worth of the
-   lines' ink, so the dialogue is read and cleaned whole. An outline is looked for around the glyphs' own ink, not around the marks beside them, and a
-   wide outline drawn around free text goes with the strokes whole, though no further than twice its width,
-   so the fill starts from the picture beyond it. The strokes are filled from the
+   lines' ink, so the dialogue is read and cleaned whole. An outline is looked for around the glyphs' own
+   ink, not around the marks beside them; an edge only a few tones lighter than the paper is an outline too
+   when it keeps one distance from the glyphs all round, as an edge drawn around them does and a lighter
+   patch of the picture does not. A wide outline drawn around free text goes with the strokes whole, though
+   no further than twice its width, so the fill starts from the picture beyond it. The strokes are filled from the
    paper around them, which is exact on plain paper. Where the picture meets the text (a line, the edge of a shape,
    screentone, artwork seen through a dialogue box) that fill would smear it, so there, and only on that
    part of the strokes, an inpainting model's fill of the page is used: LaMa where the reading models run
@@ -52,7 +54,10 @@ checking are automatic.
    lettering, also inside a dialogue box: there it is what is drawn in another ink than the box's dialogue,
    or what stands alone on a shape of its own in colour and with an outline (in one of the two, when it does
    not read as text either), or a sound drawn in colour on its own; a coloured fill edged in a lighter
-   colour on a dark page counts as that colour. Glyphs drawn as outlines around a fill, as a title is, are
+   colour on a dark page counts as that colour. A colour counts only when none of the page's typeset text, a
+   run of letters that reads well, is set in it, so a book that sets its dialogue in dark blue, or its
+   captions in a colour of their own, still translates them, and dots or dashes shorter than the text is
+   thick say nothing about how the text is drawn. Glyphs drawn as outlines around a fill, as a title is, are
    lettering wherever they stand, and a text without a letter or digit (dots, dashes, waves) is a drawn mark
    with nothing to translate, so it stays.
    A detected text box in which no text line is found cannot be cleaned, so it is left as it is instead of
