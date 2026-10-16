@@ -12,6 +12,8 @@ import type { RegionMask } from "../stages/mask/interfaces/index.ts";
 import { addToPageMask, regionTextMask } from "../stages/mask/text-mask.ts";
 import { classifyRegion, unsureReadingBelow } from "../stages/regions/classify.ts";
 import type { LetteringCues } from "../stages/regions/interfaces/index.ts";
+import { letterCount } from "../stages/regions/letters.ts";
+import { pageTypesetInks } from "../stages/regions/page-ink.ts";
 import type { OrientedRegion, RegionResult, StageTimer, UtteranceResult, VisionClient } from "./interfaces/index.ts";
 
 const median = (values: number[]) => {
@@ -53,6 +55,11 @@ export const cleanPage = async (
   const { regions, strokes, pictured } = await timed("mask_fill", async () => {
     const masks = oriented.map(({ region }) => regionTextMask(rgb, gray, region.lines, region.bubble));
     const textLength = oriented.map(({ region }) => region.lines.reduce((sum, line) => sum + line.rect.long, 0));
+    const typesetInks = pageTypesetInks(oriented.map((_region, regionIndex) => ({
+      ink: masks[regionIndex]?.inkMedian ?? null,
+      letters: letterCount(utterancesOf(regionIndex).map((utterance) => utterance.text).join("")),
+      meanProb: Math.min(...utterancesOf(regionIndex).map((utterance) => utterance.meanProb)),
+    })));
     // The dialogue of a bubble is the region in it with the most text.
     const cuesOf = (regionIndex: number): LetteringCues | null => {
       const mask = masks[regionIndex];
@@ -65,6 +72,7 @@ export const cleanPage = async (
       }, null);
       return {
         coloured: isColoured(mask.inkMedian) || (mask.outlineMedian !== null && isColoured(mask.outlineMedian)),
+        typesetInk: typesetInks.some((ink) => sameInk(mask.inkMedian, ink)),
         outlined: mask.outlineMedian !== null,
         hollow: mask.hollow,
         otherInkThanBubble: dialogue !== null && !sameInk(mask.inkMedian, masks[dialogue]!.inkMedian),

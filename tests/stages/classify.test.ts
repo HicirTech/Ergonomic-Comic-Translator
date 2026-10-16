@@ -14,7 +14,7 @@ const region = (overrides: Partial<PageRegion>): PageRegion => ({
 });
 
 /** Typeset text in plain ink that reads well, among other text of its bubble. */
-const plain: LetteringCues = { coloured: false, outlined: false, hollow: false, otherInkThanBubble: false, aloneInBubble: false, readUnsure: false };
+const plain: LetteringCues = { coloured: false, typesetInk: false, outlined: false, hollow: false, otherInkThanBubble: false, aloneInBubble: false, readUnsure: false };
 
 const classify = (target: PageRegion, text: string, dialogueThickness: number | null = 20) =>
   classifyRegion(target, estimateOrientation(target.lines, target.box), text, 1000, 1400, dialogueThickness);
@@ -67,6 +67,10 @@ describe("classifyRegion", () => {
     expect(withCues({ readUnsure: true }).policy).toBe("translate");
     expect(withCues({ coloured: true }).policy).toBe("translate");
     expect(withCues({ coloured: true, readUnsure: true, aloneInBubble: false }).policy).toBe("translate");
+    // A colour the page's typeset text is set in is no cue: a book may set its dialogue in dark blue or pink.
+    expect(withCues({ coloured: true, typesetInk: true, outlined: true }).policy).toBe("translate");
+    expect(withCues({ coloured: true, typesetInk: true }, "ああ、").policy).toBe("translate");
+    expect(withCues({ coloured: true, typesetInk: true, readUnsure: true }).policy).toBe("keep");
   });
 
   it("counts coloured ink and an outline as cues for lettering outside bubbles", () => {
@@ -76,6 +80,9 @@ describe("classifyRegion", () => {
     expect(withCues({ coloured: true, outlined: true })).toEqual({ layout: "text_free", kind: "sfx", policy: "keep" });
     // Black text with a white outline is how captions are set on artwork.
     expect(withCues({ outlined: true }).policy).toBe("translate");
+    // A caption set in a colour the page's typeset text is set in, with an outline, is typeset like that text.
+    expect(withCues({ coloured: true, typesetInk: true, outlined: true }).policy).toBe("translate");
+    expect(withCues({ coloured: true, typesetInk: true, outlined: true, readUnsure: true }).policy).toBe("keep");
   });
 
   it("keeps glyphs drawn as outlines around a fill, as a title on the artwork or in a bottom box is", () => {

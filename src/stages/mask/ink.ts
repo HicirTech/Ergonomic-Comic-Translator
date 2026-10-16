@@ -1,4 +1,4 @@
-type Rgb = readonly [number, number, number];
+export type Rgb = readonly [number, number, number];
 
 /** The lines of one dialogue are set in one ink: their colours agree within this much on every channel. */
 const sameInkTolerance = 48;

@@ -36,7 +36,8 @@ export const soundLike = (text: string) => {
  * dialogue and is drawn rather than typeset (outlined, slanted or curved, or a sound). Lettering that
  * stands alone in what the detector took for a bubble is art when it is coloured and outlined, coloured
  * or outlined and the reader is not sure of it, or coloured and a sound; dialogue set large in a box of
- * its own is black or white, has no outline and reads well. Outside bubbles a coloured ink is one more cue, and a coloured ink with an
+ * its own is black or white, has no outline and reads well. A colour the page's typeset text is set in is
+ * no cue on text that reads well. Outside bubbles a coloured ink is one more cue, and a coloured ink with an
  * outline two; glyphs drawn as outlines around a fill, as a title on the artwork is, are lettering by
  * themselves, and a bottom box is dialogue unless its lettering says otherwise. A text without a letter or
  * digit (dots, dashes, waves) is a drawn mark wherever it stands: there is nothing to translate, so it
@@ -58,10 +59,13 @@ export const classifyRegion = (
   const angles = region.lines.map((line) => line.rect.angle);
   const spread = angles.length > 1 ? Math.max(...angles.map((angle) => lineAngleDistance(angle, angles[0]!))) : 0;
   const drawn = Math.abs(orientation.tilt) > sfxTilt || spread > sfxAngleSpread || region.lines.some((line) => line.curved);
+  // A colour that the page's typeset text is set in is no cue on text that reads well: the short cries of such
+  // a page are its dialogue too, while lettering drawn in that colour still reads badly.
+  const ownColour = lettering !== null && lettering.coloured && (!lettering.typesetInk || lettering.readUnsure);
   if (region.bubble) {
     const acrossDialogue = lettering !== null && lettering.otherInkThanBubble && (lettering.outlined || drawn || soundLike(text));
     const onItsOwn = lettering !== null && lettering.aloneInBubble
-      && ((lettering.coloured && lettering.outlined) || ((lettering.coloured || lettering.outlined) && lettering.readUnsure) || (lettering.coloured && soundLike(text)));
+      && ((ownColour && lettering.outlined) || ((lettering.coloured || lettering.outlined) && lettering.readUnsure) || (ownColour && soundLike(text)));
     return acrossDialogue || onItsOwn || mark
       ? { layout: "bubble", kind: "sfx", policy: "keep" }
       : { layout: "bubble", kind: thought ? "thought" : "dialogue", policy: "translate" };
@@ -77,8 +81,8 @@ export const classifyRegion = (
     dialogueThickness !== null && thickness >= sfxSizeFactor * dialogueThickness,
     drawn,
     soundLike(text),
-    lettering?.coloured,
-    lettering?.coloured && lettering.outlined,
+    ownColour,
+    ownColour && lettering.outlined,
   ].filter(Boolean).length;
   return cues >= sfxMinCues || mark || lettering?.hollow
     ? { layout, kind: "sfx", policy: "keep" }

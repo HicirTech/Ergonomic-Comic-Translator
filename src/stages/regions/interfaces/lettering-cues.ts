@@ -2,6 +2,8 @@
 export interface LetteringCues {
   /** The ink or the outline is a colour: dialogue and captions are set in black, white or grey. */
   coloured: boolean;
+  /** The ink is one the page's typeset text is set in: a book may set its dialogue or its captions in a colour. */
+  typesetInk: boolean;
   /** The glyphs carry an outline. */
   outlined: boolean;
   /** The glyphs are drawn as outlines around a fill: type is set solid. */
