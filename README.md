@@ -20,9 +20,12 @@ checking are automatic.
    natural order, chapter by chapter. Duplicate images are kept once; blank pages are kept as they are, every
    other page is read, and a page without text comes back unchanged. PDF input is not supported.
 2. **Read** (ONNX Runtime, GPU or CPU). Text and bubble detection, text line geometry including slanted text,
-   orientation, splitting one bubble into several speakers' lines, OCR, text masks and cleaning. The mask
-   takes the strokes, an outline drawn around them, and dot leaders and other small marks that continue a
-   line, and nothing of the paper beside them. The frame of a dialogue box and the picture beyond it are not
+   orientation, splitting one bubble into several speakers' lines (and a panel of short rows, a menu, into
+   one item per row, each lettered in its own row), OCR, text masks and cleaning. The mask takes the
+   strokes, an outline drawn around them, and dot leaders and other small marks that continue a line, and
+   nothing of the paper beside them; a mark beside a line, off its extent, is at most half a line thick, so
+   the next row of a list is not one, while along the line a mark may be a glyph the rectangle ended
+   before. The frame of a dialogue box and the picture beyond it are not
    text, also where the rectangle of a line reaches over them: a line that runs straight through the
    rectangle and on stays, and so does a faint line that leaves it (the picture seen through a translucent
    box), while a full stop set against such a line is still taken; along a bubble's edge, where the frame of
