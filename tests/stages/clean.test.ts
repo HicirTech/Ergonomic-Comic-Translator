@@ -217,6 +217,30 @@ describe("regionTextMask", () => {
     expect(region.ringMedian).toEqual([223, 234, 254]);
   });
 
+  it("takes a hugging band whose flood leaves specks at the glyphs' edge: specks enclosed by the band are no boundary", () => {
+    // The band of the test above, with off-white specks next to the strokes' growth above and below the bar,
+    // as compression leaves them along an edge.
+    const width = 200;
+    const height = 160;
+    const data = new Uint8Array(width * height * 3);
+    const set = (x0: number, y0: number, x1: number, y1: number, colour: readonly number[]) => {
+      for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) data.set(colour, (y * width + x) * 3);
+    };
+    set(0, 0, width, height, [223, 234, 254]);
+    set(45, 69, 155, 91, [252, 255, 255]);
+    set(50, 74, 150, 86, [20, 15, 71]);
+    for (let x = 52; x < 150; x += 8) {
+      set(x, 71, x + 1, 72, [232, 238, 250]);
+      set(x, 88, x + 1, 89, [232, 238, 250]);
+    }
+    const rgb = { data, width, height };
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 150, 60, 0)])!;
+    const pageMask = new Uint8Array(width * height);
+    addToPageMask(pageMask, width, region);
+    expect(pageMask[69 * width + 100]).toBe(1);
+    expect(region.outlineMedian).toEqual([252, 255, 255]);
+  });
+
   it("masks the fill of glyphs that are drawn as an outline, and tells the ink from the outline", () => {
     // Dark paper, a white ring around a fill that is darker than the paper: only the ring stands out.
     const rgb = page(200, 160, 32, 255, { cx: 100, cy: 80, long: 108, short: 20, angle: 0 });

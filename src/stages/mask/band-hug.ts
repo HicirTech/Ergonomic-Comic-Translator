@@ -1,3 +1,4 @@
+import { labelComponents } from "../../imaging/components.ts";
 import { dilateSquare } from "../../imaging/morphology.ts";
 
 /**
@@ -33,17 +34,31 @@ const nextTo = (mask: Uint8Array, other: Uint8Array, width: number, height: numb
   return found;
 };
 
+/** The pixels of `mask` whose piece reaches the edge of `within`: a side on a pixel outside it, or the image border. */
+const reachingOut = (mask: Uint8Array, within: Uint8Array, width: number, height: number) => {
+  const { labels, components } = labelComponents(mask, width, height);
+  const reaches = new Uint8Array(components.length);
+  for (let index = 0; index < mask.length; index += 1) {
+    if (!mask[index]) continue;
+    const x = index % width;
+    const y = Math.floor(index / width);
+    if (x === 0 || y === 0 || x === width - 1 || y === height - 1 || !within[index - 1] || !within[index + 1] || !within[index - width] || !within[index + width]) reaches[labels[index]! - 1] = 1;
+  }
+  return mask.map((value, index) => (value && reaches[labels[index]! - 1] ? 1 : 0));
+};
+
 /**
  * Whether `zone`, the pixels of one colour reached from `seed` inside `within`, is a band that hugs the
- * strokes of `seed`: it surrounds them, and the pixels on its boundary with the rest of `within` lie at
- * one distance from `seed`. Distances are the number of one-pixel dilations of `seed` it takes to cover
- * a pixel.
+ * strokes of `seed`: it surrounds them, and the pixels on its boundary with the outside lie at one distance
+ * from `seed`. The outside is the rest of `within` that reaches its edge: specks the flood left at the
+ * glyphs' blended edges, enclosed by the band, are no boundary. Distances are the number of one-pixel
+ * dilations of `seed` it takes to cover a pixel.
  */
 export const bandHugsStrokes = (zone: Uint8Array, seed: Uint8Array, within: Uint8Array, width: number, height: number) => {
   const beside = nextTo(within.map((value, index) => value & (seed[index]! ^ 1)), seed, width, height);
   if (beside.length === 0 || beside.filter((index) => zone[index]).length < bandMinCoverage * beside.length) return false;
   const rest = within.map((value, index) => value & (zone[index]! ^ 1) & (seed[index]! ^ 1));
-  const boundary = nextTo(zone, rest, width, height);
+  const boundary = nextTo(zone, reachingOut(rest, within, width, height), width, height);
   if (boundary.length === 0) return false;
   const distances: number[] = [];
   const unreached = new Set(boundary);
