@@ -11,8 +11,11 @@ const quotes = [["「", "」"], ["『", "』"], ["【", "】"]] as const;
 const katakanaWord = /^[ァ-ヶー・]+$/u;
 /** Mimetic words (ムラムラ, ドキドキ) repeat a short unit; they are not terms. */
 const reduplicated = /^(.{1,3})\1$/u;
-/** A loanword seen this often is a term of the volume, not a one-off. */
-const loanwordMinOccurrences = 2;
+/**
+ * A loanword seen this often is a term of the volume, not a one-off. Two uses are too few to be worth a
+ * rendering fixed by the general model, which the volume's translator may know better (slang above all).
+ */
+const loanwordMinOccurrences = 3;
 /** A name is longer than this: a single character (村, 森) is a common noun the extractor took for a place. */
 const nameMinChars = 2;
 

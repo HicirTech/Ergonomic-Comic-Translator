@@ -186,6 +186,8 @@ describe("trust", () => {
     expect(isTrustedTerm(fixed({ normKey: "アンデッド", canonical: "アンデッド", kind: "title", surfaces: ["アンデッド"], occurrences: 16 }), lines, "ja")).toBe(true);
     expect(isTrustedTerm(fixed({ normKey: "ドキドキ", canonical: "ドキドキ", kind: "term", surfaces: ["ドキドキ"], occurrences: 5 }), lines, "ja")).toBe(false);
     expect(isTrustedTerm(fixed({ normKey: "バイブ", canonical: "バイブ", kind: "item", surfaces: ["バイブ"], occurrences: 1 }), lines, "ja")).toBe(false);
+    expect(isTrustedTerm(fixed({ normKey: "バイブ", canonical: "バイブ", kind: "item", surfaces: ["バイブ"], occurrences: 2 }), lines, "ja")).toBe(false);
+    expect(isTrustedTerm(fixed({ normKey: "バイブ", canonical: "バイブ", kind: "item", surfaces: ["バイブ"], occurrences: 3 }), lines, "ja")).toBe(true);
     expect(isTrustedTerm(fixed({ normKey: "受付", canonical: "受付", kind: "title", surfaces: ["受付"], occurrences: 4 }), lines, "ja")).toBe(false);
   });
 
