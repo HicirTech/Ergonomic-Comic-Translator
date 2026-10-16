@@ -3,10 +3,31 @@ import { labelComponents } from "../../imaging/components.ts";
 
 /** A mark is at most this large, in line thicknesses: a dot, a dash, a small kana, not a line of text or art. */
 export const markSideShare = 1.2;
+/**
+ * A mark beside a line, off its extent across the line (ruby, an emphasis dot), is at most this large, in
+ * line thicknesses; a glyph of the next row of a list, as close to the line as a dot, is larger. Along the
+ * line a mark may be glyph-sized: a glyph the detector's rectangle ended before.
+ */
+const markBesideSideShare = 0.5;
 /** A mark sits this close to a line or to a mark already taken, in line thicknesses. */
 const markGapShare = 1.2;
 
 const gapBetween = (a: Box, b: Box) => Math.max(0, a.x0 - b.x1, b.x0 - a.x1, a.y0 - b.y1, b.y0 - a.y1);
+
+/**
+ * Whether `box` lies along one of the lines, however far: its centre lies within that line's extent across
+ * the line. A glyph the rectangle ended before may stand a leader of dots away from it. The lines run the
+ * way the longest of them does: a rectangle around one glyph is as tall as it is wide.
+ */
+const alongSomeLine = (box: Box, lineBoxes: readonly Box[]) => {
+  const cx = (box.x0 + box.x1) / 2;
+  const cy = (box.y0 + box.y1) / 2;
+  const side = (line: Box) => Math.max(line.x1 - line.x0, line.y1 - line.y0);
+  const longest = lineBoxes.reduce<Box | null>((best, line) => (best === null || side(line) > side(best) ? line : best), null);
+  if (longest === null) return false;
+  const horizontal = longest.x1 - longest.x0 >= longest.y1 - longest.y0;
+  return lineBoxes.some((line) => (horizontal ? cy >= line.y0 && cy <= line.y1 : cx >= line.x0 && cx <= line.x1));
+};
 
 /**
  * Among the ink-coloured blobs around the lines of a region, the ones that belong to its text: glyph parts
@@ -49,9 +70,10 @@ export const keepLineMarks = (
   const pending: number[] = [];
   components.forEach((component, index) => {
     if (leavesZone[index]) return;
-    if (Math.max(component.box.x1 - component.box.x0, component.box.y1 - component.box.y0) > markSideShare * thickness) return;
+    const side = Math.max(component.box.x1 - component.box.x0, component.box.y1 - component.box.y0);
+    if (side > markSideShare * thickness) return;
     if (touchesCore[index]) kept[index] = 1;
-    else pending.push(index);
+    else if (alongSomeLine(component.box, lineBoxes) || side <= markBesideSideShare * thickness) pending.push(index);
   });
   // A leader is a chain: every dot is close to the line or to a dot already taken.
   const gapLimit = markGapShare * thickness;

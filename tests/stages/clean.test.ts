@@ -527,6 +527,18 @@ describe("regionTextMask", () => {
     expect(pageMask[80 * 400 + 210]).toBe(0);
   });
 
+  it("takes a glyph-sized blob along the line, but beside it only a small mark: the next row of a list is neither", () => {
+    // In a bubble, marks are looked for beside the line too. The line is 30 px thick (rows 65 to 95): a dot
+    // past its end, a 20 px blob past the dot on the line's rows, and a 20 px blob just below the line.
+    const rgb = withDots([190]);
+    for (let y = 70; y < 90; y += 1) rgb.data.fill(10, (y * 400 + 198) * 3, (y * 400 + 218) * 3);
+    for (let y = 100; y < 120; y += 1) rgb.data.fill(10, (y * 400 + 100) * 3, (y * 400 + 120) * 3);
+    const pageMask = maskOf(rgb, { x0: 30, y0: 40, x1: 240, y1: 140 });
+    expect(pageMask[80 * 400 + 190]).toBe(1);
+    expect(pageMask[80 * 400 + 208]).toBe(1);
+    expect(pageMask[110 * 400 + 110]).toBe(0);
+  });
+
   it("looks for marks only inside the bubble", () => {
     const pageMask = maskOf(withDots([190, 210, 230]), { x0: 30, y0: 40, x1: 200, y1: 120 });
     expect(pageMask[80 * 400 + 190]).toBe(1);
