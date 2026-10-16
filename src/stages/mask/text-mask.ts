@@ -493,9 +493,11 @@ export const regionTextMask = (rgb: RgbImage, gray: GrayImage, lines: readonly T
       return outlineMedian.every((value, channel) => Math.abs(rgb.data[offset + channel]! - value) <= bandTolerance);
     };
     const band = floodFrom(grown, reach, ofBand, width, height);
-    const rim = dilateSquare(band, width, height, bandRimPixels);
+    // The rim surrounds every pixel of the band's colour, also those the strokes' growth already holds.
+    const bandColoured = grown.map((value, index) => (band[index] || (value && ofBand(index)) ? 1 : 0));
+    const rim = dilateSquare(bandColoured, width, height, bandRimPixels);
     for (let index = 0; index < grown.length; index += 1) {
-      if (grown[index] || !reach[index] || !(band[index] || rim[index])) continue;
+      if (grown[index] || !(band[index] || rim[index])) continue;
       grown[index] = 1;
       strokePixels += 1;
     }

@@ -86,9 +86,10 @@ describe("regionTextMask", () => {
     const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 150, 60, 0)])!;
     const pageMask = new Uint8Array(200 * 160);
     addToPageMask(pageMask, 200, region);
-    // The white edge covers rows 70 to 73 above the bar: all of it is masked, the paper above it is not.
+    // The white edge covers rows 70 to 73 above the bar: all of it and its rim are masked, the paper beyond is not.
     expect(pageMask[70 * 200 + 100]).toBe(1);
-    expect(pageMask[69 * 200 + 100]).toBe(0);
+    expect(pageMask[68 * 200 + 100]).toBe(1);
+    expect(pageMask[67 * 200 + 100]).toBe(0);
     expect(region.inkMedian).toEqual([10, 10, 10]);
     expect(region.outlineMedian).toEqual([255, 255, 255]);
     expect(region.ringMedian).toEqual([128, 128, 128]);
@@ -106,6 +107,21 @@ describe("regionTextMask", () => {
     expect(pageMask[62 * 200 + 100]).toBe(1);
     expect(pageMask[60 * 200 + 100]).toBe(1);
     expect(pageMask[59 * 200 + 100]).toBe(0);
+    expect(region.outlineMedian).toEqual([255, 255, 255]);
+    expect(region.ringMedian).toEqual([190, 190, 190]);
+  });
+
+  it("takes the blended rim of an outline that the growth of the strokes already covers", () => {
+    // Light paper, a dark bar with a white edge of 9 px that blends into the paper over one more pixel:
+    // the growth of a 60 px line covers the edge exactly, so the band flood adds nothing, and the blend still goes.
+    const rgb = page(200, 160, 190, 255, { cx: 100, cy: 80, long: 118, short: 30, angle: 0 });
+    for (let y = 74; y < 86; y += 1) rgb.data.fill(10, (y * 200 + 50) * 3, (y * 200 + 150) * 3);
+    for (const y of [64, 95]) rgb.data.fill(212, (y * 200 + 41) * 3, (y * 200 + 159) * 3);
+    const region = regionTextMask(rgb, rgbToGray(rgb), [line(100, 80, 150, 60, 0)])!;
+    const pageMask = new Uint8Array(200 * 160);
+    addToPageMask(pageMask, 200, region);
+    expect(pageMask[64 * 200 + 100]).toBe(1);
+    expect(pageMask[62 * 200 + 100]).toBe(0);
     expect(region.outlineMedian).toEqual([255, 255, 255]);
     expect(region.ringMedian).toEqual([190, 190, 190]);
   });
